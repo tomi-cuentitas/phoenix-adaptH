@@ -16,3 +16,8 @@ Layers can but do not have to be consistent in size. Born from the idea, that th
 Going down that road, any multilayer operation requires the rigurous definition of transfer functions between the layers. To handle sync, there should be a dict (or some other sort of dependency graph) where all the identifiers are listed that require updating when one of them is marked as changed, together with the corresponding routine to do so.
 
 The original case of a pair of host and device data refs can be inherited from here. Sync functions can be predefined in that case. I think of DataContainer (inherits to) DualContainer (inherits to) DualContainerF90, DualContainerCuda, ....
+
+
+### Callable is now Subroutine
+
+To avoid name collisions with builtins, the module callable and the class Callable are now the module subroutine and the class Subroutine.
