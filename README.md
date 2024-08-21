@@ -16,7 +16,7 @@ The modules included are
 - `fgen`: represent multi-linear functions by instruction sets acting on the datatypes.
     - `tomography`: automatize the generation of instructions by testing input combinations
     - `routine`: combine instruction sets and some meta data to have abstract representations of your functions
-    - `callable`: specify a HPC language and get a callable based on a routine
+    - `subroutine`: specify a HPC language and get a subroutine based on a routine
 
 These modules are properly introduced and specified in more detail in the *Modules*-section below.
 
@@ -65,7 +65,7 @@ The keymap module provides a `Region` class that further inherits to `Keymap` an
 #### fgen.routine
 
 
-#### fgen.callable
+#### fgen.subroutine
 
 
 #### fgen.library
