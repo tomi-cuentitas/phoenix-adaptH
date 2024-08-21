@@ -8,12 +8,11 @@ While the initial idea was to have a DType class to pair host data with the repr
 
 DLayers can be created from a class factory monad by passing the data configuration of the layer together with an identifier, e.g. 
 
-`MyLayerClass = LayerFactory("f90", real="float64", imag="float64").`
+`MyLayerClass = LayerFactory("f90", real="float64", imag="float64")`,
 
-"f90" identifies the representation being specific to a FORTRAN90 backend, containing the variables real and imag with the corresponding datatypes.
+where "f90" identifies the representation being specific to a FORTRAN90 backend, containing the variables real and imag with the corresponding datatypes.
 
-I will need to think about the idea, that layers do not have to be consistent in size. Summarizing an n-spin system into a smaller one without changing the backend could be interesting to do as well, this could be implemented as multiple layers within a container. Note that this also requires to identify the both-way transfer between the two layers and spikes the idea, that routines shall ultimately receive layers as their arguments.
+Layers can but do not have to be consistent in size. Born from the idea, that the datatype has the job to sync between host and device data representations, I failed to see the potential generalization at first. Summarizing an n-spin system into a smaller representative system could be interesting to do as well, this could be implemented as multiple layers within a container. 
+Going down that road, any multilayer operation requires the rigurous definition of transfer functions between the layers. To handle sync, there should be a dict (or some other sort of dependency graph) where all the identifiers are listed that require updating when one of them is marked as changed, together with the corresponding routine to do so.
 
-Going down that road, any multilayer operation requires the rigurous definition of transfer functions between the layers.
-
-To handle sync, there should be a dict (or some other sort of dependency graph) where all the identifiers are listed that require updating when one of them is marked as changed.
+The original case of a pair of host and device data refs can be inherited from here. Sync functions can be predefined in that case. I think of DataContainer (inherits to) DualContainer (inherits to) DualContainerF90, DualContainerCuda, ....
