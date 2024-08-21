@@ -47,7 +47,16 @@ The keymap module provides a `Region` class that further inherits to `Keymap` an
 ### dtype
 
 
+#### dtype.dcontainer
+
+
+#### dtype.dlayer
+
+
 ### fgen
+
+
+#### fgen.instruction
 
 
 #### fgen.tomography
@@ -57,3 +66,6 @@ The keymap module provides a `Region` class that further inherits to `Keymap` an
 
 
 #### fgen.callable
+
+
+#### fgen.library
