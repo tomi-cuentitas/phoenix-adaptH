@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2024, 17:42
-# Version:     0.0.5
+# Last Update: 26/08/2024, 17:02
+# Version:     0.0.311
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,13 +32,131 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 
 """
 
+from typing import Any
+
+import numpy as np
+import cupy as cp
+import pyopencl as cl
+
 
 class DLayer:
     """DLayer class description"""
 
+    _TARGET_KEYS = ["real", "imag"]
+    _IDENT = "_GENERIC_"
+
+    def __init__(self, size: int):
+        self._ndata = size
+        self._data_r = None
+        self._data_i = None
+
+    def _set_data(self, real=None, imag=None):
+        """set data"""
+        if real is not None:
+            self._data_r = real
+        if imag is not None:
+            self._data_i = imag
+        return self
+
+    def __mul__(self, other):
+        if isinstance(other, DLayer):
+            assert self.size == other.size
+            return self.__class__(size=self.size)._set_data(
+                real=(
+                    self._data_r * other._data_r - self._data_i * other._data_i
+                ),
+                imag=(
+                    self._data_r * other._data_i + self._data_i * other._data_r
+                ),
+            )
+        return self.__class__(size=self.size)._set_data(
+            real=(self._data_r * other._data_r - self._data_i * other._data_i),
+            imag=(self._data_r * other._data_i + self._data_i * other._data_r),
+        )
+
+    def __add__(self, other):
+        if isinstance(other, DLayer):
+            assert self.size == other.size
+            assert self.ident == other.ident
+            return self.__class__(size=self.size)._set_data(
+                real=self._data_r + other._data_r,
+                imag=self._data_i + other._data_i,
+            )
+        return self.__class__(size=self.size)._set_data(
+            real=self._data_r + float(other).real,
+            imag=self._data_i + float(other).imag,
+        )
+
+    def __sub__(self, other):
+        if isinstance(other, DLayer):
+            assert self.size == other.size
+            assert self.ident == other.ident
+            return self.__class__(size=self.size)._set_data(
+                real=self._data_r - other._data_r,
+                imag=self._data_i - other._data_i,
+            )
+        return self.__class__(size=self.size)._set_data(
+            real=self._data_r - float(other).real,
+            imag=self._data_i - float(other).imag,
+        )
+
+    def __rsub__(self, other):
+        assert not isinstance(other, DLayer)
+        return self.__class__(size=self.size)._set_data(
+            real=float(other).real - self._data_r,
+            imag=float(other).imag - self._data_i,
+        )
+
+    def __rmul__(self, other):
+        # assume commutative
+        return self.__mul__(other)
+
+    def __radd__(self, other):
+        # assume commutative
+        return self.__add__(other)
+
+    @property
+    def ident(self) -> str:
+        """access write-protected property ident"""
+        return self._IDENT
+
+    @property
+    def size(self) -> int:
+        """access write-protected property ndata"""
+        return self._ndata
+
+    def unpack(self) -> tuple:
+        """unpack the layer"""
+        return (self._data_r, self._data_i, self.size)
+
 
 class DContainer:
     """DContainer class description"""
+
+    _LAYERS = {}
+
+    def __init__(self, *sizes):
+        self._layers = {
+            key: layer(size)
+            for (key, layer), size in zip(self._LAYERS.items(), sizes)
+        }
+
+    def __init_subclass__(cls, **layers):
+        cls._LAYERS = layers
+        return cls
+
+    def __getitem__(self, key):
+        assert key in self._layers
+        return self._layers[key]
+
+    def __setitem__(self, key, value):
+        assert key in self._layers
+        self._layers[key] = value
+
+    def unpack(self, key, **kwargs):
+        """unpack the requested layer"""
+        assert key in self._layers
+        return self._layers[key].unpack(**kwargs)
 
 
 class DLC(DContainer):
@@ -47,3 +165,109 @@ class DLC(DContainer):
 
 class SDLC(DLC):
     """Synced Dual Layer Container class description"""
+
+
+###############################################################################
+
+
+class DLayerPurePy(DLayer):
+    """Pure Python data layer"""
+
+    _IDENT = "PUREPYTHON"
+
+    def __init__(self, size):
+        super().__init__(size)
+        self._data_r = [0.0 for _ in range(size)]
+        self._data_i = [0.0 for _ in range(size)]
+
+
+class DLayerNumpy(DLayer):
+    """Numpy based data layer"""
+
+    _IDENT = "NUMPY"
+
+    def __init__(self, size):
+        super().__init__(size)
+        self._data_r = np.zeros(size)
+        self._data_i = np.zeros(size)
+
+
+class DLayerCupy(DLayer):
+    """Cupy based data layer"""
+
+    _IDENT = "CUPY"
+
+    def __init__(self, size):
+        super().__init__(size)
+        self._data_r = cp.zeros(size)
+        self._data_i = cp.zeros(size)
+
+
+class DLayerOCLGPU(DLayer):
+    """Cupy based data layer"""
+
+    _IDENT = "CUPY"
+
+    _CL_CTX = cl.create_some_context()
+    _CL_QUEUE = cl.CommandQueue(_CL_CTX)
+
+    _CL_MF = cl.mem_flags
+
+    def __init__(self, size):
+        super().__init__(size)
+        self._data_r = cl.Buffer(
+            self._CL_CTX,
+            self._CL_MF.READ_ONLY | self._CL_MF.COPY_HOST_PTR,
+            hostbuf=np.zeros(size),
+        )
+        self._data_i = cl.Buffer(
+            self._CL_CTX,
+            self._CL_MF.READ_ONLY | self._CL_MF.COPY_HOST_PTR,
+            hostbuf=np.zeros(size),
+        )
+
+
+class Foo(
+    DContainer,
+    layer1=DLayerPurePy,
+    layer2=DLayerNumpy,
+    layer3=DLayerOCLGPU,
+    layer4=DLayerCupy,
+):
+    pass
+
+
+print(Foo._LAYERS)
+
+test = Foo(10, 12, 14, 16)
+
+print(
+    test["layer1"].unpack(),
+    "\n",
+    type(test["layer1"].unpack()[0]),
+    type(test["layer1"].unpack()[0][0]),
+    "\n",
+)
+
+print(
+    test["layer2"].unpack(),
+    "\n",
+    type(test["layer2"].unpack()[0]),
+    type(test["layer2"].unpack()[0][0]),
+    "\n",
+)
+
+print(
+    test["layer3"].unpack(),
+    "\n",
+    type(test["layer3"].unpack()[0]),
+    "\n",
+)
+
+print(
+    test["layer4"].unpack(),
+    "\n",
+    type(test["layer4"].unpack()[0]),
+    type(test["layer4"].unpack()[0][0]),
+    "\n",
+)
