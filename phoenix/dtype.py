@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 26/08/2024, 17:02
-# Version:     0.0.311
+# Last Update: 27/08/2024, 16:02
+# Version:     0.0.471
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,22 +17,30 @@ __doc__ = """
 DType module description
 ========================
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus nisl lectus,
-gravida ut risus id, tincidunt pretium arcu. Duis tortor nulla, mattis ac leo
-id, pharetra imperdiet odio. Aliquam sit amet nisl sed nulla luctus commodo eget
-a est. Quisque iaculis sapien eget metus dignissim congue. Suspendisse cursus
-orci ex, a malesuada tellus laoreet in. Nulla eu metus vitae nunc vehicula
-consequat a ac erat. Phasellus fringilla tristique magna, sed fermentum enim
-malesuada eget. Curabitur mauris diam, vehicula ac odio a, lobortis ultrices
-dolor. Vivamus posuere, sem in egestas aliquam, lacus lorem aliquet sapien,
-quis tincidunt libero sem ac augue. Mauris eget rhoncus urna. Donec dapibus
-nulla lacus, at egestas ligula pulvinar nec. Quisque pellentesque fringilla sem
-ac molestie. Suspendisse convallis dolor felis. Vestibulum ante ipsum primis in
-faucibus orci luctus et ultrices posuere cubilia curae.
+DLayer
+------
+
+The DLayer class holds data references to HPC backends and unpacks accordingly
+for function calls.
+
+Basic arithemtic operations are implemented via a mapping into a basic
+linop(A, b, C) -> A + b * C operation
+
+DContainer
+----------
+
+DContainer combines multiple Layers to a combined datatype and can be extended
+to manage inter-layer data conversion, host-device sync and consistency checks.
+
+So far, no arithmetic operation is implemented on this level, intentionally,
+as, depending on the interpretation of levels, such an implementation might be
+factually wrong.
 
 """
 
-from typing import Any
+# pylint: disable=too-many-arguments
+
+# from typing import Any
 
 import numpy as np
 import cupy as cp
@@ -42,7 +50,6 @@ import pyopencl as cl
 class DLayer:
     """DLayer class description"""
 
-    _TARGET_KEYS = ["real", "imag"]
     _IDENT = "_GENERIC_"
 
     def __init__(self, size: int):
@@ -50,7 +57,7 @@ class DLayer:
         self._data_r = None
         self._data_i = None
 
-    def _set_data(self, real=None, imag=None):
+    def _set_data_ref(self, real=None, imag=None):
         """set data"""
         if real is not None:
             self._data_r = real
@@ -58,53 +65,87 @@ class DLayer:
             self._data_i = imag
         return self
 
-    def __mul__(self, other):
-        if isinstance(other, DLayer):
-            assert self.size == other.size
-            return self.__class__(size=self.size)._set_data(
-                real=(
-                    self._data_r * other._data_r - self._data_i * other._data_i
-                ),
-                imag=(
-                    self._data_r * other._data_i + self._data_i * other._data_r
-                ),
-            )
-        return self.__class__(size=self.size)._set_data(
-            real=(self._data_r * other._data_r - self._data_i * other._data_i),
-            imag=(self._data_r * other._data_i + self._data_i * other._data_r),
-        )
+    @classmethod
+    def _from_scalar(cls, scalar_real, scalar_imag):
+        return scalar_real, scalar_imag
+
+    @classmethod
+    def _basic_linop(cls, op_a=None, sc_b=None, op_c=None):
+        """returns operator_a + scalar_b * operator_c"""
+
+        if op_a is None:
+            oar, oai = cls._from_scalar(0, 0)
+        else:
+            oar = op_a._data_r
+            oai = op_a._data_i
+
+        if op_c is None:
+            ocr, oci = cls._from_scalar(1, 0)
+        else:
+            ocr = op_c._data_r
+            oci = op_c._data_i
+
+        if sc_b is None:
+            sbr, sbi = cls._from_scalar(1, 0)
+        else:
+            sbr, sbi = cls._from_scalar(complex(sc_b).real, complex(sc_b).imag)
+
+        real_part = oar + (sbr * ocr - sbi * oci)
+        imag_part = oai + (sbi * ocr + sbr * oci)
+
+        return (real_part, imag_part)
 
     def __add__(self, other):
         if isinstance(other, DLayer):
             assert self.size == other.size
             assert self.ident == other.ident
-            return self.__class__(size=self.size)._set_data(
-                real=self._data_r + other._data_r,
-                imag=self._data_i + other._data_i,
+            (real_part, imag_part) = self._basic_linop(
+                op_a=self, sc_b=1, op_c=other
             )
-        return self.__class__(size=self.size)._set_data(
-            real=self._data_r + float(other).real,
-            imag=self._data_i + float(other).imag,
+        else:
+            (real_part, imag_part) = self._basic_linop(
+                op_a=self, sc_b=other, op_c=None
+            )
+        return self.__class__(size=self.size)._set_data_ref(
+            real=real_part,
+            imag=imag_part,
         )
 
     def __sub__(self, other):
         if isinstance(other, DLayer):
             assert self.size == other.size
             assert self.ident == other.ident
-            return self.__class__(size=self.size)._set_data(
-                real=self._data_r - other._data_r,
-                imag=self._data_i - other._data_i,
+            (real_part, imag_part) = self._basic_linop(
+                op_a=self, sc_b=-1, op_c=other
             )
-        return self.__class__(size=self.size)._set_data(
-            real=self._data_r - float(other).real,
-            imag=self._data_i - float(other).imag,
+        else:
+            (real_part, imag_part) = self._basic_linop(
+                op_a=self, sc_b=-other, op_c=None
+            )
+        return self.__class__(size=self.size)._set_data_ref(
+            real=real_part,
+            imag=imag_part,
         )
 
-    def __rsub__(self, other):
+    def __mul__(self, other):
         assert not isinstance(other, DLayer)
-        return self.__class__(size=self.size)._set_data(
-            real=float(other).real - self._data_r,
-            imag=float(other).imag - self._data_i,
+        (real_part, imag_part) = self._basic_linop(
+            op_a=None, sc_b=other, op_c=self
+        )
+        return self.__class__(size=self.size)._set_data_ref(
+            real=real_part,
+            imag=imag_part,
+        )
+
+    def __truediv__(self, other):
+        assert not isinstance(other, DLayer)
+        inv_other = 1.0 / other
+        (real_part, imag_part) = self._basic_linop(
+            op_a=None, sc_b=inv_other, op_c=self
+        )
+        return self.__class__(size=self.size)._set_data_ref(
+            real=real_part,
+            imag=imag_part,
         )
 
     def __rmul__(self, other):
@@ -114,6 +155,35 @@ class DLayer:
     def __radd__(self, other):
         # assume commutative
         return self.__add__(other)
+
+    def __neg__(self):
+        (real_part, imag_part) = self._basic_linop(
+            op_a=None, sc_b=-1, op_c=self
+        )
+        return self.__class__(size=self.size)._set_data_ref(
+            real=real_part,
+            imag=imag_part,
+        )
+
+    def __rsub__(self, other):
+        assert not isinstance(other, DLayer)
+        (real_part, imag_part) = self._basic_linop(
+            op_a=-self, sc_b=other, op_c=None
+        )
+        return self.__class__(size=self.size)._set_data_ref(
+            real=real_part,
+            imag=imag_part,
+        )
+
+    # I need to think a little more about that.
+    # def __enter__(self):
+    #     """use of the "with" statement"""
+    #     # potentially check read/write access here
+    #     return self
+
+    # def __exit__(self, exc_type, exc_val, exc_tb):
+    #     """end "with" statement section"""
+    #     # do stuff on exit like sync or flags
 
     @property
     def ident(self) -> str:
@@ -149,14 +219,21 @@ class DContainer:
         assert key in self._layers
         return self._layers[key]
 
-    def __setitem__(self, key, value):
-        assert key in self._layers
-        self._layers[key] = value
+    # # I need to think about granting write access to that.
+    # def __setitem__(self, key, value):
+    #     assert key in self._layers
+    #     self._layers[key] = value
 
     def unpack(self, key, **kwargs):
         """unpack the requested layer"""
         assert key in self._layers
         return self._layers[key].unpack(**kwargs)
+
+    def unpack_multi(self, keys, **kwargs):
+        """unpack the requested layer"""
+        for key in keys:
+            assert key in self._layers
+        return [self._layers[key].unpack(**kwargs) for key in keys]
 
 
 class DLC(DContainer):
