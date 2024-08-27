@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2024, 17:41
-# Version:     0.0.7
+# Last Update: 27/08/2024, 16:17
+# Version:     0.0.8
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,7 +33,7 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 """
 
 
-class Instruction:
+class Instruction(dict):
     """Instruction class description"""
 
 
