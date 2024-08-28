@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 28/08/2024, 10:38
-# Version:     0.0.9
+# Last Update: 28/08/2024, 13:32
+# Version:     0.0.227
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,11 +33,180 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 """
 
 
-class Region:
-    """Region class description"""
+import pickle
+
+INDENT = 2
 
 
-class Key(Region):
+class KeyMap:
+    """Keymap class description"""
+
+    _IDENTIFIER_ = "KeyMap"
+    _ENUM = 0
+
+    def __init__(self, name=None):
+        # autoname
+        if name is None:
+            name = f"{self._IDENTIFIER_}{self._ENUM}"
+        # count
+        self.__class__._ENUM += 1
+        self._name = name
+
+        # start empty
+        self._size = 0
+
+        # contain nested keymaps, regions or entries
+        self._content = []
+
+        # lookup tables
+        self._pos2reg = {}  # translate from pos to key reg
+        self._key2reg = {}  # translate the key to its region
+        self._key2pos = {}  # translate the key to its position
+
+        # reset
+        self._reset()
+
+        # this actually does not make a difference, but it feels more safe to
+        # start with False
+        self._is_ud_flag = False
+
+    def _reset(self):
+        """reset anything that has to do with counters and offsets"""
+        self._size = 0
+        self._pos2reg = {}
+        self._key2pos = {}
+        self._key2reg = {}
+
+    @property
+    def name(self):
+        """get name (protected access)"""
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        print("Bad programmer, bad! But seriously, be careful with renaming.")
+        self._name = name
+
+    @property
+    def size(self):
+        """get size (protected access)"""
+        self.update()
+        return self._size
+
+    def __str__(self):
+        return f"<{self._IDENTIFIER_} name={self.name}>"
+
+    def __repr__(self):
+        return f"{self._IDENTIFIER_[0]}:{self.name}"
+
+    def __len__(self):
+        return self.size
+
+    def _check_ud(self):
+        """in the nesting, if the inner keymap is not up to date, all the outer
+        ones are not up to date, either, so the negative update status has to
+        propagate to the outside"""
+        for keymap in self.keymaps:
+            if not keymap.is_ud:
+                self._is_ud_flag = False
+        return self._is_ud_flag
+
+    @staticmethod
+    def from_file(filename):
+        """get the keymap from a file"""
+        with open(filename, "rb") as handle:
+            return pickle.load(handle)
+
+    def to_file(self, filename):
+        """write the keymap to a file"""
+        with open(filename, "wb") as handle:
+            pickle.dump(self, handle)
+
+    @property
+    def is_ud(self):
+        """check if the keymap is up to date, includes checking inner nested
+        maps"""
+        self._is_ud_flag = self._check_ud()
+        return self._is_ud_flag
+
+    @property
+    def keymaps(self):
+        """get keymaps generator (protected access)"""
+        self.update()
+        yield from self._key2reg.values()
+
+    @property
+    def content(self):
+        """get keymaps generator (protected access)"""
+        self.update()
+        yield from self._key2reg.items()
+
+    @property
+    def keys(self):
+        """get the keymap's keys generator (protected access)"""
+        self.update()
+        yield from self._key2reg.keys()
+
+    def reorder(self, function, recursive=True):
+        """reorder the arrangement of keys in the map by some sorting function"""
+        return True
+
+    def flag_ud(self):
+        """mark for update"""
+        self._is_ud_flag = False
+        return self
+
+    def update(self):
+        """user-friendly update procedure. Skips update if already up to date,
+        asserts up-to-date flag and"""
+        if not self.is_ud:
+            ret = self._update()
+        assert ret
+        return self
+
+    def _update(self):
+        """the actual update routine"""
+        # reset internal stuff
+        self._reset()
+
+        offset_pointer = 0
+
+        # go through keymaps in content
+        for key, keymap in self.content:
+            keymap.update()
+
+            if keymap.size <= 0:
+                print(f"skipping keymap {keymap} as it is empty")
+                continue
+
+            self._key2reg[key] = keymap
+            self._key2pos[key] = offset_pointer
+            self._pos2reg[offset_pointer] = keymap
+
+            offset_pointer += len(keymap)
+
+        self._size = offset_pointer
+        self._is_ud_flag = True
+
+        return self._is_ud_flag
+
+
+class Region(KeyMap):
+    """Region is a keymap which is trivially indexed by integer keys"""
+
+    _IDENTIFIER_ = "Region"
+    _ENUM = 0
+
+    def _update(self):
+        """the actual update routine"""
+        return True
+
+
+class Entry(Region):
+    """A Region of size 1"""
+
+
+class Key:
     """Key class description"""
 
 
@@ -45,5 +214,12 @@ class KeyChain(Key):
     """A chain of keys to access nested maps"""
 
 
-class KeyMap(Region):
-    """Keymap class description"""
+a = KeyMap()
+b = KeyMap()
+print(a.name)
+print(b.name)
+print(KeyMap._ENUM)
+
+c = Region()
+print(c.name)
+print(Region._ENUM)
