@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 28/08/2024, 13:32
-# Version:     0.0.227
+# Last Update: 28/08/2024, 18:00
+# Version:     0.0.503
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,18 +38,23 @@ import pickle
 INDENT = 2
 
 
-class KeyMap:
+class DuplicateKeyError(Exception):
+    """duplicate key access"""
+
+
+class KeyMap(dict):
     """Keymap class description"""
 
     _IDENTIFIER_ = "KeyMap"
-    _ENUM = 0
+    _ENUM_ = 0
 
     def __init__(self, name=None):
         # autoname
+        super().__init__()
         if name is None:
-            name = f"{self._IDENTIFIER_}{self._ENUM}"
+            name = f"{self._IDENTIFIER_}{self._ENUM_}"
         # count
-        self.__class__._ENUM += 1
+        self.__class__._ENUM_ += 1
         self._name = name
 
         # start empty
@@ -58,10 +63,13 @@ class KeyMap:
         # contain nested keymaps, regions or entries
         self._content = []
 
+        # remember what you are attached to
+        self._parents = []
+
         # lookup tables
-        self._pos2reg = {}  # translate from pos to key reg
-        self._key2reg = {}  # translate the key to its region
+        self._pos2reg = []  # translate from pos to key reg
         self._key2pos = {}  # translate the key to its position
+        # self._key2reg = {}  # translate the key to its region -> self
 
         # reset
         self._reset()
@@ -72,10 +80,12 @@ class KeyMap:
 
     def _reset(self):
         """reset anything that has to do with counters and offsets"""
+        self._is_ud_flag = False
         self._size = 0
-        self._pos2reg = {}
+        self._pos2reg = []
         self._key2pos = {}
-        self._key2reg = {}
+        # self._key2reg = {}
+        self.clear()
 
     @property
     def name(self):
@@ -90,26 +100,20 @@ class KeyMap:
     @property
     def size(self):
         """get size (protected access)"""
-        self.update()
         return self._size
 
     def __str__(self):
+        return super().__str__()
         return f"<{self._IDENTIFIER_} name={self.name}>"
 
     def __repr__(self):
+        return super().__repr__()
         return f"{self._IDENTIFIER_[0]}:{self.name}"
 
     def __len__(self):
-        return self.size
-
-    def _check_ud(self):
-        """in the nesting, if the inner keymap is not up to date, all the outer
-        ones are not up to date, either, so the negative update status has to
-        propagate to the outside"""
-        for keymap in self.keymaps:
-            if not keymap.is_ud:
-                self._is_ud_flag = False
-        return self._is_ud_flag
+        self.update()
+        assert self._size == sum(len(keymap) for keymap in self.values())
+        return self._size
 
     @staticmethod
     def from_file(filename):
@@ -126,39 +130,66 @@ class KeyMap:
     def is_ud(self):
         """check if the keymap is up to date, includes checking inner nested
         maps"""
-        self._is_ud_flag = self._check_ud()
         return self._is_ud_flag
 
-    @property
-    def keymaps(self):
-        """get keymaps generator (protected access)"""
-        self.update()
-        yield from self._key2reg.values()
+    # @property
+    # def keymaps(self):
+    #     """get keymaps generator (protected access)"""
+    #     self.update()
+    #     yield from self.values()
 
-    @property
-    def content(self):
-        """get keymaps generator (protected access)"""
-        self.update()
-        yield from self._key2reg.items()
+    # @property
+    # def items(self):
+    #     """get keymaps generator (protected access)"""
+    #     self.update()
+    #     yield from self.items()
 
-    @property
-    def keys(self):
-        """get the keymap's keys generator (protected access)"""
-        self.update()
-        yield from self._key2reg.keys()
+    # @property
+    # def keys(self):
+    #     """get the keymap's keys generator (protected access)"""
+    #     self.update()
+    #     yield from self.keys()
 
-    def reorder(self, function, recursive=True):
+    def reorder(self, function):
         """reorder the arrangement of keys in the map by some sorting function"""
-        return True
+        self._content = sorted(
+            [
+                (sort_id, key, keymap)
+                for key, keymap in self._content
+                if (sort_id := function(key, keymap)) is not None
+            ]
+        )
+        self.flag_ud()
 
     def flag_ud(self):
         """mark for update"""
         self._is_ud_flag = False
-        return self
+        for parent in self._parents:
+            parent.flag_ud()
+
+    def _append(self, key, keymap):
+        assert isinstance(key, Key)
+        self._content.append((key, keymap))
+
+    def append(self, key, keymap, check=__debug__):
+        """append a keymap object at a key"""
+        if check:
+            for tkey in self.keys():
+                if tkey == key:
+                    raise DuplicateKeyError(f"Key '{key}' already exists")
+        self._append(key, keymap)
+        keymap.add_parent(self)
+        self.flag_ud()
+
+    def add_parent(self, parent):
+        """add as a parent if not yet there"""
+        if parent not in self._parents:
+            self._parents.append(parent)
 
     def update(self):
         """user-friendly update procedure. Skips update if already up to date,
         asserts up-to-date flag and"""
+        ret = True
         if not self.is_ud:
             ret = self._update()
         assert ret
@@ -167,24 +198,25 @@ class KeyMap:
     def _update(self):
         """the actual update routine"""
         # reset internal stuff
+
+        print("TRUE")
         self._reset()
 
         offset_pointer = 0
 
         # go through keymaps in content
-        for key, keymap in self.content:
+        for key, keymap in self._content:
             keymap.update()
-
             if keymap.size <= 0:
                 print(f"skipping keymap {keymap} as it is empty")
                 continue
 
-            self._key2reg[key] = keymap
-            self._key2pos[key] = offset_pointer
-            self._pos2reg[offset_pointer] = keymap
-
-            offset_pointer += len(keymap)
-
+            self[key] = keymap
+            for offset in range(len(keymap)):
+                self._key2pos[key] = offset_pointer
+                self._pos2reg.append((keymap, offset))
+                offset_pointer += 1
+        assert len(self._pos2reg) == offset_pointer
         self._size = offset_pointer
         self._is_ud_flag = True
 
@@ -195,31 +227,116 @@ class Region(KeyMap):
     """Region is a keymap which is trivially indexed by integer keys"""
 
     _IDENTIFIER_ = "Region"
-    _ENUM = 0
+    _ENUM_ = 0
 
-    def _update(self):
-        """the actual update routine"""
-        return True
+    def __init__(self, size, name=None):
+        # autoname
+        super().__init__(name=name)
+        for count in range(size):
+            self.append(Key(count), Entry(name=f"{self.name}+{count}"))
+        self.update()
+
+    def __str__(self):
+        return super().__str__()
+        # return f"<Region:{self.name}>"
+
+    def __repr__(self):
+        return super().__repr__()
+        return f"REG={self.name}"
 
 
 class Entry(Region):
     """A Region of size 1"""
 
+    _IDENTIFIER_ = "Entry"
+    _ENUM_ = 0
+
+    def __init__(self, name=None):
+        super().__init__(0, name=name)
+        self._is_ud_flag = True
+        self._size = 1
+
+    def _update(self):
+        """the actual update routine"""
+        self._size = 1
+        self._is_ud_flag = True
+        return self._is_ud_flag
+
+    def flag_ud(self):
+        pass
+
+    def __len__(self):
+        return 1
+
+    def __str__(self):
+        return f"Entry={self.name}"
+
+    def __repr__(self):
+        return f"ENT={self.name}"
+
 
 class Key:
     """Key class description"""
 
+    def __init__(self, *inps):
+        self._keys = []
+        for inp in inps:
+            if isinstance(inp, Key):
+                self._keys += inp.list_of_keys()
+            else:
+                self._keys += [inp]
 
-class KeyChain(Key):
-    """A chain of keys to access nested maps"""
+    def list_of_keys(self):
+        """get a list of keys"""
+        return list(self._keys)
+
+    @property
+    def keys(self):
+        """read-only access to keys"""
+        return tuple(self._keys)
+
+    def __hash__(self):
+        return hash(self.keys)
+
+    def __eq__(self, other):
+        return self.keys == other.keys
+
+    def keychain(self):
+        """unpack all the keys chained up"""
+        yield from self._keys
+
+    def __str__(self):
+        return f'Key={"|".join(map(str, self._keys))}'
+
+    def __repr__(self):
+        return f'KEY={"|".join(map(str, self._keys))}'
 
 
 a = KeyMap()
 b = KeyMap()
-print(a.name)
-print(b.name)
-print(KeyMap._ENUM)
+print(a)
+print(b)
+print(KeyMap._ENUM_)
 
-c = Region()
-print(c.name)
-print(Region._ENUM)
+c = Region(4)
+print(Region._ENUM_)
+
+# a.update()
+# b.update()
+c.update()
+
+print(c)
+print(len(c._content))
+
+a = Key((("A",), "B"))
+b = Key("B")
+c = Key("C")
+
+d = Key(a, b, "C")
+print(d.list_of_keys())
+e = Key(a, Key(a, b, b), "F")
+print(e.list_of_keys())
+print(e.keys)
+
+for key in e.keychain():
+    print(key)
