@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2024, 17:41
-# Version:     0.0.7
+# Last Update: 28/08/2024, 10:38
+# Version:     0.0.9
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,8 +38,12 @@ class Region:
 
 
 class Key(Region):
-    """Key  class description"""
+    """Key class description"""
 
 
-class Keymap(Region):
+class KeyChain(Key):
+    """A chain of keys to access nested maps"""
+
+
+class KeyMap(Region):
     """Keymap class description"""
