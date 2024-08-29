@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 28/08/2024, 18:00
-# Version:     0.0.503
+# Last Update: 29/08/2024, 14:26
+# Version:     0.0.780
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -36,10 +36,6 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 import pickle
 
 INDENT = 2
-
-
-class DuplicateKeyError(Exception):
-    """duplicate key access"""
 
 
 class KeyMap(dict):
@@ -103,12 +99,12 @@ class KeyMap(dict):
         return self._size
 
     def __str__(self):
-        return super().__str__()
-        return f"<{self._IDENTIFIER_} name={self.name}>"
+        # return super().__str__()
+        return f"<{self._IDENTIFIER_} '{self.name}'>"
 
     def __repr__(self):
-        return super().__repr__()
-        return f"{self._IDENTIFIER_[0]}:{self.name}"
+        # return super().__repr__()
+        return f"<{self._IDENTIFIER_[0]}[{self.name}]>"
 
     def __len__(self):
         self.update()
@@ -173,10 +169,12 @@ class KeyMap(dict):
 
     def append(self, key, keymap, check=__debug__):
         """append a keymap object at a key"""
+        if not isinstance(key, Key):
+            key = Key(key)
         if check:
             for tkey in self.keys():
                 if tkey == key:
-                    raise DuplicateKeyError(f"Key '{key}' already exists")
+                    raise KeyError(f"Key '{key}' already exists")
         self._append(key, keymap)
         keymap.add_parent(self)
         self.flag_ud()
@@ -199,7 +197,6 @@ class KeyMap(dict):
         """the actual update routine"""
         # reset internal stuff
 
-        print("TRUE")
         self._reset()
 
         offset_pointer = 0
@@ -212,8 +209,8 @@ class KeyMap(dict):
                 continue
 
             self[key] = keymap
+            self._key2pos[key] = offset_pointer
             for offset in range(len(keymap)):
-                self._key2pos[key] = offset_pointer
                 self._pos2reg.append((keymap, offset))
                 offset_pointer += 1
         assert len(self._pos2reg) == offset_pointer
@@ -236,13 +233,13 @@ class Region(KeyMap):
             self.append(Key(count), Entry(name=f"{self.name}+{count}"))
         self.update()
 
-    def __str__(self):
-        return super().__str__()
-        # return f"<Region:{self.name}>"
+    # def __str__(self):
+    #     return f"<Region='{self.name}'>"
+    #     # return super().__str__()
 
-    def __repr__(self):
-        return super().__repr__()
-        return f"REG={self.name}"
+    # def __repr__(self):
+    #     # return super().__repr__()
+    #     return f"<R='{self.name}'>"
 
 
 class Entry(Region):
@@ -268,32 +265,54 @@ class Entry(Region):
     def __len__(self):
         return 1
 
+    # def __str__(self):
+    #     return f"<Entry='{self.name}'>"
+
+    # def __repr__(self):
+    #     return f"<E='{self.name}'>"
+
+
+class _Key:
+    """Key class description"""
+
+    _PARENT = None
+
+    def __init__(self, key):
+        self._key = key
+
+    @property
+    def key(self):
+        return self._key
+
+    @property
+    def parent(self):
+        """access the classes parent attribute"""
+        return self.__class__._PARENT
+
     def __str__(self):
-        return f"Entry={self.name}"
+        return f"[{self._key}]"
 
     def __repr__(self):
-        return f"ENT={self.name}"
+        return f"[{self._key}]"
 
 
 class Key:
-    """Key class description"""
+    def __init_subclass__(cls, parent=None):
+        cls._PARENT = parent
 
-    def __init__(self, *inps):
+    def __init__(self, *keys):
         self._keys = []
-        for inp in inps:
-            if isinstance(inp, Key):
-                self._keys += inp.list_of_keys()
+        for key in keys:
+            if isinstance(key, Key):
+                self._keys += key.as_list()
+            elif isinstance(key, _Key):
+                self._keys += [key]
             else:
-                self._keys += [inp]
+                self._keys += [_Key(key)]
 
-    def list_of_keys(self):
-        """get a list of keys"""
-        return list(self._keys)
-
-    @property
-    def keys(self):
-        """read-only access to keys"""
-        return tuple(self._keys)
+    def unchain(self):
+        """unpack all the key objects chained up"""
+        yield from self._keys
 
     def __hash__(self):
         return hash(self.keys)
@@ -301,15 +320,41 @@ class Key:
     def __eq__(self, other):
         return self.keys == other.keys
 
-    def keychain(self):
-        """unpack all the keys chained up"""
-        yield from self._keys
+    @property
+    def keys(self):
+        """unpack the key signature as a tuple for hashing and more"""
+        return tuple(key.key for key in self._keys)
 
-    def __str__(self):
-        return f'Key={"|".join(map(str, self._keys))}'
+    def as_list(self):
+        """access the keys as a list"""
+        return list(self.unchain())
 
     def __repr__(self):
-        return f'KEY={"|".join(map(str, self._keys))}'
+        return f"[{'|'.join(map(lambda x: str(x.key), self._keys))}]"
+
+    def __str__(self):
+        return f"<K{self.__repr__()}>"
+
+    def __or__(self, other):
+        if isinstance(other, Key):
+            return Key(self, other.as_list())
+        elif isinstance(other, _Key):
+            return Key(self, other)
+        else:
+            return Key(self, _Key(other))
+
+    def __ror__(self, other):
+        if isinstance(other, Key):
+            return Key(other.as_list(), self)
+        elif isinstance(other, _Key):
+            return Key(other, self)
+        else:
+            return Key(_Key(other), self)
+
+    @property
+    def parents(self):
+        """access the classes parent attribute"""
+        return [key.parent for key in self._keys]
 
 
 a = KeyMap()
@@ -319,6 +364,9 @@ print(b)
 print(KeyMap._ENUM_)
 
 c = Region(4)
+a.append(Key("No 1"), c)
+a.append(Key("No 2"), c)
+a.update()
 print(Region._ENUM_)
 
 # a.update()
@@ -328,15 +376,29 @@ c.update()
 print(c)
 print(len(c._content))
 
+for reg in a._pos2reg:
+    print(reg)
+
+for idn, item in a._key2pos.items():
+    print(idn, item)
+
+print(len(a))
+
 a = Key((("A",), "B"))
 b = Key("B")
 c = Key("C")
 
 d = Key(a, b, "C")
-print(d.list_of_keys())
+print(d.as_list())
 e = Key(a, Key(a, b, b), "F")
-print(e.list_of_keys())
+print(e.as_list())
 print(e.keys)
 
-for key in e.keychain():
+print(e)
+
+f = e | e
+
+for key in e.unchain():
     print(key)
+
+print(f.parents)
