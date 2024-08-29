@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 29/08/2024, 14:30
-# Version:     0.0.791
+# Last Update: 29/08/2024, 15:01
+# Version:     0.0.881
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -42,213 +42,6 @@ class InvalidOperation(Exception):
 INDENT = 2
 
 
-class KeyMap(dict):
-    """Keymap class description"""
-
-    _IDENTIFIER_ = "KeyMap"
-    _ENUM_ = 0
-
-    def __init__(self, name=None):
-        # autoname
-        super().__init__()
-        if name is None:
-            name = f"{self._IDENTIFIER_}{self._ENUM_}"
-        # count
-        self.__class__._ENUM_ += 1
-        self._name = name
-
-        # start empty
-        self._size = 0
-
-        # contain nested keymaps, regions or entries
-        self._content = []
-
-        # remember what you are attached to
-        self._parents = []
-
-        # lookup tables
-        self._pos2reg = []  # translate from pos to key reg
-        self._key2pos = {}  # translate the key to its position
-
-        # reset
-        self._reset()
-
-        # this actually does not make a difference, but it feels more safe to
-        # start with False
-        self._is_ud_flag = False
-
-    def _reset(self):
-        """reset anything that has to do with counters and offsets"""
-        self._is_ud_flag = False
-        self._size = 0
-        self._pos2reg = []
-        self._key2pos = {}
-        self.clear()
-
-    @property
-    def name(self):
-        """get name (protected access)"""
-        return self._name
-
-    @name.setter
-    def name(self, name):
-        print("Bad programmer, bad! But seriously, be careful with renaming.")
-        self._name = name
-
-    @property
-    def size(self):
-        """get size (protected access)"""
-        return self._size
-
-    def __str__(self):
-        # return super().__str__()  # this brings out the dict character
-        return f"<{self._IDENTIFIER_} '{self.name}'>"
-
-    def __repr__(self):
-        # return super().__repr__()  # this brings out the dict character
-        return f"<{self._IDENTIFIER_[0]}[{self.name}]>"
-
-    def __len__(self):
-        self.update()
-        assert self._size == sum(len(keymap) for keymap in self.values())
-        return self._size
-
-    @staticmethod
-    def from_file(filename):
-        """get the keymap from a file"""
-        with open(filename, "rb") as handle:
-            return pickle.load(handle)
-
-    def to_file(self, filename):
-        """write the keymap to a file"""
-        with open(filename, "wb") as handle:
-            pickle.dump(self, handle)
-
-    @property
-    def is_ud(self):
-        """read-only access to update flag"""
-        return self._is_ud_flag
-
-    def reorder(self, function):
-        """reorder the arrangement of keys in the map by some sorting function"""
-        self._content = sorted(
-            [
-                (sort_id, key, keymap)
-                for key, keymap in self._content
-                if (sort_id := function(key, keymap)) is not None
-            ]
-        )
-        self.flag_ud()
-
-    def flag_ud(self):
-        """mark for update"""
-        self._is_ud_flag = False
-        for parent in self._parents:
-            parent.flag_ud()
-
-    def _append(self, key, keymap):
-        assert isinstance(key, Key)
-        self._content.append((key, keymap))
-
-    def append(self, key, keymap, check=__debug__):
-        """append a keymap object at a key"""
-        if not isinstance(key, Key):
-            key = Key(key)
-        if check:
-            for tkey in self.keys():
-                if tkey == key:
-                    raise KeyError(f"Key '{key}' already exists")
-        self._append(key, keymap)
-        keymap.add_parent(self)
-        self.flag_ud()
-
-    def add_parent(self, parent):
-        """add as a parent if not yet there"""
-        if parent not in self._parents:
-            self._parents.append(parent)
-
-    def update(self):
-        """user-friendly update procedure. Skips update if already up to date,
-        asserts up-to-date flag and"""
-        ret = True
-        if not self.is_ud:
-            ret = self._update()
-        assert ret
-        return self
-
-    def _update(self):
-        """the actual update routine"""
-
-        # reset internal stuff
-        self._reset()
-        offset_pointer = 0
-
-        # go through keymaps in content
-        for key, keymap in self._content:
-            keymap.update()
-            if keymap.size <= 0:
-                print(f"skipping keymap {keymap} as it is empty")
-                continue
-
-            self[key] = keymap
-            self._key2pos[key] = offset_pointer
-            for offset in range(len(keymap)):
-                self._pos2reg.append((keymap, offset))
-                offset_pointer += 1
-        assert len(self._pos2reg) == offset_pointer
-        self._size = offset_pointer
-        self._is_ud_flag = True
-
-        return self._is_ud_flag
-
-
-class Region(KeyMap):
-    """Region is a keymap which is trivially indexed by integer keys"""
-
-    _IDENTIFIER_ = "Region"
-    _ENUM_ = 0
-
-    def __init__(self, size, name=None):
-        # autoname
-        super().__init__(name=name)
-        for count in range(size):
-            self.append(Key(count), Entry(name=f"{self.name}+{count}"))
-        self.update()
-
-    def reorder(self, function):
-        raise InvalidOperation("Reordering regions is not supported")
-
-
-class Entry(Region):
-    """A Region of size 1"""
-
-    _IDENTIFIER_ = "Entry"
-    _ENUM_ = 0
-
-    def __init__(self, name=None):
-        super().__init__(0, name=name)
-        self._is_ud_flag = True
-        self._size = 1
-
-    def _update(self):
-        """the actual update routine"""
-        self._size = 1
-        self._is_ud_flag = True
-        return self._is_ud_flag
-
-    def flag_ud(self):
-        pass
-
-    def __len__(self):
-        return 1
-
-    # def __str__(self):
-    #     return f"<Entry='{self.name}'>"
-
-    # def __repr__(self):
-    #     return f"<E='{self.name}'>"
-
-
 class _Key:
     """Key class description"""
 
@@ -256,6 +49,15 @@ class _Key:
 
     def __init__(self, key):
         self._key = key
+
+    def __init_subclass__(cls, parent=None):
+        cls._PARENT = parent
+
+    def __hash__(self):
+        return hash(self.key)
+
+    def __eq__(self, other):
+        return self.key == other.key
 
     @property
     def key(self):
@@ -274,9 +76,6 @@ class _Key:
 
 
 class Key:
-    def __init_subclass__(cls, parent=None):
-        cls._PARENT = parent
-
     def __init__(self, *keys):
         self._keys = []
         for key in keys:
@@ -334,6 +133,232 @@ class Key:
         return [key.parent for key in self._keys]
 
 
+class KeyMap(dict):
+    """Keymap class description"""
+
+    _IDENTIFIER_ = "KeyMap"
+    _ENUM_ = 0
+    _KEYGEN = _Key
+
+    def __new__(cls, *_args, name=None):
+        ret = super().__new__(cls)
+        # autoname
+        if name is None:
+            name = f"{cls._IDENTIFIER_}{cls._ENUM_}"
+        # count
+        cls._ENUM_ += 1
+        ret._name = name
+
+        class ThisKeyGen(_Key, parent=cls):
+            pass
+
+        ret._KEYGEN = ThisKeyGen
+        ret._KEYGEN.__doc__ = f"""key generator for keymap '{name}'"""
+        return ret
+
+    def __init__(self, name=None):
+        super().__init__()
+        # start empty
+        self._size = 0
+
+        # contain nested keymaps, regions or entries
+        self._content = []
+
+        # remember what you are attached to
+        self._parents = []
+
+        # lookup tables
+        self._pos2reg = []  # translate from pos to key reg
+        self._key2pos = {}  # translate the key to its position
+
+        # reset
+        self._reset()
+
+        # this actually does not make a difference, but it feels more safe to
+        # start with False
+        self._is_ud_flag = False
+
+    def _reset(self):
+        """reset anything that has to do with counters and offsets"""
+        self._is_ud_flag = False
+        self._size = 0
+        self._pos2reg = []
+        self._key2pos = {}
+        self.clear()
+
+    @property
+    def name(self):
+        """get name (protected access)"""
+        return self._name
+
+    @name.setter
+    def name(self, name):
+        print("Bad programmer, bad! But seriously, be careful with renaming.")
+        self._name = name
+
+    @property
+    def size(self):
+        """get size (protected access)"""
+        return self._size
+
+    def __str__(self):
+        self.update()
+        # return super().__str__()  # this brings out the dict character
+        return f"<{self._IDENTIFIER_} '{self.name}'>"
+
+    def __repr__(self):
+        self.update()
+        # return super().__repr__()  # this brings out the dict character
+        return f"<{self._IDENTIFIER_[0]}[{self.name}]>"
+
+    def __len__(self):
+        self.update()
+        assert self._size == sum(len(keymap) for keymap in self.values())
+        return self._size
+
+    @staticmethod
+    def from_file(filename):
+        """get the keymap from a file"""
+        with open(filename, "rb") as handle:
+            ret = pickle.load(handle)
+        ret._update()
+        return ret
+
+    def to_file(self, filename):
+        """write the keymap to a file"""
+        with open(filename, "wb") as handle:
+            pickle.dump(self, handle)
+
+    @property
+    def is_ud(self):
+        """read-only access to update flag"""
+        return self._is_ud_flag
+
+    def reorder(self, function):
+        """reorder the arrangement of keys in the map by some sorting function"""
+        self._content = sorted(
+            [
+                (sort_id, key, keymap)
+                for key, keymap in self._content
+                if (sort_id := function(key, keymap)) is not None
+            ]
+        )
+        self.flag_ud()
+
+    def flag_ud(self):
+        """mark for update"""
+        self._is_ud_flag = False
+        for parent in self._parents:
+            parent.flag_ud()
+
+    def _append(self, key, keymap):
+        assert isinstance(key, _Key)
+        self._content.append((key, keymap))
+
+    def append(self, key, keymap=None, check=__debug__):
+        """append a keymap object at a key"""
+        key_obj = self._KEYGEN(key)
+        if check:
+            for tkey, _ in self._content:
+                if tkey == key_obj:
+                    raise KeyError(f"Key '{key_obj}' already exists")
+        self._append(key_obj, keymap)
+        keymap.add_parent(self)
+        self.flag_ud()
+
+    def add_parent(self, parent):
+        """add as a parent if not yet there"""
+        if parent not in self._parents:
+            self._parents.append(parent)
+
+    def update(self):
+        """user-friendly update procedure. Skips update if already up to date,
+        asserts up-to-date flag and"""
+        ret = True
+        if not self.is_ud:
+            ret = self._update()
+        assert ret
+        return self
+
+    def _update(self):
+        """the actual update routine"""
+
+        # reset internal stuff
+        self._reset()
+        offset_pointer = 0
+
+        # go through keymaps in content
+        for key, keymap in self._content:
+            keymap.update()
+            if keymap.size <= 0:
+                print(f"skipping keymap {keymap} as it is empty")
+                continue
+
+            self[key] = keymap
+            self._key2pos[key] = offset_pointer
+            for offset in range(len(keymap)):
+                self._pos2reg.append((keymap, offset))
+                offset_pointer += 1
+        assert len(self._pos2reg) == offset_pointer
+        self._size = offset_pointer
+        self._is_ud_flag = True
+
+        return self._is_ud_flag
+
+    def __getitem__(self, key):
+        self.update()
+        if not isinstance(key, _Key):
+            key = self._KEYGEN(key)
+        return super().__getitem__(key)
+
+
+class Region(KeyMap):
+    """Region is a keymap which is trivially indexed by integer keys"""
+
+    _IDENTIFIER_ = "Region"
+    _ENUM_ = 0
+
+    def __init__(self, size, name=None):
+        # autoname
+        super().__init__(name=name)
+        for count in range(size):
+            self.append(Key(count), Entry(name=f"{self.name}+{count}"))
+        self.update()
+
+    def reorder(self, function):
+        raise InvalidOperation("Reordering regions is not supported")
+
+
+class Entry(Region):
+    """A Region of size 1"""
+
+    _IDENTIFIER_ = "Entry"
+    _ENUM_ = 0
+
+    def __init__(self, name=None):
+        super().__init__(0, name=name)
+        self._is_ud_flag = True
+        self._size = 1
+
+    def _update(self):
+        """the actual update routine"""
+        self._size = 1
+        self._is_ud_flag = True
+        return self._is_ud_flag
+
+    def flag_ud(self):
+        pass
+
+    def __len__(self):
+        return 1
+
+    # def __str__(self):
+    #     return f"<Entry='{self.name}'>"
+
+    # def __repr__(self):
+    #     return f"<E='{self.name}'>"
+
+
 a = KeyMap()
 b = KeyMap()
 print(a)
@@ -341,8 +366,12 @@ print(b)
 print(KeyMap._ENUM_)
 
 c = Region(4)
-a.append(Key("No 1"), c)
-a.append(Key("No 2"), c)
+print(c)
+
+print("a", a)
+
+a.append("No 1", c)
+a.append("No 2", c)
 a.update()
 print(Region._ENUM_)
 
@@ -379,3 +408,16 @@ for key in e.unchain():
     print(key)
 
 print(f.parents)
+
+a = KeyMap("foobar")
+print(a._KEYGEN.__doc__)
+a.append("foo", Region(3))
+a.append("bar", Region(3))
+a.append("baz", Region(3))
+# a.update()
+print(a)
+
+print(a["foo"])
+print(len(a))
+print(len(a["foo"]))
+print(list(a.keys()))
