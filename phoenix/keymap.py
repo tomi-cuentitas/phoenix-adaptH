@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 29/08/2024, 14:26
-# Version:     0.0.780
+# Last Update: 29/08/2024, 14:30
+# Version:     0.0.791
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,8 +32,12 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 
 """
 
-
 import pickle
+
+
+class InvalidOperation(Exception):
+    """You're not supposed to do that."""
+
 
 INDENT = 2
 
@@ -65,7 +69,6 @@ class KeyMap(dict):
         # lookup tables
         self._pos2reg = []  # translate from pos to key reg
         self._key2pos = {}  # translate the key to its position
-        # self._key2reg = {}  # translate the key to its region -> self
 
         # reset
         self._reset()
@@ -80,7 +83,6 @@ class KeyMap(dict):
         self._size = 0
         self._pos2reg = []
         self._key2pos = {}
-        # self._key2reg = {}
         self.clear()
 
     @property
@@ -99,11 +101,11 @@ class KeyMap(dict):
         return self._size
 
     def __str__(self):
-        # return super().__str__()
+        # return super().__str__()  # this brings out the dict character
         return f"<{self._IDENTIFIER_} '{self.name}'>"
 
     def __repr__(self):
-        # return super().__repr__()
+        # return super().__repr__()  # this brings out the dict character
         return f"<{self._IDENTIFIER_[0]}[{self.name}]>"
 
     def __len__(self):
@@ -124,27 +126,8 @@ class KeyMap(dict):
 
     @property
     def is_ud(self):
-        """check if the keymap is up to date, includes checking inner nested
-        maps"""
+        """read-only access to update flag"""
         return self._is_ud_flag
-
-    # @property
-    # def keymaps(self):
-    #     """get keymaps generator (protected access)"""
-    #     self.update()
-    #     yield from self.values()
-
-    # @property
-    # def items(self):
-    #     """get keymaps generator (protected access)"""
-    #     self.update()
-    #     yield from self.items()
-
-    # @property
-    # def keys(self):
-    #     """get the keymap's keys generator (protected access)"""
-    #     self.update()
-    #     yield from self.keys()
 
     def reorder(self, function):
         """reorder the arrangement of keys in the map by some sorting function"""
@@ -195,10 +178,9 @@ class KeyMap(dict):
 
     def _update(self):
         """the actual update routine"""
+
         # reset internal stuff
-
         self._reset()
-
         offset_pointer = 0
 
         # go through keymaps in content
@@ -233,13 +215,8 @@ class Region(KeyMap):
             self.append(Key(count), Entry(name=f"{self.name}+{count}"))
         self.update()
 
-    # def __str__(self):
-    #     return f"<Region='{self.name}'>"
-    #     # return super().__str__()
-
-    # def __repr__(self):
-    #     # return super().__repr__()
-    #     return f"<R='{self.name}'>"
+    def reorder(self, function):
+        raise InvalidOperation("Reordering regions is not supported")
 
 
 class Entry(Region):
