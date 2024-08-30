@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 30/08/2024, 15:12
-# Version:     0.0.982
+# Last Update: 30/08/2024, 16:59
+# Version:     0.0.1056
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -148,7 +148,7 @@ def autoname(function):
     return wrapper
 
 
-class KeyMap(dict):
+class KeyMap:
     """Keymap class description"""
 
     _IDENTIFIER_ = "KeyMap"
@@ -172,6 +172,7 @@ class KeyMap(dict):
         # lookup tables
         self._pos2reg = []  # translate from pos to key reg
         self._key2pos = {}  # translate the key to its position
+        self._key2reg = {}
 
         class ThisKeyGen(_Key, parent=self.__class__):
             """auto generated key generator for keymap"""
@@ -193,7 +194,7 @@ class KeyMap(dict):
         self._size = 0
         self._pos2reg = []
         self._key2pos = {}
-        self.clear()
+        self._key2reg = {}
 
     @property
     def name(self):
@@ -222,7 +223,9 @@ class KeyMap(dict):
 
     def __len__(self):
         self.update()
-        assert self._size == sum(len(keymap) for keymap in self.values())
+        assert self._size == sum(
+            len(keymap) for keymap in self.values(recursive=True)
+        )
         return self._size
 
     @staticmethod
@@ -303,7 +306,7 @@ class KeyMap(dict):
                 print(f"skipping keymap {keymap} as it is empty")
                 continue
 
-            self[key] = keymap
+            self._key2reg[key] = keymap
             self._key2pos[key] = offset_pointer
             for offset in range(len(keymap)):
                 self._pos2reg.append((keymap, offset))
@@ -316,9 +319,35 @@ class KeyMap(dict):
 
     def __getitem__(self, key):
         self.update()
+        if isinstance(key, Key):
+            return self._key2reg[key._keys[0]]
         if not isinstance(key, _Key):
-            key = self._keygen(key)
-        return super().__getitem__(key)
+            return self._key2reg[_Key(key)]
+        return self._key2reg[key]
+
+    def keys(self, recursive=False, prefix=Key()):
+        """generator equivalent to dict's keys function"""
+        for key, reg in self._key2reg.items():
+            if recursive:
+                yield from reg.keys(recursive=True, prefix=Key(prefix, key))
+            else:
+                yield Key(prefix, key)
+
+    def items(self, recursive=False, prefix=Key()):
+        """generator equivalent to dict's items function"""
+        for key, reg in self._key2reg.items():
+            if recursive:
+                yield from reg.items(recursive=True, prefix=Key(prefix, key))
+            else:
+                yield Key(key), reg
+
+    def values(self, recursive=False):
+        """generator equivalent to dict's values function"""
+        for key, reg in self._key2reg.items():
+            if recursive:
+                yield from reg.values(recursive=True)
+            else:
+                yield reg
 
 
 class Region(KeyMap):
@@ -348,6 +377,15 @@ class Entry(Region):
         super().__init__(0, name=name)
         self._is_ud_flag = True
         self._size = 1
+
+    def keys(self, recursive=False, prefix=Key()):
+        yield Key(prefix)
+
+    def items(self, recursive=False, prefix=Key()):
+        yield Key(prefix), self
+
+    def values(self, recursive=False):
+        yield self
 
     def _update(self):
         """the actual update routine"""
@@ -430,7 +468,14 @@ print(a)
 print(a["foo"])
 print(len(a))
 print(len(a["foo"]))
-print(list(a.keys()))
+print()
+print(list(a.keys(recursive=False)))
+print(list(a.keys(recursive=True)))
 
-print(Key.__doc__)
-print(__debug__)
+print()
+print(list(a.items(recursive=False)))
+print(list(a.items(recursive=True)))
+
+print()
+print(list(a.values(recursive=False)))
+print(list(a.values(recursive=True)))
