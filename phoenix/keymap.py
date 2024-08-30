@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 29/08/2024, 15:01
-# Version:     0.0.881
+# Last Update: 30/08/2024, 15:12
+# Version:     0.0.982
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -76,6 +76,8 @@ class _Key:
 
 
 class Key:
+    """A key contains one or multiple _Key objects"""
+
     def __init__(self, *keys):
         self._keys = []
         for key in keys:
@@ -133,31 +135,31 @@ class Key:
         return [key.parent for key in self._keys]
 
 
+def autoname(function):
+    """decorator to automatically fill a proper name"""
+
+    def wrapper(self, name=None):
+        if name is None:
+            name = f"{self._IDENTIFIER_}{self._ENUM_}"
+        self.__class__._ENUM_ += 1  # count
+
+        function(self, name=name)
+
+    return wrapper
+
+
 class KeyMap(dict):
     """Keymap class description"""
 
     _IDENTIFIER_ = "KeyMap"
     _ENUM_ = 0
-    _KEYGEN = _Key
 
-    def __new__(cls, *_args, name=None):
-        ret = super().__new__(cls)
-        # autoname
-        if name is None:
-            name = f"{cls._IDENTIFIER_}{cls._ENUM_}"
-        # count
-        cls._ENUM_ += 1
-        ret._name = name
-
-        class ThisKeyGen(_Key, parent=cls):
-            pass
-
-        ret._KEYGEN = ThisKeyGen
-        ret._KEYGEN.__doc__ = f"""key generator for keymap '{name}'"""
-        return ret
-
+    @autoname
     def __init__(self, name=None):
         super().__init__()
+
+        self._name = name
+
         # start empty
         self._size = 0
 
@@ -170,6 +172,13 @@ class KeyMap(dict):
         # lookup tables
         self._pos2reg = []  # translate from pos to key reg
         self._key2pos = {}  # translate the key to its position
+
+        class ThisKeyGen(_Key, parent=self.__class__):
+            """auto generated key generator for keymap"""
+
+        ThisKeyGen.__doc__ += f" '{name}.'"
+
+        self._keygen = ThisKeyGen
 
         # reset
         self._reset()
@@ -257,7 +266,7 @@ class KeyMap(dict):
 
     def append(self, key, keymap=None, check=__debug__):
         """append a keymap object at a key"""
-        key_obj = self._KEYGEN(key)
+        key_obj = self._keygen(key)
         if check:
             for tkey, _ in self._content:
                 if tkey == key_obj:
@@ -308,7 +317,7 @@ class KeyMap(dict):
     def __getitem__(self, key):
         self.update()
         if not isinstance(key, _Key):
-            key = self._KEYGEN(key)
+            key = self._keygen(key)
         return super().__getitem__(key)
 
 
@@ -377,12 +386,13 @@ print(Region._ENUM_)
 
 # a.update()
 # b.update()
-c.update()
+# c.update()
 
 print(c)
+
 print(len(c._content))
 
-for reg in a._pos2reg:
+for reg in a.items():
     print(reg)
 
 for idn, item in a._key2pos.items():
@@ -410,7 +420,7 @@ for key in e.unchain():
 print(f.parents)
 
 a = KeyMap("foobar")
-print(a._KEYGEN.__doc__)
+print(a._keygen.__doc__)
 a.append("foo", Region(3))
 a.append("bar", Region(3))
 a.append("baz", Region(3))
@@ -421,3 +431,6 @@ print(a["foo"])
 print(len(a))
 print(len(a["foo"]))
 print(list(a.keys()))
+
+print(Key.__doc__)
+print(__debug__)
