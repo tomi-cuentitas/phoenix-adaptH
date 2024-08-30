@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 30/08/2024, 16:59
-# Version:     0.0.1056
+# Last Update: 30/08/2024, 17:34
+# Version:     0.0.1157
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -63,10 +63,10 @@ class _Key:
     def key(self):
         return self._key
 
-    @property
-    def parent(self):
+    @classmethod
+    def parent(cls):
         """access the classes parent attribute"""
-        return self.__class__._PARENT
+        return cls._PARENT
 
     def __str__(self):
         return f"[{self._key}]"
@@ -80,17 +80,21 @@ class Key:
 
     def __init__(self, *keys):
         self._keys = []
-        for key in keys:
-            if isinstance(key, Key):
-                self._keys += key.as_list()
-            elif isinstance(key, _Key):
-                self._keys += [key]
+        for _key in keys:
+            if isinstance(_key, Key):
+                self._keys += _key.as_list()
+            elif isinstance(_key, _Key):
+                self._keys += [_key]
             else:
-                self._keys += [_Key(key)]
+                self._keys += [_Key(_key)]
 
-    def unchain(self):
+    def unchain(self, tagged=False):
         """unpack all the key objects chained up"""
-        yield from self._keys
+        for _key in self._keys:
+            if tagged:
+                yield (_key.parent(), _key)
+            else:
+                yield _key
 
     def __hash__(self):
         return hash(self.keys)
@@ -101,11 +105,11 @@ class Key:
     @property
     def keys(self):
         """unpack the key signature as a tuple for hashing and more"""
-        return tuple(key.key for key in self._keys)
+        return tuple(_key.key for _key in self._keys)
 
-    def as_list(self):
+    def as_list(self, tagged=False):
         """access the keys as a list"""
-        return list(self.unchain())
+        return list(self.unchain(tagged=tagged))
 
     def __repr__(self):
         return f"[{'|'.join(map(lambda x: str(x.key), self._keys))}]"
@@ -132,7 +136,7 @@ class Key:
     @property
     def parents(self):
         """access the classes parent attribute"""
-        return [key.parent for key in self._keys]
+        return [_key.parent() for _key in self._keys]
 
 
 def autoname(function):
@@ -174,19 +178,23 @@ class KeyMap:
         self._key2pos = {}  # translate the key to its position
         self._key2reg = {}
 
-        class ThisKeyGen(_Key, parent=self.__class__):
-            """auto generated key generator for keymap"""
-
-        ThisKeyGen.__doc__ += f" '{name}.'"
-
-        self._keygen = ThisKeyGen
-
         # reset
         self._reset()
 
         # this actually does not make a difference, but it feels more safe to
         # start with False
         self._is_ud_flag = False
+
+        self._keygen = self._generate_keygen(name)
+
+    def _generate_keygen(self, name):
+        class ThisKeyGen(_Key, parent=self):
+            pass
+
+        ThisKeyGen.__doc__ = (
+            f"auto generated key generator for keymap '{name}.'"
+        )
+        return ThisKeyGen
 
     def _reset(self):
         """reset anything that has to do with counters and offsets"""
@@ -270,6 +278,8 @@ class KeyMap:
     def append(self, key, keymap=None, check=__debug__):
         """append a keymap object at a key"""
         key_obj = self._keygen(key)
+        if keymap is None:
+            keymap = Entry(str(key))
         if check:
             for tkey, _ in self._content:
                 if tkey == key_obj:
@@ -359,9 +369,14 @@ class Region(KeyMap):
     def __init__(self, size, name=None):
         # autoname
         super().__init__(name=name)
+        self._counter = 0
         for count in range(size):
-            self.append(Key(count), Entry(name=f"{self.name}+{count}"))
+            self.append(Entry(name=f"{self.name}+{count}"))
         self.update()
+
+    def append(self, entry):
+        super().append(key=self._counter, keymap=entry)
+        self._counter += 1
 
     def reorder(self, function):
         raise InvalidOperation("Reordering regions is not supported")
@@ -399,11 +414,8 @@ class Entry(Region):
     def __len__(self):
         return 1
 
-    # def __str__(self):
-    #     return f"<Entry='{self.name}'>"
-
-    # def __repr__(self):
-    #     return f"<E='{self.name}'>"
+    def _generate_keygen(self, name):
+        return _Key
 
 
 a = KeyMap()
@@ -459,9 +471,15 @@ print(f.parents)
 
 a = KeyMap("foobar")
 print(a._keygen.__doc__)
-a.append("foo", Region(3))
-a.append("bar", Region(3))
-a.append("baz", Region(3))
+a.append("foo", Region(3, name="reg@foo"))
+a.append("bar", Region(3, name="reg@bar"))
+a.append("baz", Region(3, name="reg@baz"))
+
+b = KeyMap("foobaz")
+b.append("x")
+b.append("y")
+b.append("z")
+a.append("test", b)
 # a.update()
 print(a)
 
@@ -479,3 +497,6 @@ print(list(a.items(recursive=True)))
 print()
 print(list(a.values(recursive=False)))
 print(list(a.values(recursive=True)))
+
+test = next(a.keys(recursive=True)).as_list(tagged=True)
+print(test)
