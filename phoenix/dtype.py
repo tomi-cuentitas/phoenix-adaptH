@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/08/2024, 16:02
-# Version:     0.0.471
+# Last Update: 03/09/2024, 13:53
+# Version:     0.0.503
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -50,15 +50,20 @@ import pyopencl as cl
 class DLayer:
     """DLayer class description"""
 
-    _IDENT = "_GENERIC_"
+    _IDENTIFIER = "_GENERIC_"
 
     def __init__(self, size: int):
         self._ndata = size
         self._data_r = None
         self._data_i = None
 
+    def __init_subclass__(cls, ident=None):
+        if ident is None:
+            ident = cls._IDENTIFIER
+        cls._IDENTIFIER = ident
+
     def _set_data_ref(self, real=None, imag=None):
-        """set data"""
+        """set data ref"""
         if real is not None:
             self._data_r = real
         if imag is not None:
@@ -175,20 +180,10 @@ class DLayer:
             imag=imag_part,
         )
 
-    # I need to think a little more about that.
-    # def __enter__(self):
-    #     """use of the "with" statement"""
-    #     # potentially check read/write access here
-    #     return self
-
-    # def __exit__(self, exc_type, exc_val, exc_tb):
-    #     """end "with" statement section"""
-    #     # do stuff on exit like sync or flags
-
     @property
     def ident(self) -> str:
         """access write-protected property ident"""
-        return self._IDENT
+        return self._IDENTIFIER
 
     @property
     def size(self) -> int:
@@ -250,7 +245,7 @@ class SDLC(DLC):
 class DLayerPurePy(DLayer):
     """Pure Python data layer"""
 
-    _IDENT = "PUREPYTHON"
+    _IDENTIFIER = "PUREPYTHON"
 
     def __init__(self, size):
         super().__init__(size)
@@ -261,7 +256,7 @@ class DLayerPurePy(DLayer):
 class DLayerNumpy(DLayer):
     """Numpy based data layer"""
 
-    _IDENT = "NUMPY"
+    _IDENTIFIER = "NUMPY"
 
     def __init__(self, size):
         super().__init__(size)
@@ -272,7 +267,7 @@ class DLayerNumpy(DLayer):
 class DLayerCupy(DLayer):
     """Cupy based data layer"""
 
-    _IDENT = "CUPY"
+    _IDENTIFIER = "CUPY"
 
     def __init__(self, size):
         super().__init__(size)
@@ -283,7 +278,7 @@ class DLayerCupy(DLayer):
 class DLayerOCLGPU(DLayer):
     """Cupy based data layer"""
 
-    _IDENT = "CUPY"
+    _IDENTIFIER = "CUPY"
 
     _CL_CTX = cl.create_some_context()
     _CL_QUEUE = cl.CommandQueue(_CL_CTX)
@@ -348,3 +343,10 @@ print(
     type(test["layer4"].unpack()[0][0]),
     "\n",
 )
+
+
+class MyLayerPurePy(DLayerPurePy, ident="PurePy2"):
+    pass
+
+
+print(MyLayerPurePy._IDENTIFIER)
