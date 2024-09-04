@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/09/2024, 13:42
-# Version:     0.0.9
+# Last Update: 04/09/2024, 12:17
+# Version:     0.0.109
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -36,6 +36,84 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 class Instruction:
     """Instruction class description"""
 
+    _FTYPE = "GENERIC"
+
+    def __init__(self, *, sort_key=None, **params):
+        self._params = dict(params)
+        if sort_key is None:
+            sort_key = "|".join(map(str, self.lookup(*self._params.keys())))
+        self.sort_key = sort_key
+
+    def get(self, use_dict=False, **requests):
+        """lookup parameters in the Instruction. Use defaults if not set.
+        Return tuple or dict"""
+        if use_dict:
+            return {
+                key: (self._params[key] if key in self._params else default)
+                for key, default in requests.items()
+            }
+        return tuple(
+            self._params[key] if key in self._params else default
+            for key, default in requests.items()
+        )
+
+    def lookup(self, *keys, use_dict=False, defaults=None):
+        """lookup parameters in the Instruction. Use None if not set.
+        Return tuple or dict"""
+        if defaults is None:
+            defaults = {}
+        if use_dict:
+            return {
+                key: (
+                    self._params[key]
+                    if key in self._params
+                    else defaults.get(key, None)
+                )
+                for key in keys
+            }
+
+        return tuple(
+            self._params[key] if key in self._params else None for key in keys
+        )
+
+    def __gt__(self, other):
+        return self.sort_key > other.sort_key
+
+    def __lt__(self, other):
+        return self.sort_key < other.sort_key
+
+    def __eq__(self, other):
+        return self.sort_key == other.sort_key
+
+    def __str__(self):
+        return f"<Instruction '{self._FTYPE}' [{', '.join([f'{key}={value}' for key, value in self._params.items()])}]>"
+
+    def __repr__(self):
+        return f"<I:{'|'.join(map(str, self._params.values()))}>"
+
+
+class _Instruction_Ax(Instruction):
+    """Instruction for the function type y=Ax"""
+
+    _KEYS = ()
+    _FTYPE = "Ax"
+
 
 class InstructionGroup(Instruction):
     """InstructionGroup class description"""
+
+
+a = Instruction(a=1, b=2, c=3)
+
+print(a)
+print([a])
+
+print(a.get(a=None, c=2, d=7))
+
+print(a.get(a=None, c=2, d=7, use_dict=True))
+
+print(a.lookup("a", "c", "d"))
+
+print(a.lookup("a", "c", "d", use_dict=True))
+
+print(a.lookup("a", "c", "d", use_dict=True, defaults={"d": 42}))
