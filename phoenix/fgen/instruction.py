@@ -5,13 +5,14 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/09/2024, 12:17
-# Version:     0.0.109
+# Last Update: 05/09/2024, 16:35
+# Version:     0.0.611
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
 
 __doc__ = """
 Instruction module description
@@ -33,19 +34,116 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 """
 
 
-class Instruction:
+class _InstructionMeta(type):
+    """Use a metaclass to handle this"""
+
+    @staticmethod
+    def default_sort_key(obj):
+        """default sort method"""
+        return tuple(str(val) for val in obj.get(*obj.required))
+
+    def __new__(cls, name, bases, dct, **other):
+        """meta class generator. When args are given upon inheritance, they also land here"""
+        # generate the object
+        obj = super().__new__(cls, name, bases, dct)
+
+        # get extra args and put None as default
+        ftype = other.get("ftype", None)
+        required = other.get("required", None)
+        defaults = other.get("defaults", None)
+        sort_function = other.get("sort_function", None)
+
+        # assign it to the object, which is the class in this case!
+        obj._FTYPE = ftype or name.upper()
+        obj._REQUIRED = required or []
+        obj._DEFAULTS = defaults or {}
+        obj._SORT_FUNC = sort_function or cls.default_sort_key
+
+        return obj
+
+    @property
+    def ftype(cls):
+        """class level property for ftype attribute"""
+        return str(cls._FTYPE)
+
+    @property
+    def required(cls):
+        """class level property for required attribute"""
+        return list(cls._REQUIRED)
+
+    @property
+    def defaults(cls):
+        """class level property for defaults attribute"""
+        return dict(cls._DEFAULTS)
+
+    @property
+    def sort_func(cls):
+        """class level property for defaults attribute"""
+        return cls._SORT_FUNC
+
+
+class Instruction(
+    metaclass=_InstructionMeta,
+    sort_function=None,
+    ftype="GENERIC",
+    required=None,
+    defaults=None,
+):
     """Instruction class description"""
 
-    _FTYPE = "GENERIC"
+    @classmethod
+    def check_params(cls, params):
+        """check the parameters of the call"""
+        params_wdef = {}
+        for default_key, default_val in cls.defaults.items():
+            params_wdef[default_key] = params.get(default_key, default_val)
+        for param_key, param_val in params.items():
+            params_wdef[param_key] = param_val
+        for required_key in cls.required:
+            if required_key not in params_wdef.keys():
+                raise ValueError(
+                    f"A value for '{required_key}' is required in Instruction {cls.ftype}"
+                )
 
-    def __init__(self, *, sort_key=None, **params):
+    def __init__(self, **params):
+        self.check_params(params)
         self._params = dict(params)
-        if sort_key is None:
-            sort_key = "|".join(map(str, self.lookup(*self._params.keys())))
-        self.sort_key = sort_key
+        self._sort_key = self._get_sort_key()
+        self._protected = True
 
-    def get(self, use_dict=False, **requests):
-        """lookup parameters in the Instruction. Use defaults if not set.
+    def _get_sort_key(self, function=None):
+        """get a sort key from the instruction"""
+        if function is None:
+            function = self.__class__.sort_func
+        return function(self)
+
+    @property
+    def sort_key(self):
+        """access protected sort key attribute"""
+        return self._sort_key
+
+    @sort_key.setter
+    def sort_key(self, new_sort_key):
+        if not isinstance(new_sort_key, tuple):
+            new_sort_key = tuple([new_sort_key])
+        self._sort_key = tuple(
+            str(sort_key_entry) for sort_key_entry in new_sort_key
+        )
+
+    def update_sort_key(self, function=None):
+        """recall the sort key function"""
+        self._sort_key = self._get_sort_key(function)
+
+    def __getitem__(self, key):
+        return self._params[key]
+
+    def __setitem__(self, key, value):
+        if self._protected:
+            raise ValueError("Instruction is protected and cannot be modified")
+        self._params[key] = value
+
+    def lookup(self, use_dict=False, **requests):
+        """lookup parameters in the Instruction. Use default in request if not set.
         Return tuple or dict"""
         if use_dict:
             return {
@@ -57,23 +155,37 @@ class Instruction:
             for key, default in requests.items()
         )
 
-    def lookup(self, *keys, use_dict=False, defaults=None):
-        """lookup parameters in the Instruction. Use None if not set.
+    def __enter__(self):
+        self._protected = False
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._protected = True
+
+    def set(self, **requests):
+        """set parameters in the Instruction. Use defaults if not set.
+        Return tuple or dict"""
+        if self._protected:
+            if __debug__:
+                raise ValueError(
+                    "Instruction is protected and cannot be modified"
+                )
+            return False
+        for rkey, rval in requests.items():
+            self._params[rkey] = rval
+        return True
+
+    def get(self, *keys, use_dict=False, defaults=None):
+        """lookup parameters in the Instruction. Use defaults if not set.
         Return tuple or dict"""
         if defaults is None:
             defaults = {}
         if use_dict:
             return {
-                key: (
-                    self._params[key]
-                    if key in self._params
-                    else defaults.get(key, None)
-                )
+                key: self._params.get(key, defaults.get(key, None))
                 for key in keys
             }
-
         return tuple(
-            self._params[key] if key in self._params else None for key in keys
+            self._params.get(key, defaults.get(key, None)) for key in keys
         )
 
     def __gt__(self, other):
@@ -86,34 +198,164 @@ class Instruction:
         return self.sort_key == other.sort_key
 
     def __str__(self):
-        return f"<Instruction '{self._FTYPE}' [{', '.join([f'{key}={value}' for key, value in self._params.items()])}]>"
+        return f"<Instruction '{self.ftype}' [{', '.join([f'{key}={value}' for key, value in self._params.items()])}]>"
 
     def __repr__(self):
         return f"<I:{'|'.join(map(str, self._params.values()))}>"
 
+    @property
+    def ftype(self):
+        """class level property for ftype attribute"""
+        return str(self.__class__.ftype)
 
-class _Instruction_Ax(Instruction):
-    """Instruction for the function type y=Ax"""
+    @property
+    def required(self):
+        """class level property for required attribute"""
+        return list(self.__class__.required)
 
-    _KEYS = ()
-    _FTYPE = "Ax"
+    @property
+    def defaults(self):
+        """class level property for defaults attribute"""
+        return dict(self.__class__.defaults)
+
+    @property
+    def sort_func(self):
+        """class level property for defaults attribute"""
+        return self.__class__.sort_func
 
 
-class InstructionGroup(Instruction):
+class InstructionAx(
+    Instruction,
+    ftype="Sparse_Ax",
+    required=[
+        "pos_in1",
+        "pos_out",
+        "key_in1",
+        "key_out",
+        "alpha_r",
+        "alpha_i",
+    ],
+    defaults={
+        "alpha_i": 0.0,
+        "alpha_r": 0.0,
+    },
+):
+    """Instruction for the function type y = A x1"""
+
+
+class InstructionLx(
+    InstructionAx,
+    ftype="Lookup_Lx",
+    required=[
+        "pos_in1",
+        "pos_out",
+        "key_in1",
+        "key_out",
+    ],
+    defaults=None,
+):
+    """Instruction for the function type y=Lookup[x]"""
+
+
+class InstructionPx(
+    InstructionLx,
+    ftype="Permutation_Px",
+    required=[
+        "pos_in1",
+        "pos_out",
+        "key_in1",
+        "key_out",
+    ],
+    defaults=None,
+):
+    """Instruction for the function type y=Permutation[x]"""
+
+
+class InstructionAxx(
+    Instruction,
+    ftype="Sparse_Axx",
+    required=[
+        "pos_in1",
+        "pos_in2",
+        "pos_out",
+        "key_in1",
+        "key_in2",
+        "key_out",
+    ],
+    defaults=None,
+):
+    """Instruction for the function type y = A x1 x2"""
+
+
+class InstructionGroup(
+    Instruction,
+    ftype="Group",
+    required=["ftype"],
+    defaults=None,
+):
     """InstructionGroup class description"""
 
 
-a = Instruction(a=1, b=2, c=3)
+if __name__ == "__main__":
+    a = Instruction(a=1, b=2, c=3)
 
-print(a)
-print([a])
+    print(a)
+    print([a])
 
-print(a.get(a=None, c=2, d=7))
+    print(a.lookup(a=None, c=2, d=7))
 
-print(a.get(a=None, c=2, d=7, use_dict=True))
+    print(a.lookup(a=None, c=2, d=7, use_dict=True))
 
-print(a.lookup("a", "c", "d"))
+    print(a.get("a", "c", "d"))
 
-print(a.lookup("a", "c", "d", use_dict=True))
+    print(a.get("a", "c", "d", use_dict=True))
 
-print(a.lookup("a", "c", "d", use_dict=True, defaults={"d": 42}))
+    print(a.get("a", "c", "d", use_dict=True, defaults={"d": 42}))
+
+    print(a.sort_key)
+    a.update_sort_key()
+
+    print(a.sort_key)
+    a.sort_key = 33
+
+    print(a.sort_key)
+
+    a.update_sort_key()
+    print(a.sort_key)
+
+    try:
+        a.set(a=12)
+        print(a)
+    except ValueError as e:
+        print(e)
+
+    with a as a_rw:
+        a.set(a=12)
+        print(a)
+
+    b = InstructionAx(
+        key_in1=10,
+        pos_in1=20,
+        key_out="None",
+        pos_out=20,
+        alpha_r=2.0,
+    )
+
+    print(b)
+
+    class MyInstruction(
+        Instruction,
+        # ftype="mine",
+        required=["value"],
+        sort_function=(lambda x: x["value"]),
+        defaults=InstructionAx.defaults | {"bar": "baz"},
+    ):
+        """A testclass"""
+
+    foo = MyInstruction(foo=1, value="x")
+
+    print(foo.sort_key)
+    print(MyInstruction.ftype)
+
+    print(InstructionGroup.ftype)
+    print(InstructionGroup.default_sort_key)

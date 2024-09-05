@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 30/08/2024, 17:34
-# Version:     0.0.1157
+# Last Update: 03/09/2024, 13:50
+# Version:     0.0.1298
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,29 +34,45 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 
 import pickle
 
+from typing import Hashable
+
 
 class InvalidOperation(Exception):
     """You're not supposed to do that."""
 
 
-INDENT = 2
+###############################################################################
+#
+#  .oPYo.  .oPYo.             o   o
+#  8    8  8    8             8  .P
+# o8YooP'  8       88        o8ob'   .oPYo.  o    o
+#  8       8                  8  `b  8oooo8  8    8
+#  8       8    8             8   8  8.      8    8
+#  8       `YooP'  88         8   8  `Yooo'  `YooP8
+# :..::::: :.....: ..: oooo  :..::.. :.....: :....8
+# :::::::: ::::::: ::: ..... ::::::: ::::::: ::ooP'.
+# :::::::: ::::::: ::: ::::: ::::::: ::::::: ::...::
+###############################################################################
 
 
 class _Key:
     """Key class description"""
 
-    _PARENT = None
+    _parent = None
 
     def __init__(self, key):
+        assert isinstance(key, Hashable)
+        print(f"generate key from {type(key)} '{key}'")
         self._key = key
 
     def __init_subclass__(cls, parent=None):
-        cls._PARENT = parent
+        cls._parent = parent
 
     def __hash__(self):
         return hash(self.key)
 
     def __eq__(self, other):
+        assert isinstance(other, _Key), "Invalid comparison"
         return self.key == other.key
 
     @property
@@ -66,13 +82,32 @@ class _Key:
     @classmethod
     def parent(cls):
         """access the classes parent attribute"""
-        return cls._PARENT
+        return cls._parent
 
     def __str__(self):
         return f"[{self._key}]"
 
     def __repr__(self):
         return f"[{self._key}]"
+
+
+class _ForbiddenKey(_Key):
+    def __init__(self, *_args, **_kwargs):
+        raise InvalidOperation("No keys allowed to be created here")
+
+
+###############################################################################
+#
+# .oPYo.       o   o
+# 8    8       8  .P
+# 8       88  o8ob'   .oPYo.  o    o
+# 8            8  `b  8oooo8  8    8
+# 8    8       8   8  8.      8    8
+# `YooP'  88   8   8  `Yooo'  `YooP8
+# :.....: ..: :..::.. :.....: :....8
+# ::::::: ::: ::::::: ::::::: ::ooP'.
+# ::::::: ::: ::::::: ::::::: ::...::
+###############################################################################
 
 
 class Key:
@@ -119,7 +154,7 @@ class Key:
 
     def __or__(self, other):
         if isinstance(other, Key):
-            return Key(self, other.as_list())
+            return Key(self, *other.unchain())
         elif isinstance(other, _Key):
             return Key(self, other)
         else:
@@ -127,7 +162,7 @@ class Key:
 
     def __ror__(self, other):
         if isinstance(other, Key):
-            return Key(other.as_list(), self)
+            return Key(*other.unchain(), self)
         elif isinstance(other, _Key):
             return Key(other, self)
         else:
@@ -144,19 +179,33 @@ def autoname(function):
 
     def wrapper(self, name=None):
         if name is None:
-            name = f"{self._IDENTIFIER_}{self._ENUM_}"
-        self.__class__._ENUM_ += 1  # count
+            name = f"{self._IDENTIFIER}{self._enum}"
+        self.__class__._enum += 1  # count
 
         function(self, name=name)
 
     return wrapper
 
 
+###############################################################################
+#
+# .oPYo.       o   o                  o     o
+# 8    8       8  .P                  8b   d8
+# 8       88  o8ob'   .oPYo.  o    o  8`b d'8  .oPYo.  .oPYo.
+# 8            8  `b  8oooo8  8    8  8 `o' 8  .oooo8  8    8
+# 8    8       8   8  8.      8    8  8     8  8    8  8    8
+# `YooP'  88   8   8  `Yooo'  `YooP8  8     8  `YooP8  8YooP'
+# :.....: ..: :..::.. :.....: :....8  ..::::.. :.....: 8 ....:
+# ::::::: ::: ::::::: ::::::: ::ooP'. :::::::: ::::::: 8 :::::
+# ::::::: ::: ::::::: ::::::: ::...:: :::::::: ::::::: ..:::::
+###############################################################################
+
+
 class KeyMap:
     """Keymap class description"""
 
-    _IDENTIFIER_ = "KeyMap"
-    _ENUM_ = 0
+    _IDENTIFIER = "KeyMap"
+    _enum = 0
 
     @autoname
     def __init__(self, name=None):
@@ -176,7 +225,7 @@ class KeyMap:
         # lookup tables
         self._pos2reg = []  # translate from pos to key reg
         self._key2pos = {}  # translate the key to its position
-        self._key2reg = {}
+        self._key2reg = {}  # key objects are keys to regs
 
         # reset
         self._reset()
@@ -222,15 +271,16 @@ class KeyMap:
     def __str__(self):
         self.update()
         # return super().__str__()  # this brings out the dict character
-        return f"<{self._IDENTIFIER_} '{self.name}'>"
+        return f"<{self._IDENTIFIER} '{self.name}'>"
 
     def __repr__(self):
         self.update()
         # return super().__repr__()  # this brings out the dict character
-        return f"<{self._IDENTIFIER_[0]}[{self.name}]>"
+        return f"<{self._IDENTIFIER[0]}[{self.name}]>"
 
     def __len__(self):
         self.update()
+        print("__len__ called", self, self.__class__)
         assert self._size == sum(
             len(keymap) for keymap in self.values(recursive=True)
         )
@@ -270,6 +320,9 @@ class KeyMap:
         self._is_ud_flag = False
         for parent in self._parents:
             parent.flag_ud()
+
+    def get_key(self, key):
+        return self._keygen(key)
 
     def _append(self, key, keymap):
         assert isinstance(key, _Key)
@@ -360,11 +413,25 @@ class KeyMap:
                 yield reg
 
 
+###############################################################################
+#
+# .oPYo.       .oPYo.                   o
+# 8    8       8   `8
+# 8       88  o8YooP'  .oPYo.  .oPYo.  o8  .oPYo.  odYo.
+# 8            8   `b  8oooo8  8    8   8  8    8  8' `8
+# 8    8       8    8  8.      8    8   8  8    8  8   8
+# `YooP'  88   8    8  `Yooo'  `YooP8   8  `YooP'  8   8
+# :.....: ..: :..:::.. :.....: :....8  :.. :.....: ..::..
+# ::::::: ::: :::::::: ::::::: ::ooP'. ::: ::::::: ::::::
+# ::::::: ::: :::::::: ::::::: ::...:: ::: ::::::: ::::::
+###############################################################################
+
+
 class Region(KeyMap):
     """Region is a keymap which is trivially indexed by integer keys"""
 
-    _IDENTIFIER_ = "Region"
-    _ENUM_ = 0
+    _IDENTIFIER = "Region"
+    _enum = 0
 
     def __init__(self, size, name=None):
         # autoname
@@ -382,16 +449,33 @@ class Region(KeyMap):
         raise InvalidOperation("Reordering regions is not supported")
 
 
+###############################################################################
+#
+# .oPYo.      .oPYo.           o
+# 8    8      8.               8
+# 8       88  `boo    odYo.   o8P  oPYo.  o    o
+# 8           .P      8' `8    8   8  `'  8    8
+# 8    8      8       8   8    8   8      8    8
+# `YooP'  88  `YooP'  8   8    8   8      `YooP8
+# :.....: ..: :.....: ..::.. ::..: ..:::: :....8
+# ::::::: ::: ::::::: :::::: ::::: :::::: ::ooP'.
+# ::::::: ::: ::::::: :::::: ::::: :::::: ::...::
+###############################################################################
+
+
 class Entry(Region):
     """A Region of size 1"""
 
-    _IDENTIFIER_ = "Entry"
-    _ENUM_ = 0
+    _IDENTIFIER = "Entry"
+    _enum = 0
 
     def __init__(self, name=None):
         super().__init__(0, name=name)
         self._is_ud_flag = True
         self._size = 1
+
+    # NOTE:
+    # keys, items and values break the recursive call!
 
     def keys(self, recursive=False, prefix=Key()):
         yield Key(prefix)
@@ -415,88 +499,114 @@ class Entry(Region):
         return 1
 
     def _generate_keygen(self, name):
-        return _Key
+        class ThisKeyGen(_ForbiddenKey, parent=self):
+            pass
+
+        ThisKeyGen.__doc__ = (
+            f"auto generated key generator for keymap '{name}.'"
+        )
+        return ThisKeyGen
 
 
-a = KeyMap()
-b = KeyMap()
-print(a)
-print(b)
-print(KeyMap._ENUM_)
+###############################################################################
+#
+#  .oPYo.  8                                                             8
+#  8    8  8                                                             8
+# o8YooP'  8  .oPYo.  o    o  .oPYo.  oPYo.  .oPYo.  o    o  odYo.  .oPYo8
+#  8       8  .oooo8  8    8  8    8  8  `'  8    8  8    8  8' `8  8    8
+#  8       8  8    8  8    8  8    8  8      8    8  8    8  8   8  8    8
+#  8       8  `YooP8  `YooP8  `YooP8  8      `YooP'  `YooP'  8   8  `YooP'
+# :..::::: .. :.....: :....8  :....8  ..:::: :.....: :.....: ..::.. :.....:
+# :::::::: :: ::::::: ::ooP'. ::ooP'. :::::: ::::::: ::::::: :::::: :::::::
+# :::::::: :: ::::::: ::...:: ::...:: :::::: ::::::: ::::::: :::::: :::::::
+###############################################################################
 
-c = Region(4)
-print(c)
 
-print("a", a)
+if __name__ == "__main__":
+    # this is for messing around a little, proper tests must be done though!
 
-a.append("No 1", c)
-a.append("No 2", c)
-a.update()
-print(Region._ENUM_)
+    a = KeyMap()
+    b = KeyMap()
+    print(a)
+    print(b)
+    print(KeyMap._enum)
 
-# a.update()
-# b.update()
-# c.update()
+    c = Region(4)
+    print(c)
 
-print(c)
+    print("a", a)
 
-print(len(c._content))
+    a.append("No 1", c)
+    a.append("No 2", c)
+    a.update()
+    print(Region._enum)
 
-for reg in a.items():
-    print(reg)
+    # a.update()
+    # b.update()
+    # c.update()
 
-for idn, item in a._key2pos.items():
-    print(idn, item)
+    print(c)
 
-print(len(a))
+    print(len(c._content))
 
-a = Key((("A",), "B"))
-b = Key("B")
-c = Key("C")
+    for reg in a.items():
+        print(reg)
 
-d = Key(a, b, "C")
-print(d.as_list())
-e = Key(a, Key(a, b, b), "F")
-print(e.as_list())
-print(e.keys)
+    for idn, item in a._key2pos.items():
+        print(idn, item)
 
-print(e)
+    print(len(a))
 
-f = e | e
+    a = Key((("A",), "B"))
+    b = Key("B")
+    c = Key("C")
 
-for key in e.unchain():
-    print(key)
+    d = Key(a, b, "C")
+    print(d.as_list())
+    e = Key(a, Key(a, b, b), "F")
+    print(e.as_list())
+    print(e.keys)
 
-print(f.parents)
+    print(e)
 
-a = KeyMap("foobar")
-print(a._keygen.__doc__)
-a.append("foo", Region(3, name="reg@foo"))
-a.append("bar", Region(3, name="reg@bar"))
-a.append("baz", Region(3, name="reg@baz"))
+    f = e | e
 
-b = KeyMap("foobaz")
-b.append("x")
-b.append("y")
-b.append("z")
-a.append("test", b)
-# a.update()
-print(a)
+    for key in e.unchain():
+        print(key)
 
-print(a["foo"])
-print(len(a))
-print(len(a["foo"]))
-print()
-print(list(a.keys(recursive=False)))
-print(list(a.keys(recursive=True)))
+    print(f.parents)
 
-print()
-print(list(a.items(recursive=False)))
-print(list(a.items(recursive=True)))
+    a = KeyMap("foobar")
+    print(a._keygen.__doc__)
+    a.append("foo", Region(3, name="reg@foo"))
+    a.append("bar", Region(3, name="reg@bar"))
+    a.append("baz", Region(3, name="reg@baz"))
 
-print()
-print(list(a.values(recursive=False)))
-print(list(a.values(recursive=True)))
+    b = KeyMap("foobaz")
+    b.append("x")
+    b.append("y")
+    b.append("z")
+    a.append("test", b)
+    # a.update()
+    print(a)
 
-test = next(a.keys(recursive=True)).as_list(tagged=True)
-print(test)
+    print(a["foo"])
+    print(len(a))
+    print(len(a["foo"]))
+    print()
+    print(list(a.keys(recursive=False)))
+    print(list(a.keys(recursive=True)))
+
+    print()
+    print(list(a.items(recursive=False)))
+    print(list(a.items(recursive=True)))
+
+    print()
+    print(list(a.values(recursive=False)))
+    print(list(a.values(recursive=True)))
+
+    test = next(a.keys(recursive=True)).as_list(tagged=True)
+    print(test)
+    print(len(a))
+
+    print(Key("a", Key(Key("a") | Key("b") | Key("c"))))
