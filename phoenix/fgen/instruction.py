@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 05/09/2024, 16:35
-# Version:     0.0.611
+# Last Update: 05/09/2024, 18:14
+# Version:     0.0.809
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,6 +34,20 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 """
 
 
+###############################################################################
+#
+# o     o  .oPYo.  ooooo       .oo  .oPYo.  o           .oo  .oPYo.  .oPYo.
+# 8b   d8  8.        8        .P 8  8    8  8          .P 8  8       8
+# 8`b d'8  `boo      8       .P  8  8       8         .P  8  `Yooo.  `Yooo.
+# 8 `o' 8  .P        8      oPooo8  8       8        oPooo8      `8      `8
+# 8     8  8         8     .P    8  8    8  8       .P    8       8       8
+# 8     8  `YooP'    8    .P     8  `YooP'  8oooo  .P     8  `YooP'  `YooP'
+# ..::::.. :.....: ::..:: ..:::::.. :.....: ...... ..:::::.. :.....: :.....:
+# :::::::: ::::::: :::::: ::::::::: ::::::: :::::: ::::::::: ::::::: :::::::
+# :::::::: ::::::: :::::: ::::::::: ::::::: :::::: ::::::::: ::::::: :::::::
+###############################################################################
+
+
 class _InstructionMeta(type):
     """Use a metaclass to handle this"""
 
@@ -45,6 +59,8 @@ class _InstructionMeta(type):
     def __new__(cls, name, bases, dct, **other):
         """meta class generator. When args are given upon inheritance, they also land here"""
         # generate the object
+
+        print("new is called")
         obj = super().__new__(cls, name, bases, dct)
 
         # get extra args and put None as default
@@ -82,6 +98,20 @@ class _InstructionMeta(type):
         return cls._SORT_FUNC
 
 
+###############################################################################
+#
+# o  o    o  .oPYo.  ooooo   .oPYo.  o    o  .oPYo.  ooooo  o  .oPYo.  o    o
+# 8  8b   8  8         8     8   `8  8    8  8    8    8    8  8    8  8b   8
+# 8  8`b  8  `Yooo.    8    o8YooP'  8    8  8         8    8  8    8  8`b  8
+# 8  8 `b 8      `8    8     8   `b  8    8  8         8    8  8    8  8 `b 8
+# 8  8  `b8       8    8     8    8  8    8  8    8    8    8  8    8  8  `b8
+# 8  8   `8  `YooP'    8     8    8  `YooP'  `YooP'    8    8  `YooP'  8   `8
+# .. ..:::.. :.....: ::..:: :..:::.. :.....: :.....: ::..:: .. :.....: ..:::..
+# :: ::::::: ::::::: :::::: :::::::: ::::::: ::::::: :::::: :: ::::::: :::::::
+# :: ::::::: ::::::: :::::: :::::::: ::::::: ::::::: :::::: :: ::::::: :::::::
+###############################################################################
+
+
 class Instruction(
     metaclass=_InstructionMeta,
     sort_function=None,
@@ -92,7 +122,7 @@ class Instruction(
     """Instruction class description"""
 
     @classmethod
-    def check_params(cls, params):
+    def _params_include_defaults(cls, params):
         """check the parameters of the call"""
         params_wdef = {}
         for default_key, default_val in cls.defaults.items():
@@ -100,13 +130,14 @@ class Instruction(
         for param_key, param_val in params.items():
             params_wdef[param_key] = param_val
         for required_key in cls.required:
-            if required_key not in params_wdef.keys():
+            if required_key not in params_wdef:
                 raise ValueError(
                     f"A value for '{required_key}' is required in Instruction {cls.ftype}"
                 )
+        return params_wdef
 
     def __init__(self, **params):
-        self.check_params(params)
+        params = self._params_include_defaults(params)
         self._params = dict(params)
         self._sort_key = self._get_sort_key()
         self._protected = True
@@ -223,10 +254,86 @@ class Instruction(
         """class level property for defaults attribute"""
         return self.__class__.sort_func
 
+    def group_is_compatible(self, group):
+        """check if the instruction fits into a group"""
+        assert isinstance(group, InstructionGroup)
+        return group["ftype"] == self.ftype
+
+
+###############################################################################
+#
+# o             .oPYo.   .oPYo.  .oPYo.  o    o   .oPYo.
+# 8             8    8   8   `8  8    8  8    8   8    8
+# 8             8       o8YooP'  8    8  8    8  o8YooP'
+# 8      ooooo  8   oo   8   `b  8    8  8    8   8
+# 8             8    8   8    8  8    8  8    8   8
+# 8  88         `YooP8   8    8  `YooP'  `YooP'   8
+# .. ..: :::::: :....8  :..:::.. :.....: :.....: :..:::::
+# :: ::: :::::: :::::8  :::::::: ::::::: ::::::: ::::::::
+# :: ::: :::::: :::::.. :::::::: ::::::: ::::::: ::::::::
+###############################################################################
+class InstructionGroup(
+    Instruction,
+    ftype="GROUP",
+    required=["ident", "ftype"],
+    defaults=None,
+):
+    """InstructionGroup class description"""
+
+    _count = 0
+
+    def __init__(self, instructions=None, ftype=None, ident=None):
+        if ident is None:
+            ident = f"grp:{self.__class__._count}"
+            self.__class__._count += 1
+        if instructions is None:
+            instructions = []
+        if ftype is None:
+            if instructions:
+                ftype = instructions[0].ftype
+        assert ftype is not None
+        super().__init__(ident=ident, ftype=ftype)
+        self._instructions = []
+        for instr in instructions:
+            if instr.group_is_compatible(self):
+                self._instructions.append(instr)
+            else:
+                raise ValueError(
+                    f"Instruction '{instr}' does not fit into group '{self}'"
+                )
+
+    def group_is_compatible(self, group):
+        assert isinstance(group, InstructionGroup)
+        return self["ftype"] == group["ftype"]
+
+    @property
+    def ftype(self):
+        return self["ftype"]
+
+    def __str__(self):
+        return f"<iGroup[{self.ftype}]({len(self._instructions)})>"
+
+    def __repr__(self):
+        return f"<G[{self.ftype}]({len(self._instructions)})>"
+
+
+###############################################################################
+#
+# .oPYo.   o    o   ooooo  .oPYo.  o    o  ooo.    .oPYo.  ooo.
+# 8.       `b  d'     8    8.      8b   8  8  `8.  8.      8  `8.
+# `boo      `bd'      8    `boo    8`b  8  8   `8  `boo    8   `8
+# .P        .PY.      8    .P      8 `b 8  8    8  .P      8    8
+# 8        .P  Y.     8    8       8  `b8  8   .P  8       8   .P
+# `YooP'  .P    Y.    8    `YooP'  8   `8  8ooo'   `YooP'  8ooo'
+# :.....: ..::::..: ::..:: :.....: ..:::.. .....:: :.....: .....::
+# ::::::: ::::::::: :::::: ::::::: ::::::: ::::::: ::::::: :::::::
+# ::::::: ::::::::: :::::: ::::::: ::::::: ::::::: ::::::: :::::::
+###############################################################################
+
 
 class InstructionAx(
     Instruction,
-    ftype="Sparse_Ax",
+    ftype="SPARSE_AX",
     required=[
         "pos_in1",
         "pos_out",
@@ -245,7 +352,7 @@ class InstructionAx(
 
 class InstructionLx(
     InstructionAx,
-    ftype="Lookup_Lx",
+    ftype="LOOKUP_LX",
     required=[
         "pos_in1",
         "pos_out",
@@ -259,7 +366,7 @@ class InstructionLx(
 
 class InstructionPx(
     InstructionLx,
-    ftype="Permutation_Px",
+    ftype="PERMUTATION_PX",
     required=[
         "pos_in1",
         "pos_out",
@@ -273,7 +380,7 @@ class InstructionPx(
 
 class InstructionAxx(
     Instruction,
-    ftype="Sparse_Axx",
+    ftype="SPARSE_AXX",
     required=[
         "pos_in1",
         "pos_in2",
@@ -287,13 +394,18 @@ class InstructionAxx(
     """Instruction for the function type y = A x1 x2"""
 
 
-class InstructionGroup(
-    Instruction,
-    ftype="Group",
-    required=["ftype"],
-    defaults=None,
-):
-    """InstructionGroup class description"""
+###############################################################################
+#
+#  .oPYo.  o           .oo  o   o  .oPYo.   .oPYo.  .oPYo.  o    o  o    o  ooo.
+#  8    8  8          .P 8  `b d'  8    8   8   `8  8    8  8    8  8b   8  8  `8.
+# o8YooP'  8         .P  8   `b'   8       o8YooP'  8    8  8    8  8`b  8  8   `8
+#  8       8        oPooo8    8    8   oo   8   `b  8    8  8    8  8 `b 8  8    8
+#  8       8       .P    8    8    8    8   8    8  8    8  8    8  8  `b8  8   .P
+#  8       8oooo  .P     8    8    `YooP8   8    8  `YooP'  `YooP'  8   `8  8ooo'
+# :..::::: ...... ..:::::.. ::..:: :....8  :..:::.. :.....: :.....: ..:::.. .....::
+# :::::::: :::::: ::::::::: :::::: :::::8  :::::::: ::::::: ::::::: ::::::: :::::::
+# :::::::: :::::: ::::::::: :::::: :::::.. :::::::: ::::::: ::::::: ::::::: :::::::
+###############################################################################
 
 
 if __name__ == "__main__":
@@ -352,10 +464,33 @@ if __name__ == "__main__":
     ):
         """A testclass"""
 
-    foo = MyInstruction(foo=1, value="x")
+    foo = MyInstruction(value="x")
+    bar = MyInstruction(value="y")
+    baz = MyInstruction(value="z")
+
+    print(foo)
+    print(foo.ftype)
 
     print(foo.sort_key)
     print(MyInstruction.ftype)
 
     print(InstructionGroup.ftype)
     print(InstructionGroup.default_sort_key)
+
+    y = InstructionGroup(instructions=[foo, bar, baz])
+    x = InstructionGroup(instructions=[y, y])
+
+    print()
+    print(foo)
+    print(foo.ftype)
+    print(foo.__class__.ftype)
+
+    print()
+    print(x)
+    print(x.ftype)
+    print(x.__class__.ftype)
+
+    print()
+    print(y)
+    print(y.ftype)
+    print(y.__class__.ftype)
