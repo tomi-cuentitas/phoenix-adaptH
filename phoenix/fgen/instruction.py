@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 05/09/2024, 18:14
-# Version:     0.0.809
+# Last Update: 06/09/2024, 13:08
+# Version:     0.0.1072
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -79,7 +79,7 @@ class _InstructionMeta(type):
 
     @property
     def ftype(cls):
-        """class level property for ftype attribute"""
+        """class level property for itype attribute"""
         return str(cls._FTYPE)
 
     @property
@@ -132,7 +132,7 @@ class Instruction(
         for required_key in cls.required:
             if required_key not in params_wdef:
                 raise ValueError(
-                    f"A value for '{required_key}' is required in Instruction {cls.ftype}"
+                    f"A value for '{required_key}' is required in Instruction {cls.itype}"
                 )
         return params_wdef
 
@@ -141,6 +141,7 @@ class Instruction(
         self._params = dict(params)
         self._sort_key = self._get_sort_key()
         self._protected = True
+        self._itype = self.__class__.ftype
 
     def _get_sort_key(self, function=None):
         """get a sort key from the instruction"""
@@ -229,35 +230,95 @@ class Instruction(
         return self.sort_key == other.sort_key
 
     def __str__(self):
-        return f"<Instruction '{self.ftype}' [{', '.join([f'{key}={value}' for key, value in self._params.items()])}]>"
+        return f"<Instruction '{self.itype}' [{', '.join([f'{key}={value}' for key, value in self._params.items()])}]>"
 
     def __repr__(self):
         return f"<I:{'|'.join(map(str, self._params.values()))}>"
 
+    def __len__(self):
+        return 1
+
+    @property
+    def num_instructions(self):
+        return 1
+
+    @property
+    def itype(self):
+        """access object level property for ftype attribute"""
+        return str(self._itype)
+
     @property
     def ftype(self):
-        """class level property for ftype attribute"""
+        """access class level property for ftype attribute"""
         return str(self.__class__.ftype)
 
     @property
     def required(self):
-        """class level property for required attribute"""
+        """access class level property for required attribute"""
         return list(self.__class__.required)
 
     @property
     def defaults(self):
-        """class level property for defaults attribute"""
+        """access class level property for defaults attribute"""
         return dict(self.__class__.defaults)
 
     @property
     def sort_func(self):
-        """class level property for defaults attribute"""
+        """access class level property for defaults attribute"""
         return self.__class__.sort_func
 
-    def group_is_compatible(self, group):
+    def is_compatible(self, other):
         """check if the instruction fits into a group"""
-        assert isinstance(group, InstructionGroup)
-        return group["ftype"] == self.ftype
+        return self.itype == other.itype
+
+    def unpack(self, depth=None):
+        """unpack the instructions inside"""
+        if depth is None or depth > 0:
+            yield self
+
+    @classmethod
+    def combine(cls, *instructions, ident=None):
+        itype = instructions[0].itype
+        assert all(
+            itype == instr.itype for instr in instructions
+        ), "All instructions must be of the same type"
+        if ident is None:
+            group_names = []
+            num_instr = 0
+            for instr in instructions:
+                if isinstance(instr, InstructionGroup):
+                    group_names.append(instr.ident)
+                else:
+                    num_instr += 1
+            ident = "+".join(
+                (
+                    "*" + str(instr.ident)
+                    for instr in instructions
+                    if isinstance(instr, InstructionGroup)
+                )
+            )
+            if num_instr > 0:
+                ident += " + " if group_names else ""
+                ident += f"C[{num_instr} instructions]"
+        return InstructionGroup(
+            instructions=sum(
+                (
+                    list(instr.instructions)
+                    if isinstance(instr, InstructionGroup)
+                    else [instr]
+                    for instr in instructions
+                ),
+                start=[],
+            ),
+            itype=itype,
+            ident=ident,
+        )
+
+    def __add__(self, other):
+        assert isinstance(
+            other, Instruction
+        ), "Only Instruction instances can be combined"
+        return Instruction.combine(self, other)
 
 
 ###############################################################################
@@ -272,49 +333,167 @@ class Instruction(
 # :: ::: :::::: :::::8  :::::::: ::::::: ::::::: ::::::::
 # :: ::: :::::: :::::.. :::::::: ::::::: ::::::: ::::::::
 ###############################################################################
+
+
 class InstructionGroup(
     Instruction,
     ftype="GROUP",
-    required=["ident", "ftype"],
+    required=[],
     defaults=None,
 ):
-    """InstructionGroup class description"""
+    """InstructionGroup class description
+
+    InstructionGroup inherits from instruction and has ftype GROUP.
+    However, it has an internal parameter ftype of the function type it contains
+    and represents.
+
+    The ftype attribute tells how to form code from it and identifies segments of
+    an AST.
+    The ftype attribute is more for consistency and ftype checks.
+    """
 
     _count = 0
 
-    def __init__(self, instructions=None, ftype=None, ident=None):
+    def __init__(self, instructions=None, itype=None, ident=None):
         if ident is None:
             ident = f"grp:{self.__class__._count}"
             self.__class__._count += 1
         if instructions is None:
             instructions = []
-        if ftype is None:
+        if itype is None:
             if instructions:
-                ftype = instructions[0].ftype
-        assert ftype is not None
-        super().__init__(ident=ident, ftype=ftype)
+                itype = instructions[0].itype
+        assert itype is not None
+        super().__init__()
         self._instructions = []
+        self._ident = ident
+        self._itype = itype
         for instr in instructions:
-            if instr.group_is_compatible(self):
+            if self.is_compatible(instr):
                 self._instructions.append(instr)
             else:
                 raise ValueError(
                     f"Instruction '{instr}' does not fit into group '{self}'"
                 )
 
-    def group_is_compatible(self, group):
-        assert isinstance(group, InstructionGroup)
-        return self["ftype"] == group["ftype"]
+    @property
+    def ident(self):
+        """access read-only attribute ident"""
+        return self._ident
 
     @property
-    def ftype(self):
-        return self["ftype"]
+    def instructions(self):
+        """access instruction as a generator, but do not unpack further"""
+        yield from self._instructions
 
     def __str__(self):
-        return f"<iGroup[{self.ftype}]({len(self._instructions)})>"
+        return f"<iGroup[{self.itype}]({len(self)}:{self.num_instructions})>"
 
     def __repr__(self):
-        return f"<G[{self.ftype}]({len(self._instructions)})>"
+        return f"<G[{self.itype}]({len(self)})>"
+
+    def __len__(self):
+        return len(self._instructions)
+
+    @property
+    def num_instructions(self):
+        return sum(instr.num_instructions for instr in self._instructions)
+
+    def unpack(self, depth=None):
+        """unpack the instructions inside"""
+        if depth is None or depth > 0:
+            for instr in self._instructions:
+                yield from instr.unpack(
+                    depth=(None if depth is None else depth - 1)
+                )
+
+    def flatten(self):
+        """flatten the group by unpacking any inner subgroups"""
+        return InstructionGroup(
+            instructions=list(self.unpack(depth=None)),
+            itype=self.itype,
+            ident=f"**{self.ident}",
+        )
+
+    def regroup(self, function, generator):
+        """group instructions"""
+        grouped_instructions = {}
+        for instr in generator:
+            key = function(instr)
+            if key not in grouped_instructions:
+                grouped_instructions[key] = []
+            grouped_instructions[key].append(instr)
+        inner_groups = [
+            InstructionGroup(
+                itype=self.itype,
+                instructions=group,
+                ident=f"{self.ident}|{key}",
+            )
+            for key, group in grouped_instructions.items()
+        ]
+        return InstructionGroup(
+            instructions=inner_groups,
+            itype=self.itype,
+            ident=f"${self.ident}",
+        )
+
+    def sort(self, function):
+        sorted_instructions = sorted(
+            [(function(instr), instr) for instr in self.instructions]
+        )
+        return InstructionGroup(
+            instructions=[instr for _, instr in sorted_instructions],
+            itype=self.itype,
+            ident=f"§{self.ident}",
+        )
+
+    def __iter__(self):
+        yield from self._instructions
+
+
+###############################################################################
+#
+# o             .oPYo.          8  8
+# 8             8    8          8  8
+# 8             8       .oPYo.  8  8
+# 8      ooooo  8       .oooo8  8  8
+# 8             8    8  8    8  8  8
+# 8  88         `YooP'  `YooP8  8  8
+# .. ..: :::::: :.....: :.....: .. ..
+# :: ::: :::::: ::::::: ::::::: :: ::
+# :: ::: :::::: ::::::: ::::::: :: ::
+###############################################################################
+
+
+class InstructionChain(
+    Instruction,
+    itype="CALL",
+    required=["library", "fname", "fargs"],
+    defaults=None,
+):
+    """This instruction calls a routine 'fname' from a library 'library'.
+    'fargs' is a list of call arguments that work as offsets for the positions
+    """
+
+
+class InstructionOffsetCall(
+    Instruction,
+    itype="CALL",
+    required=["library", "fname", "offsets"],
+    defaults=None,
+):
+    """This instruction calls a routine 'fname' from a library 'library'.
+    'offsets' is a list of call arguments that work as offsets for the positions
+    """
+
+
+class InstructionMultiCall(
+    Instruction,
+    itype="MULTICALL",
+    required=["calls"],
+    defaults=None,
+):
+    """This instruction calls multiple call objects"""
 
 
 ###############################################################################
@@ -333,7 +512,7 @@ class InstructionGroup(
 
 class InstructionAx(
     Instruction,
-    ftype="SPARSE_AX",
+    itype="SPARSE_AX",
     required=[
         "pos_in1",
         "pos_out",
@@ -345,6 +524,8 @@ class InstructionAx(
     defaults={
         "alpha_i": 0.0,
         "alpha_r": 0.0,
+        "off_in1": 0,
+        "off_out": 0,
     },
 ):
     """Instruction for the function type y = A x1"""
@@ -352,35 +533,41 @@ class InstructionAx(
 
 class InstructionLx(
     InstructionAx,
-    ftype="LOOKUP_LX",
+    itype="LOOKUP_LX",
     required=[
         "pos_in1",
         "pos_out",
         "key_in1",
         "key_out",
     ],
-    defaults=None,
+    defaults={
+        "off_in1": 0,
+        "off_out": 0,
+    },
 ):
     """Instruction for the function type y=Lookup[x]"""
 
 
 class InstructionPx(
     InstructionLx,
-    ftype="PERMUTATION_PX",
+    itype="PERMUTATION_PX",
     required=[
         "pos_in1",
         "pos_out",
         "key_in1",
         "key_out",
     ],
-    defaults=None,
+    defaults={
+        "off_in1": 0,
+        "off_out": 0,
+    },
 ):
     """Instruction for the function type y=Permutation[x]"""
 
 
 class InstructionAxx(
     Instruction,
-    ftype="SPARSE_AXX",
+    itype="SPARSE_AXX",
     required=[
         "pos_in1",
         "pos_in2",
@@ -389,7 +576,11 @@ class InstructionAxx(
         "key_in2",
         "key_out",
     ],
-    defaults=None,
+    defaults={
+        "off_in1": 0,
+        "off_in2": 0,
+        "off_out": 0,
+    },
 ):
     """Instruction for the function type y = A x1 x2"""
 
@@ -457,7 +648,7 @@ if __name__ == "__main__":
 
     class MyInstruction(
         Instruction,
-        # ftype="mine",
+        # itype="mine",
         required=["value"],
         sort_function=(lambda x: x["value"]),
         defaults=InstructionAx.defaults | {"bar": "baz"},
@@ -469,12 +660,12 @@ if __name__ == "__main__":
     baz = MyInstruction(value="z")
 
     print(foo)
-    print(foo.ftype)
+    print(foo.itype)
 
     print(foo.sort_key)
-    print(MyInstruction.ftype)
+    print(MyInstruction.itype)
 
-    print(InstructionGroup.ftype)
+    print(InstructionGroup.itype)
     print(InstructionGroup.default_sort_key)
 
     y = InstructionGroup(instructions=[foo, bar, baz])
@@ -482,15 +673,29 @@ if __name__ == "__main__":
 
     print()
     print(foo)
+    print(foo.itype)
     print(foo.ftype)
-    print(foo.__class__.ftype)
 
     print()
     print(x)
+    print(x.itype)
     print(x.ftype)
-    print(x.__class__.ftype)
 
     print()
     print(y)
+    print(y.itype)
     print(y.ftype)
-    print(y.__class__.ftype)
+
+    big = Instruction.combine(x, x, foo)
+    print()
+    print(big, big.ident)
+    print(", ".join(str(instr) for instr in big.instructions))
+
+    super_big = sum(
+        (x for _ in range(10)), start=InstructionGroup(itype=x.itype)
+    )
+    print(super_big)
+    print(super_big.flatten())
+    super_big_sorted = super_big.flatten().sort(function=lambda x: x["value"])
+    print([instr["value"] for instr in super_big.flatten()])
+    print([instr["value"] for instr in super_big_sorted])
