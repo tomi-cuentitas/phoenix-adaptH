@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 06/09/2024, 13:08
-# Version:     0.0.1072
+# Last Update: 06/09/2024, 13:22
+# Version:     0.0.1084
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -240,31 +240,32 @@ class Instruction(
 
     @property
     def num_instructions(self):
+        """get the number of instructions, e.g. in a group. This is recursive, in contrast to __len__"""
         return 1
 
     @property
     def itype(self):
-        """access object level property for ftype attribute"""
+        """access object level property for 'itype' attribute"""
         return str(self._itype)
 
     @property
     def ftype(self):
-        """access class level property for ftype attribute"""
+        """access class level property for 'ftype' attribute, bring to object level"""
         return str(self.__class__.ftype)
 
     @property
     def required(self):
-        """access class level property for required attribute"""
+        """access class level property for 'required' attribute, bring to object level"""
         return list(self.__class__.required)
 
     @property
     def defaults(self):
-        """access class level property for defaults attribute"""
+        """access class level property for 'defaults' attribute, bring to object level"""
         return dict(self.__class__.defaults)
 
     @property
     def sort_func(self):
-        """access class level property for defaults attribute"""
+        """access class level property for 'sort_func' attribute, bring to object level"""
         return self.__class__.sort_func
 
     def is_compatible(self, other):
@@ -437,10 +438,15 @@ class InstructionGroup(
             ident=f"${self.ident}",
         )
 
-    def sort(self, function):
-        sorted_instructions = sorted(
-            [(function(instr), instr) for instr in self.instructions]
-        )
+    def sort(self, function=None):
+        if function is None:
+            sorted_instructions = sorted(
+                [(instr.sort_key, instr) for instr in self.instructions]
+            )
+        else:
+            sorted_instructions = sorted(
+                [(function(instr), instr) for instr in self.instructions]
+            )
         return InstructionGroup(
             instructions=[instr for _, instr in sorted_instructions],
             itype=self.itype,
@@ -696,6 +702,10 @@ if __name__ == "__main__":
     )
     print(super_big)
     print(super_big.flatten())
-    super_big_sorted = super_big.flatten().sort(function=lambda x: x["value"])
+    super_big_sorted_function = super_big.flatten().sort(
+        function=lambda x: x["value"]
+    )
+    super_big_sorted_default = super_big.flatten().sort(function=None)
     print([instr["value"] for instr in super_big.flatten()])
-    print([instr["value"] for instr in super_big_sorted])
+    print([instr["value"] for instr in super_big_sorted_function])
+    print([instr["value"] for instr in super_big_sorted_default])
