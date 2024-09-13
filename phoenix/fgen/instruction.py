@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 06/09/2024, 13:22
-# Version:     0.0.1084
+# Last Update: 13/09/2024, 16:49
+# Version:     0.0.1227
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -52,28 +52,27 @@ class _InstructionMeta(type):
     """Use a metaclass to handle this"""
 
     @staticmethod
-    def default_sort_key(obj):
+    def default_sort_key(this):
         """default sort method"""
-        return tuple(str(val) for val in obj.get(*obj.required))
+        return tuple(str(val) for val in this.get(*this.__class__.required))
 
     def __new__(cls, name, bases, dct, **other):
         """meta class generator. When args are given upon inheritance, they also land here"""
         # generate the object
 
-        print("new is called")
         obj = super().__new__(cls, name, bases, dct)
 
         # get extra args and put None as default
         ftype = other.get("ftype", None)
         required = other.get("required", None)
         defaults = other.get("defaults", None)
-        sort_function = other.get("sort_function", None)
+        sort_key_func = other.get("sort_key_func", None)
 
         # assign it to the object, which is the class in this case!
         obj._FTYPE = ftype or name.upper()
         obj._REQUIRED = required or []
         obj._DEFAULTS = defaults or {}
-        obj._SORT_FUNC = sort_function or cls.default_sort_key
+        obj._SORT_KEY_FUNC = sort_key_func or cls.default_sort_key
 
         return obj
 
@@ -85,7 +84,7 @@ class _InstructionMeta(type):
     @property
     def required(cls):
         """class level property for required attribute"""
-        return list(cls._REQUIRED)
+        yield from cls._REQUIRED
 
     @property
     def defaults(cls):
@@ -93,9 +92,9 @@ class _InstructionMeta(type):
         return dict(cls._DEFAULTS)
 
     @property
-    def sort_func(cls):
+    def sort_key_func(cls):
         """class level property for defaults attribute"""
-        return cls._SORT_FUNC
+        return cls._SORT_KEY_FUNC
 
 
 ###############################################################################
@@ -114,7 +113,7 @@ class _InstructionMeta(type):
 
 class Instruction(
     metaclass=_InstructionMeta,
-    sort_function=None,
+    sort_key_func=None,
     ftype="GENERIC",
     required=None,
     defaults=None,
@@ -146,7 +145,7 @@ class Instruction(
     def _get_sort_key(self, function=None):
         """get a sort key from the instruction"""
         if function is None:
-            function = self.__class__.sort_func
+            function = self.__class__.sort_key_func
         return function(self)
 
     @property
@@ -164,6 +163,8 @@ class Instruction(
 
     def update_sort_key(self, function=None):
         """recall the sort key function"""
+        if function is None:
+            function = self.__class__.sort_key_func
         self._sort_key = self._get_sort_key(function)
 
     def __getitem__(self, key):
@@ -253,20 +254,20 @@ class Instruction(
         """access class level property for 'ftype' attribute, bring to object level"""
         return str(self.__class__.ftype)
 
-    @property
-    def required(self):
-        """access class level property for 'required' attribute, bring to object level"""
-        return list(self.__class__.required)
+    # @property
+    # def required(self):
+    #     """access class level property for 'required' attribute, bring to object level"""
+    #     return list(self.__class__.required)
+
+    # @property
+    # def defaults(self):
+    #     """access class level property for 'defaults' attribute, bring to object level"""
+    #     return dict(self.__class__.defaults)
 
     @property
-    def defaults(self):
-        """access class level property for 'defaults' attribute, bring to object level"""
-        return dict(self.__class__.defaults)
-
-    @property
-    def sort_func(self):
-        """access class level property for 'sort_func' attribute, bring to object level"""
-        return self.__class__.sort_func
+    def sort_key_func(self):
+        """access class level property for 'sort_key_func' attribute, bring to object level"""
+        return self.__class__.sort_key_func
 
     def is_compatible(self, other):
         """check if the instruction fits into a group"""
@@ -656,7 +657,7 @@ if __name__ == "__main__":
         Instruction,
         # itype="mine",
         required=["value"],
-        sort_function=(lambda x: x["value"]),
+        sort_key_func=(lambda x: x["value"]),
         defaults=InstructionAx.defaults | {"bar": "baz"},
     ):
         """A testclass"""
