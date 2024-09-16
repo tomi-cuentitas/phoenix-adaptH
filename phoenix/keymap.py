@@ -5,13 +5,16 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/09/2024, 13:50
-# Version:     0.0.1298
+# Last Update: 16/09/2024, 18:25
+# Version:     0.0.1908
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+from __future__ import annotations
+
 
 __doc__ = """
 Keymap module description
@@ -32,9 +35,16 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 
 """
 
+
 import pickle
 
-from typing import Hashable
+
+from typing import Hashable, Any, Generator, Tuple, List, Callable, Type
+
+try:
+    from typing import Self
+except ImportError:
+    Self = type("Self", (), {})
 
 
 class InvalidOperation(Exception):
@@ -43,46 +53,77 @@ class InvalidOperation(Exception):
 
 ###############################################################################
 #
-#  .oPYo.  .oPYo.             o   o
-#  8    8  8    8             8  .P
-# o8YooP'  8       88        o8ob'   .oPYo.  o    o
-#  8       8                  8  `b  8oooo8  8    8
-#  8       8    8             8   8  8.      8    8
-#  8       `YooP'  88         8   8  `Yooo'  `YooP8
-# :..::::: :.....: ..: oooo  :..::.. :.....: :....8
-# :::::::: ::::::: ::: ..... ::::::: ::::::: ::ooP'.
-# :::::::: ::::::: ::: ::::: ::::::: ::::::: ::...::
+#       o   o   o
+#       8   8  .P
+#       8  o8ob'   .oPYo.  o    o
+#       8   8  `b  8oooo8  8    8
+#       8   8   8  8.      8    8
+#       8   8   8  `Yooo'  `YooP8
+# oooo  .. :..::.. :.....: :....8
+# ..... :: ::::::: ::::::: ::ooP'.
+# ::::: :: ::::::: ::::::: ::...::
 ###############################################################################
 
 
-class _Key:
-    """Key class description"""
+class _IKey:
+    """
+    Private Class: _IKey
+    ===================
 
-    _parent = None
+    Simple dataclass that contains a hashable as a key and a link to the
+    parent, i.e. the KeyMap where this key is registered at.
+    """
 
-    def __init__(self, key):
+    _cparent = None
+
+    def __init__(self, key, parent=None):
+        if __debug__:
+            print(f"generate key from {type(key).__name__} '{key}'")
+
+        # make sure key is hashable
         assert isinstance(key, Hashable)
-        print(f"generate key from {type(key)} '{key}'")
-        self._key = key
+
+        # check for potential input arg conversion
+        if isinstance(key, _IKey):
+            self._key = key.key
+        elif isinstance(key, Key):
+            assert len(key.keys) == 1, "cannot generate _Key from chained key"
+            self._key = key.keys[0].key
+        else:
+            self._key = key
+
+        # check explicit parent, use class parent otherwise
+        if parent is not None:
+            assert isinstance(parent, KeyMap), f"Invalid parent {type(parent)}"
+            self._parent = parent
+        else:
+            self._parent = self._cparent
+
+        # final check
+        assert not isinstance(self._key, (_IKey, Key))
 
     def __init_subclass__(cls, parent=None):
-        cls._parent = parent
+        """set parent upon inheritance"""
+        cls._cparent = parent
 
     def __hash__(self):
         return hash(self.key)
 
     def __eq__(self, other):
-        assert isinstance(other, _Key), "Invalid comparison"
+        assert isinstance(
+            other, _IKey
+        ), f"Invalid comparison between {type(self)} and {type(other)}"
         return self.key == other.key
 
     @property
-    def key(self):
+    def key(self) -> Any:
+        """access protected attribute key"""
         return self._key
 
-    @classmethod
-    def parent(cls):
-        """access the classes parent attribute"""
-        return cls._parent
+    @property
+    def parent(self):
+        """access read-only parameter parent"""
+        return self._parent
 
     def __str__(self):
         return f"[{self._key}]"
@@ -91,45 +132,55 @@ class _Key:
         return f"[{self._key}]"
 
 
-class _ForbiddenKey(_Key):
-    def __init__(self, *_args, **_kwargs):
+class _ForbiddenKey(_IKey):
+    def __new__(cls, *_args, **_kwargs) -> Exception:
+        """Entry classes do not allow keygens as they do not require them.
+        So let's kill the attempt"""
         raise InvalidOperation("No keys allowed to be created here")
 
 
 ###############################################################################
 #
-# .oPYo.       o   o
-# 8    8       8  .P
-# 8       88  o8ob'   .oPYo.  o    o
-# 8            8  `b  8oooo8  8    8
-# 8    8       8   8  8.      8    8
-# `YooP'  88   8   8  `Yooo'  `YooP8
-# :.....: ..: :..::.. :.....: :....8
-# ::::::: ::: ::::::: ::::::: ::ooP'.
-# ::::::: ::: ::::::: ::::::: ::...::
+#  o   o
+#  8  .P
+# o8ob'   .oPYo.  o    o
+#  8  `b  8oooo8  8    8
+#  8   8  8.      8    8
+#  8   8  `Yooo'  `YooP8
+# :..::.. :.....: :....8
+# ::::::: ::::::: ::ooP'.
+# ::::::: ::::::: ::...::
 ###############################################################################
 
 
 class Key:
-    """A key contains one or multiple _Key objects"""
+    """
+    Class Key
+    =========
+
+    Keys can be composed from other keys to access nested classes. Internally,
+    they store the _Key objects they are made from.
+    """
 
     def __init__(self, *keys):
         self._keys = []
+        # decompose into _Key objects
         for _key in keys:
-            if isinstance(_key, Key):
-                self._keys += _key.as_list()
-            elif isinstance(_key, _Key):
+            if isinstance(_key, _IKey):
                 self._keys += [_key]
+            elif isinstance(_key, Key):
+                self._keys += _key.as_list(tagged=False)
             else:
-                self._keys += [_Key(_key)]
+                self._keys += [_IKey(_key)]
+        # and check
+        if __debug__:
+            for _key in self._keys:
+                assert isinstance(_key, _IKey)
 
-    def unchain(self, tagged=False):
+    def unchain(self) -> Generator:
         """unpack all the key objects chained up"""
         for _key in self._keys:
-            if tagged:
-                yield (_key.parent(), _key)
-            else:
-                yield _key
+            yield (_key.parent, _key)
 
     def __hash__(self):
         return hash(self.keys)
@@ -138,13 +189,15 @@ class Key:
         return self.keys == other.keys
 
     @property
-    def keys(self):
+    def keys(self) -> Tuple[_IKey]:
         """unpack the key signature as a tuple for hashing and more"""
-        return tuple(_key.key for _key in self._keys)
+        return tuple(key for _, key in self.unchain())
 
-    def as_list(self, tagged=False):
+    def as_list(self, tagged=False) -> List:
         """access the keys as a list"""
-        return list(self.unchain(tagged=tagged))
+        if tagged:
+            return list(self.unchain())
+        return [key for _, key in self.unchain()]
 
     def __repr__(self):
         return f"[{'|'.join(map(lambda x: str(x.key), self._keys))}]"
@@ -152,29 +205,27 @@ class Key:
     def __str__(self):
         return f"<K{self.__repr__()}>"
 
-    def __or__(self, other):
+    def __or__(self, other) -> Self:
         if isinstance(other, Key):
-            return Key(self, *other.unchain())
-        elif isinstance(other, _Key):
             return Key(self, other)
-        else:
-            return Key(self, _Key(other))
+        if isinstance(other, _IKey):
+            return Key(self, other)
+        return Key(self, _IKey(other))
 
-    def __ror__(self, other):
+    def __ror__(self, other) -> Self:
         if isinstance(other, Key):
-            return Key(*other.unchain(), self)
-        elif isinstance(other, _Key):
             return Key(other, self)
-        else:
-            return Key(_Key(other), self)
+        if isinstance(other, _IKey):
+            return Key(other, self)
+        return Key(_IKey(other), self)
 
     @property
-    def parents(self):
+    def parents(self) -> List[KeyMap]:
         """access the classes parent attribute"""
-        return [_key.parent() for _key in self._keys]
+        return [_key.parent for _key in self._keys]
 
 
-def autoname(function):
+def autoname(function) -> Callable:
     """decorator to automatically fill a proper name"""
 
     def wrapper(self, name=None):
@@ -189,15 +240,15 @@ def autoname(function):
 
 ###############################################################################
 #
-# .oPYo.       o   o                  o     o
-# 8    8       8  .P                  8b   d8
-# 8       88  o8ob'   .oPYo.  o    o  8`b d'8  .oPYo.  .oPYo.
-# 8            8  `b  8oooo8  8    8  8 `o' 8  .oooo8  8    8
-# 8    8       8   8  8.      8    8  8     8  8    8  8    8
-# `YooP'  88   8   8  `Yooo'  `YooP8  8     8  `YooP8  8YooP'
-# :.....: ..: :..::.. :.....: :....8  ..::::.. :.....: 8 ....:
-# ::::::: ::: ::::::: ::::::: ::ooP'. :::::::: ::::::: 8 :::::
-# ::::::: ::: ::::::: ::::::: ::...:: :::::::: ::::::: ..:::::
+#  o   o                  o     o
+#  8  .P                  8b   d8
+# o8ob'   .oPYo.  o    o  8`b d'8  .oPYo.  .oPYo.
+#  8  `b  8oooo8  8    8  8 `o' 8  .oooo8  8    8
+#  8   8  8.      8    8  8     8  8    8  8    8
+#  8   8  `Yooo'  `YooP8  8     8  `YooP8  8YooP'
+# :..::.. :.....: :....8  ..::::.. :.....: 8 ....:
+# ::::::: ::::::: ::ooP'. :::::::: ::::::: 8 :::::
+# ::::::: ::::::: ::...:: :::::::: ::::::: ..:::::
 ###############################################################################
 
 
@@ -205,6 +256,7 @@ class KeyMap:
     """Keymap class description"""
 
     _IDENTIFIER = "KeyMap"
+    _IDENTIFIER_SHORT = "KM"
     _enum = 0
 
     @autoname
@@ -224,6 +276,7 @@ class KeyMap:
 
         # lookup tables
         self._pos2reg = []  # translate from pos to key reg
+        self._pos2key = []  # translate from pos to key
         self._key2pos = {}  # translate the key to its position
         self._key2reg = {}  # key objects are keys to regs
 
@@ -236,20 +289,25 @@ class KeyMap:
 
         self._keygen = self._generate_keygen(name)
 
-    def _generate_keygen(self, name):
-        class ThisKeyGen(_Key, parent=self):
-            pass
-
-        ThisKeyGen.__doc__ = (
-            f"auto generated key generator for keymap '{name}.'"
+    def _generate_keygen(self, name) -> Type:
+        """the keygenerator class can be tagged by a parent"""
+        this_class = type(
+            f"auto_KeyGen_{name}",
+            (_IKey,),
+            {
+                "__doc__": f"auto generated key generator for keymap '{name}'.",
+            },
+            parent=self,
         )
-        return ThisKeyGen
+
+        return this_class
 
     def _reset(self):
         """reset anything that has to do with counters and offsets"""
         self._is_ud_flag = False
         self._size = 0
         self._pos2reg = []
+        self._pos2key = []
         self._key2pos = {}
         self._key2reg = {}
 
@@ -270,50 +328,51 @@ class KeyMap:
 
     def __str__(self):
         self.update()
-        # return super().__str__()  # this brings out the dict character
         return f"<{self._IDENTIFIER} '{self.name}'>"
 
     def __repr__(self):
         self.update()
-        # return super().__repr__()  # this brings out the dict character
-        return f"<{self._IDENTIFIER[0]}[{self.name}]>"
+        return f"<{self._IDENTIFIER_SHORT}[{self.name}]>"
 
     def __len__(self):
         self.update()
-        print("__len__ called", self, self.__class__)
         assert self._size == sum(
             len(keymap) for keymap in self.values(recursive=True)
         )
         return self._size
 
     @staticmethod
-    def from_file(filename):
+    def from_file(filename) -> KeyMap:
         """get the keymap from a file"""
         with open(filename, "rb") as handle:
             ret = pickle.load(handle)
-        ret._update()
+        ret.flag_ud()
+        ret.__class__._enum += 1
+        ret.update()
         return ret
 
-    def to_file(self, filename):
+    def to_file(self, filename) -> None:
         """write the keymap to a file"""
+        self.update()
         with open(filename, "wb") as handle:
             pickle.dump(self, handle)
 
     @property
-    def is_ud(self):
+    def is_ud(self) -> bool:
         """read-only access to update flag"""
         return self._is_ud_flag
 
-    def reorder(self, function):
+    def reorder(self, function) -> Self:
         """reorder the arrangement of keys in the map by some sorting function"""
-        self._content = sorted(
+        aux = sorted(
             [
                 (sort_id, key, keymap)
                 for key, keymap in self._content
                 if (sort_id := function(key, keymap)) is not None
             ]
         )
-        self.flag_ud()
+        self._content = [(key, keymap) for _, key, keymap in aux]
+        return self
 
     def flag_ud(self):
         """mark for update"""
@@ -321,25 +380,37 @@ class KeyMap:
         for parent in self._parents:
             parent.flag_ud()
 
-    def get_key(self, key):
-        return self._keygen(key)
-
     def _append(self, key, keymap):
-        assert isinstance(key, _Key)
+        """internal append, contains all checks and stuff"""
+        assert isinstance(key, _IKey)
         self._content.append((key, keymap))
 
     def append(self, key, keymap=None, check=__debug__):
         """append a keymap object at a key"""
-        key_obj = self._keygen(key)
+
+        # force-make it a key
+        key_obj = self.key(key)
+
+        # default thing to add is an entry
         if keymap is None:
-            keymap = Entry(str(key))
+            keymap = Entry(str(key_obj))
+
+        # check if key is duplicate
         if check:
             for tkey, _ in self._content:
                 if tkey == key_obj:
                     raise KeyError(f"Key '{key_obj}' already exists")
+
+        # acutal append
         self._append(key_obj, keymap)
+
+        # register the current keymap as a parent to the included keymap
         keymap.add_parent(self)
         self.flag_ud()
+
+    def key(self, key):
+        """generate a key object from with the KeyMaps own keygen"""
+        return self._keygen(key)
 
     def add_parent(self, parent):
         """add as a parent if not yet there"""
@@ -352,7 +423,7 @@ class KeyMap:
         ret = True
         if not self.is_ud:
             ret = self._update()
-        assert ret
+        assert ret, "update did not succeed"
         return self
 
     def _update(self):
@@ -369,10 +440,12 @@ class KeyMap:
                 print(f"skipping keymap {keymap} as it is empty")
                 continue
 
+            # move into the selected keymap
             self._key2reg[key] = keymap
             self._key2pos[key] = offset_pointer
             for offset in range(len(keymap)):
                 self._pos2reg.append((keymap, offset))
+                self._pos2key.append((key))
                 offset_pointer += 1
         assert len(self._pos2reg) == offset_pointer
         self._size = offset_pointer
@@ -384,8 +457,8 @@ class KeyMap:
         self.update()
         if isinstance(key, Key):
             return self._key2reg[key._keys[0]]
-        if not isinstance(key, _Key):
-            return self._key2reg[_Key(key)]
+        if not isinstance(key, _IKey):
+            return self._key2reg[_IKey(key)]
         return self._key2reg[key]
 
     def keys(self, recursive=False, prefix=Key()):
@@ -412,18 +485,43 @@ class KeyMap:
             else:
                 yield reg
 
+    def find(self, *keys, _gen=None):
+        self.update()
+        key = Key(*keys)
+        current_obj = self
+        current_pos = 0
+        for kmap, tkey in key.unchain():
+            if kmap is not None:
+                if kmap != current_obj:
+                    raise KeyError(
+                        f"Tagged key {tkey} not from keymap {current_obj}"
+                    )
+            current_pos += current_obj._key2pos[tkey]
+            current_obj = current_obj._key2reg[tkey]
+
+        return current_pos, current_obj
+
+    def whats_at(self, offset, _collect=None):
+        if _collect is None:
+            _collect = []
+        if isinstance(self, Entry) or not self._key2reg:
+            return self, _collect
+        key = self._pos2key[offset]
+        region, offset = self._pos2reg[offset]
+        return region.whats_at(offset, _collect + [key])
+
 
 ###############################################################################
 #
-# .oPYo.       .oPYo.                   o
-# 8    8       8   `8
-# 8       88  o8YooP'  .oPYo.  .oPYo.  o8  .oPYo.  odYo.
-# 8            8   `b  8oooo8  8    8   8  8    8  8' `8
-# 8    8       8    8  8.      8    8   8  8    8  8   8
-# `YooP'  88   8    8  `Yooo'  `YooP8   8  `YooP'  8   8
-# :.....: ..: :..:::.. :.....: :....8  :.. :.....: ..::..
-# ::::::: ::: :::::::: ::::::: ::ooP'. ::: ::::::: ::::::
-# ::::::: ::: :::::::: ::::::: ::...:: ::: ::::::: ::::::
+#  .oPYo.                   o
+#  8   `8
+# o8YooP'  .oPYo.  .oPYo.  o8  .oPYo.  odYo.
+#  8   `b  8oooo8  8    8   8  8    8  8' `8
+#  8    8  8.      8    8   8  8    8  8   8
+#  8    8  `Yooo'  `YooP8   8  `YooP'  8   8
+# :..:::.. :.....: :....8  :.. :.....: ..::..
+# :::::::: ::::::: ::ooP'. ::: ::::::: ::::::
+# :::::::: ::::::: ::...:: ::: ::::::: ::::::
 ###############################################################################
 
 
@@ -431,6 +529,7 @@ class Region(KeyMap):
     """Region is a keymap which is trivially indexed by integer keys"""
 
     _IDENTIFIER = "Region"
+    _IDENTIFIER_SHORT = "RG"
     _enum = 0
 
     def __init__(self, size, name=None):
@@ -451,15 +550,15 @@ class Region(KeyMap):
 
 ###############################################################################
 #
-# .oPYo.      .oPYo.           o
-# 8    8      8.               8
-# 8       88  `boo    odYo.   o8P  oPYo.  o    o
-# 8           .P      8' `8    8   8  `'  8    8
-# 8    8      8       8   8    8   8      8    8
-# `YooP'  88  `YooP'  8   8    8   8      `YooP8
-# :.....: ..: :.....: ..::.. ::..: ..:::: :....8
-# ::::::: ::: ::::::: :::::: ::::: :::::: ::ooP'.
-# ::::::: ::: ::::::: :::::: ::::: :::::: ::...::
+# .oPYo.           o
+# 8.               8
+# `boo    odYo.   o8P  oPYo.  o    o
+# .P      8' `8    8   8  `'  8    8
+# 8       8   8    8   8      8    8
+# `YooP'  8   8    8   8      `YooP8
+# :.....: ..::.. ::..: ..:::: :....8
+# ::::::: :::::: ::::: :::::: ::ooP'.
+# ::::::: :::::: ::::: :::::: ::...::
 ###############################################################################
 
 
@@ -467,6 +566,7 @@ class Entry(Region):
     """A Region of size 1"""
 
     _IDENTIFIER = "Entry"
+    _IDENTIFIER_SHORT = "E"
     _enum = 0
 
     def __init__(self, name=None):
@@ -502,9 +602,6 @@ class Entry(Region):
         class ThisKeyGen(_ForbiddenKey, parent=self):
             pass
 
-        ThisKeyGen.__doc__ = (
-            f"auto generated key generator for keymap '{name}.'"
-        )
         return ThisKeyGen
 
 
@@ -571,10 +668,10 @@ if __name__ == "__main__":
 
     f = e | e
 
-    for key in e.unchain():
+    for _, key in e.unchain():
         print(key)
 
-    print(f.parents)
+    print("f", f.parents)
 
     a = KeyMap("foobar")
     print(a._keygen.__doc__)
@@ -584,7 +681,7 @@ if __name__ == "__main__":
 
     b = KeyMap("foobaz")
     b.append("x")
-    b.append("y")
+    b.append(Key("y"))
     b.append("z")
     a.append("test", b)
     # a.update()
@@ -605,8 +702,18 @@ if __name__ == "__main__":
     print(list(a.values(recursive=False)))
     print(list(a.values(recursive=True)))
 
-    test = next(a.keys(recursive=True)).as_list(tagged=True)
-    print(test)
-    print(len(a))
+    testkey = next(a.keys(recursive=True))
+    print(testkey)
+    print(testkey.as_list())
+    print(testkey.as_list(tagged=True))
 
-    print(Key("a", Key(Key("a") | Key("b") | Key("c"))))
+    # print(len(a))
+
+    # print(Key("a", Key(Key("a") | Key("b") | Key("c"))))
+
+    # print(b.key("FOOOo").__doc__)
+
+    print(a.find(a.key("test"), b.key("x")))
+
+    for num in range(len(a)):
+        print(a.whats_at(num))
