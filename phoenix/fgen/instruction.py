@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 13/09/2024, 16:49
-# Version:     0.0.1227
+# Last Update: 23/09/2024, 12:17
+# Version:     0.0.1252
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,18 +18,7 @@ __doc__ = """
 Instruction module description
 ==============================
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus nisl lectus,
-gravida ut risus id, tincidunt pretium arcu. Duis tortor nulla, mattis ac leo
-id, pharetra imperdiet odio. Aliquam sit amet nisl sed nulla luctus commodo eget
-a est. Quisque iaculis sapien eget metus dignissim congue. Suspendisse cursus
-orci ex, a malesuada tellus laoreet in. Nulla eu metus vitae nunc vehicula
-consequat a ac erat. Phasellus fringilla tristique magna, sed fermentum enim
-malesuada eget. Curabitur mauris diam, vehicula ac odio a, lobortis ultrices
-dolor. Vivamus posuere, sem in egestas aliquam, lacus lorem aliquet sapien,
-quis tincidunt libero sem ac augue. Mauris eget rhoncus urna. Donec dapibus
-nulla lacus, at egestas ligula pulvinar nec. Quisque pellentesque fringilla sem
-ac molestie. Suspendisse convallis dolor felis. Vestibulum ante ipsum primis in
-faucibus orci luctus et ultrices posuere cubilia curae.
+
 
 """
 
@@ -56,45 +45,46 @@ class _InstructionMeta(type):
         """default sort method"""
         return tuple(str(val) for val in this.get(*this.__class__.required))
 
-    def __new__(cls, name, bases, dct, **other):
-        """meta class generator. When args are given upon inheritance, they also land here"""
+    def __new__(mcs, name, bases, dct, **kwargs):
+        """meta class generator, returns class, not instance!
+        Catches extra args given at child declaration (__init_subclass__)"""
+
         # generate the object
+        cls = super().__new__(mcs, name, bases, dct)
 
-        obj = super().__new__(cls, name, bases, dct)
+        # get extra args but put None as default
+        ftype = kwargs.get("ftype", None)
+        required = kwargs.get("required", None)
+        defaults = kwargs.get("defaults", None)
+        sort_key_func = kwargs.get("sort_key_func", None)
 
-        # get extra args and put None as default
-        ftype = other.get("ftype", None)
-        required = other.get("required", None)
-        defaults = other.get("defaults", None)
-        sort_key_func = other.get("sort_key_func", None)
+        # assign it to the class created by mcs
+        cls._ftype = ftype or name.upper()
+        cls._required = required or []
+        cls._defaults = defaults or {}
+        cls._sort_key_func = sort_key_func or _InstructionMeta.default_sort_key
 
-        # assign it to the object, which is the class in this case!
-        obj._FTYPE = ftype or name.upper()
-        obj._REQUIRED = required or []
-        obj._DEFAULTS = defaults or {}
-        obj._SORT_KEY_FUNC = sort_key_func or cls.default_sort_key
-
-        return obj
+        return cls
 
     @property
     def ftype(cls):
         """class level property for itype attribute"""
-        return str(cls._FTYPE)
+        return str(cls._ftype)
 
     @property
     def required(cls):
         """class level property for required attribute"""
-        yield from cls._REQUIRED
+        yield from cls._required
 
     @property
     def defaults(cls):
         """class level property for defaults attribute"""
-        return dict(cls._DEFAULTS)
+        return dict(cls._defaults)
 
     @property
     def sort_key_func(cls):
         """class level property for defaults attribute"""
-        return cls._SORT_KEY_FUNC
+        return cls._sort_key_func
 
 
 ###############################################################################
