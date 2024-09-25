@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 17/09/2024, 16:55
-# Version:     0.0.2162
+# Last Update: 25/09/2024, 17:44
+# Version:     0.0.2182
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -742,6 +742,9 @@ if __name__ == "__main__":
     # print(b.key("FOOOo").__doc__)
 
     print(kma.find(kma.key("test"), kmb.key("x")))
+    print(kma.find(Key(kma.key("test"), kmb.key("x"))))
+    print(kma.find(Key("test", "x")))
+    print(kma.find("test", "x"))
 
     for num in range(len(kma)):
         print(kma.whats_at(num))
