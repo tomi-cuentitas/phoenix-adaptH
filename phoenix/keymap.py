@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 17/09/2024, 16:55
-# Version:     0.0.2162
+# Last Update: 18/09/2024, 13:07
+# Version:     0.0.2171
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,16 +17,19 @@ from __future__ import annotations
 
 
 __doc__ = """
-Keymap module description
+KeyMap module description
 =========================
+
+
 
 """
 
 
 import pickle
 
+from typing import Any, Generator, Tuple, List, Callable, Type, Self
+from collections.abc import Hashable
 
-from typing import Hashable, Any, Generator, Tuple, List, Callable, Type, Self
 
 ###############################################################################
 #
@@ -69,10 +72,10 @@ def autoname(function) -> Callable:
 ###############################################################################
 
 
-class _IKey:
+class _KeySegment:
     """
-    Private Class: _IKey
-    ====================
+    Private Class: _KeySegment
+    ==========================
 
     Simple dataclass that contains any hashable as a key and optionally a link
     to the parent, i.e. the KeyMap instance where this key is registered at.
@@ -81,7 +84,7 @@ class _IKey:
     never actively get in contact with this.
     """
 
-    # the class-level parent. Anonymous _IKey instances can have a class
+    # the class-level parent. Anonymous _KeySegment instances can have a class
     # assigned to them if they are generated on the fly.
     _cparent = None
 
@@ -93,7 +96,7 @@ class _IKey:
         assert isinstance(key, Hashable)
 
         # check for potential input arg conversion
-        if isinstance(key, _IKey):
+        if isinstance(key, _KeySegment):
             self._key = key.key
         elif isinstance(key, Key):
             assert len(key.keys) == 1, "cannot generate _Key from chained key"
@@ -110,7 +113,7 @@ class _IKey:
             self._parent = self._cparent
 
         # final check
-        assert not isinstance(self._key, (_IKey, Key))
+        assert not isinstance(self._key, (_KeySegment, Key))
 
     def __init_subclass__(cls, parent=None):
         """set default parent upon inheritance"""
@@ -122,7 +125,7 @@ class _IKey:
 
     def __eq__(self, other):
         assert isinstance(
-            other, _IKey
+            other, _KeySegment
         ), f"Invalid comparison between {type(self)} and {type(other)}"
         return self.key == other.key
 
@@ -143,10 +146,10 @@ class _IKey:
         return f"[{self._key}]"
 
 
-class _ForbiddenKey(_IKey):
+class _ForbiddenKey(_KeySegment):
     """To simplify the implementation, of the Entry(KeyMap) class, we will
-    introduce an _IKey child class, that simply throws an exception from the
-    constructor.
+    introduce an _KeySegment child class, that simply throws an exception from
+    the constructor.
     """
 
     def __new__(cls, *_args, **_kwargs):
@@ -175,8 +178,8 @@ class Key:
     =========
 
     Keys can be composed from other keys to access nested classes. Internally,
-    they store the _IKey objects they are made from. The main complexity of
-    this class is due to the task of managing proper conversions and handling
+    they store the _KeySegment objects they are made from. The main complexity
+    of this class is due to the task of managing proper conversions and handling
     tagged keys.
     Tagged keys include a reference to the KeyMap that they apply to. In a safe
     design, these references are checked, figuratively we check wether the key
@@ -187,16 +190,16 @@ class Key:
         self._keys = []
         # decompose into _Key objects
         for _key in keys:
-            if isinstance(_key, _IKey):
+            if isinstance(_key, _KeySegment):
                 self._keys += [_key]
             elif isinstance(_key, Key):
                 self._keys += _key.as_list(tagged=False)
             else:
-                self._keys += [_IKey(_key)]
+                self._keys += [_KeySegment(_key)]
         # and check
         if __debug__:
             for _key in self._keys:
-                assert isinstance(_key, _IKey)
+                assert isinstance(_key, _KeySegment)
 
     def unchain(self) -> Generator:
         """unpack all the key objects chained up, together with their tags"""
@@ -204,7 +207,7 @@ class Key:
             yield (_key.parent, _key)
 
     def __hash__(self):
-        """as _IKeys are hashable, so are tuples made from them"""
+        """as _KeySegments are hashable, so are tuples made from them"""
         return hash(self.keys)
 
     def __eq__(self, other):
@@ -225,7 +228,7 @@ class Key:
         return True
 
     @property
-    def keys(self) -> Tuple[_IKey]:
+    def keys(self) -> Tuple[_KeySegment]:
         """unpack the key signature as a tuple for hashing and more"""
         return tuple(key for _, key in self.unchain())
 
@@ -244,16 +247,16 @@ class Key:
     def __or__(self, other) -> Key:
         if isinstance(other, Key):
             return Key(self, other)
-        if isinstance(other, _IKey):
+        if isinstance(other, _KeySegment):
             return Key(self, other)
-        return Key(self, _IKey(other))
+        return Key(self, _KeySegment(other))
 
     def __ror__(self, other) -> Key:
         if isinstance(other, Key):
             return Key(other, self)
-        if isinstance(other, _IKey):
+        if isinstance(other, _KeySegment):
             return Key(other, self)
-        return Key(_IKey(other), self)
+        return Key(_KeySegment(other), self)
 
     @property
     def parents(self) -> Tuple[KeyMap]:
@@ -359,7 +362,7 @@ class KeyMap:
         """the keygenerator class can be tagged by a parent"""
         this_class = type(
             f"auto_KeyGen_{name}",
-            (_IKey,),
+            (_KeySegment,),
             {
                 "__doc__": f"auto generated key generator for keymap '{name}'.",
             },
@@ -435,7 +438,7 @@ class KeyMap:
 
     def _append(self, key, keymap):
         """internal append, contains all checks and stuff"""
-        assert isinstance(key, _IKey)
+        assert isinstance(key, _KeySegment)
         self._content.append((key, keymap))
 
     def add_parent(self, parent):
@@ -482,8 +485,8 @@ class KeyMap:
         self.update()
         if isinstance(key, Key):
             return self._key2reg[key._keys[0]]
-        if not isinstance(key, _IKey):
-            return self._key2reg[_IKey(key)]
+        if not isinstance(key, _KeySegment):
+            return self._key2reg[_KeySegment(key)]
         return self._key2reg[key]
 
     def keys(self, recursive=False, prefix=Key()):
@@ -566,9 +569,7 @@ class Region(KeyMap):
         self.update()
 
     def append(self, entry):
-        assert isinstance(
-            entry, Entry
-        ), "only entries can be added to regions."
+        assert isinstance(entry, Entry), "only entries can be added to regions."
         super().append(key=self._counter, keymap=entry)
         self._counter += 1
 
