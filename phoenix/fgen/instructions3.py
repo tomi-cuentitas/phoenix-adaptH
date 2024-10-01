@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 01/10/2024, 16:59
-# Version:     0.0.441
+# Last Update: 01/10/2024, 17:03
+# Version:     0.0.452
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -196,14 +196,27 @@ class GenericInstruction(Instruction, ftype="generic"):
             )
         self._params[key] = value
 
-    def to_dict(self, *keys, defaults=None):
+    def to_dict(self, *keys, defaults: dict | None = None):
         """get a dictionary from keys, filled with the values"""
         if defaults is None:
             defaults = {}
         # check params first, then check defaults, return None for miss
+        if keys:
+            return {key: self.get(key, defaults.get(key, None)) for key in keys}
         return {
-            key: self._params.get(key, defaults.get(key, None)) for key in keys
+            key: self.get(key, defaults.get(key, None)) for key in self.keys()
         }
+
+    def to_tuple(self, *keys, defaults: dict | None = None):
+        """get a data tuple from keys in the order the keys are requested"""
+        if defaults is None:
+            defaults = {}
+        # check params first, then check defaults, return None for miss
+        if keys:
+            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+        return tuple(
+            self.get(key, defaults.get(key, None)) for key in self.keys()
+        )
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -382,5 +395,5 @@ if __name__ == "__main__":
     for ins in test.instructions:
         print(ins)
 
-    for ins in foo.unpack(recursive=False):
-        print(ins, len(ins))
+    for ins in foo.unpack(recursive=True):
+        print(ins, len(ins), ins.to_dict(), ins.to_tuple())
