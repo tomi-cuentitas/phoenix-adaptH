@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 01/10/2024, 14:27
-# Version:     0.0.415
+# Last Update: 01/10/2024, 16:59
+# Version:     0.0.441
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -263,8 +263,29 @@ class InstructionGroup(Instruction, ftype="group"):
             [instr for _, instr in sorted_instructions], itype=self._itype
         )
 
-    def grouped(self, function):
-        """introduce groups to the instruction group. Assume flattened!"""
+    def grouped(self, function=None, size=None, number=None):
+        """subdivide the current instruction group into smaller groups"""
+
+        match (function, size, number):
+            case (function, None, None):
+                assert callable(function)
+                return self.group_by_key(function)
+
+            case (None, size, None):
+                assert isinstance(size, int)
+                return self.group_to_size(size)
+
+            case (None, None, number):
+                assert isinstance(number, int)
+                return self.group_to_batches
+
+            case _:
+                raise ValueError(
+                    "only one of 'function', 'size' and 'number' can be set"
+                )
+
+    def group_by_key(self, function):
+        """generate groups by a key generating function"""
         groups = {}
         for instr in self.instructions:
             group_id = function(instr)
@@ -279,8 +300,18 @@ class InstructionGroup(Instruction, ftype="group"):
             itype=self._itype,
         )
 
-    def split(self, max_size):
-        """split the instructions into groups of a certain max size"""
+    def group_to_batches(self, num_batches):
+        """subdivide the group into a number of batches.
+        Does not conserve continuousity of data"""
+        groups = [[] for _ in num_batches]
+        for num, instr in enumerate(self.instructions):
+            groups[num % num_batches].append(instr)
+        return InstructionGroup(
+            [InstructionGroup(group) for group in groups], itype=self._itype
+        )
+
+    def group_to_size(self, max_size):
+        """split the instructions into groups of a certain (maximum) size"""
         group = []
         collect = []
         for instr in self.instructions:
@@ -293,66 +324,63 @@ class InstructionGroup(Instruction, ftype="group"):
         return InstructionGroup(collect, itype=self._itype)
 
 
-x = GenericInstruction(foo="bar")
-print(x.params)
-print(x.ftype)
+if __name__ == "__main__":
+    x = GenericInstruction(foo="bar")
+    print(x.params)
+    print(x.ftype)
 
+    class SpecificInstruction(GenericInstruction, ftype="specific"):
+        pass
 
-class SpecificInstruction(GenericInstruction, ftype="specific"):
-    pass
+    class OtherSpecificInstruction(GenericInstruction, ftype="otherspecific"):
+        pass
 
+    class MoreSpecificInstruction(SpecificInstruction, ftype="more"):
+        pass
 
-class OtherSpecificInstruction(GenericInstruction, ftype="otherspecific"):
-    pass
+    y = SpecificInstruction(foo="foo")
+    z = OtherSpecificInstruction(foo="bar")
+    k = MoreSpecificInstruction(foo="baz")
+    print(y.ftype)
 
+    print(InstructionGroup._get_itype_common_root([z, k]))
 
-class MoreSpecificInstruction(SpecificInstruction, ftype="more"):
-    pass
+    foo = InstructionGroup([y, k])
+    print(foo.ftype)
+    print(foo._itype)
+    print(foo.itype)
+    print(foo._itype)
 
+    print(y.is_subtype(x))
+    print(y.is_subtype(y))
+    # print(foo.is_subtype(y))
 
-y = SpecificInstruction(foo="foo")
-z = OtherSpecificInstruction(foo="bar")
-k = MoreSpecificInstruction(foo="baz")
-print(y.ftype)
+    print()
+    bar = InstructionGroup(
+        [
+            foo,
+            foo,
+        ]
+    )
+    for instruction in bar.instructions:
+        print(instruction)
 
-print(InstructionGroup._get_itype_common_root([z, k]))
+    print()
 
-foo = InstructionGroup([y, k])
-print(foo.ftype)
-print(foo._itype)
-print(foo.itype)
-print(foo._itype)
+    baz = bar.flatten()
+    foo = baz.grouped(lambda x: x["foo"])
+    print([len(instr) for instr in foo.instructions])
+    bar = baz.group_to_size(5)
+    print([len(instr) for instr in bar.instructions])
 
-print(y.is_subtype(x))
-print(y.is_subtype(y))
-# print(foo.is_subtype(y))
+    for instruction in baz.instructions:
+        print(instruction)
 
-print()
-bar = InstructionGroup(
-    [
-        foo,
-        foo,
-    ]
-)
-for instruction in bar.instructions:
-    print(instruction)
+    test = InstructionGroup(list(baz.unpack()) + [z, z])
 
-print()
+    print(len(test))
+    for ins in test.instructions:
+        print(ins)
 
-baz = bar.flatten()
-foo = baz.grouped(lambda x: x["foo"])
-print([len(instr) for instr in foo.instructions])
-bar = baz.split(5)
-print([len(instr) for instr in bar.instructions])
-
-for instruction in baz.instructions:
-    print(instruction)
-
-test = InstructionGroup(list(baz.unpack()) + [z, z])
-
-print(len(test))
-for ins in test.instructions:
-    print(ins)
-
-for ins in foo.unpack(recursive=False):
-    print(ins, len(ins))
+    for ins in foo.unpack(recursive=False):
+        print(ins, len(ins))
