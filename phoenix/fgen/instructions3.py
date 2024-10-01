@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 01/10/2024, 14:16
-# Version:     0.0.403
+# Last Update: 01/10/2024, 14:27
+# Version:     0.0.415
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -75,6 +75,11 @@ class Instruction:
     @property
     def instructions(self):
         """access instructions"""
+        # break recursive loop
+        yield self
+
+    def unpack(self, recursive=True):
+        """unpack the instruction"""
         # break recursive loop
         yield self
 
@@ -231,10 +236,13 @@ class InstructionGroup(Instruction, ftype="group"):
         """access read-only attribute instructions as generator"""
         yield from self._instructions
 
-    def unpack(self):
+    def unpack(self, recursive=True):
         """unpack all instructions, including inner groups"""
         for instr in self.instructions:
-            yield from instr.instructions
+            if recursive:
+                yield from instr.unpack(recursive=True)
+            else:
+                yield instr
 
     def flatten(self):
         """flatten instructions, which will unpack all inner groups"""
@@ -320,7 +328,12 @@ print(y.is_subtype(y))
 # print(foo.is_subtype(y))
 
 print()
-bar = InstructionGroup([foo, foo, foo, foo, foo, foo])
+bar = InstructionGroup(
+    [
+        foo,
+        foo,
+    ]
+)
 for instruction in bar.instructions:
     print(instruction)
 
@@ -334,3 +347,12 @@ print([len(instr) for instr in bar.instructions])
 
 for instruction in baz.instructions:
     print(instruction)
+
+test = InstructionGroup(list(baz.unpack()) + [z, z])
+
+print(len(test))
+for ins in test.instructions:
+    print(ins)
+
+for ins in foo.unpack(recursive=False):
+    print(ins, len(ins))
