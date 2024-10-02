@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 02/10/2024, 18:16
-# Version:     0.0.741
+# Last Update: 02/10/2024, 18:19
+# Version:     0.0.751
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -250,9 +250,14 @@ class ADAA:
         )
 
     def __pow__(self, exponent):
-        raise NotImplementedError(
-            "power operation not implemented in generic ADAA"
-        )
+        if not isinstance(exponent, int):
+            raise ValueError("Exponent must be an integer")
+        if exponent < 0:
+            raise ValueError("Exponent must be non-negative")
+        accum = self.__class__._from_scalar(1, 0)  # identity operator
+        for _ in range(exponent):
+            accum *= self
+        return accum
 
     def __len__(self):
         return self.size
