@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 02/10/2024, 15:31
-# Version:     0.0.711
+# Last Update: 02/10/2024, 18:16
+# Version:     0.0.741
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -59,6 +59,15 @@ class ADAA:
         self._meta = {"ndata": size}
         self._data_r = None
         self._data_i = None
+        self._reinit(size)
+
+    @classmethod
+    def _empty(cls, size):
+        return None, None
+
+    def _reinit(self, size):
+        self._data_r, self._data_i = self.__class__._empty(size)
+        self._meta["ndata"] = size
 
     def __init_subclass__(cls, ident=None):
         if ident is None:
@@ -323,10 +332,11 @@ class PurePyADAA(ADAA):
 
     _IDENTIFIER = "PUREPYTHON"
 
-    def __init__(self, size):
-        super().__init__(size)
-        self._data_r = [0.0 for _ in range(size)]
-        self._data_i = [0.0 for _ in range(size)]
+    @classmethod
+    def _empty(cls, size):
+        real = [0.0 for _ in range(size)]
+        imag = [0.0 for _ in range(size)]
+        return real, imag
 
 
 class NumpyADAA(ADAA):
@@ -334,10 +344,11 @@ class NumpyADAA(ADAA):
 
     _IDENTIFIER = "NUMPY"
 
-    def __init__(self, size):
-        super().__init__(size)
-        self._data_r = np.zeros(size)
-        self._data_i = np.zeros(size)
+    @classmethod
+    def _empty(cls, size):
+        real = np.zeros(size)
+        imag = np.zeros(size)
+        return real, imag
 
 
 class FortranADAA(ADAA):
@@ -345,10 +356,11 @@ class FortranADAA(ADAA):
 
     _IDENTIFIER = "FORTRAN"
 
-    def __init__(self, size):
-        super().__init__(size)
-        self._data_r = np.zeros(size)
-        self._data_i = np.zeros(size)
+    @classmethod
+    def _empty(cls, size):
+        real = np.zeros(size)
+        imag = np.zeros(size)
+        return real, imag
 
 
 class CupyADAA(ADAA):
@@ -356,10 +368,11 @@ class CupyADAA(ADAA):
 
     _IDENTIFIER = "CUPY"
 
-    def __init__(self, size):
-        super().__init__(size)
-        self._data_r = cp.zeros(size)
-        self._data_i = cp.zeros(size)
+    @classmethod
+    def _empty(cls, size):
+        real = cp.zeros(size)
+        imag = cp.zeros(size)
+        return real, imag
 
 
 class OpenClADAA(ADAA):
@@ -372,18 +385,19 @@ class OpenClADAA(ADAA):
 
     _CL_MF = cl.mem_flags
 
-    def __init__(self, size):
-        super().__init__(size)
-        self._data_r = cl.Buffer(
-            self._CL_CTX,
-            self._CL_MF.READ_ONLY | self._CL_MF.COPY_HOST_PTR,
+    @classmethod
+    def _empty(cls, size):
+        real = cl.Buffer(
+            cls._CL_CTX,
+            cls._CL_MF.READ_ONLY | cls._CL_MF.COPY_HOST_PTR,
             hostbuf=np.zeros(size),
         )
-        self._data_i = cl.Buffer(
-            self._CL_CTX,
-            self._CL_MF.READ_ONLY | self._CL_MF.COPY_HOST_PTR,
+        imag = cl.Buffer(
+            cls._CL_CTX,
+            cls._CL_MF.READ_ONLY | cls._CL_MF.COPY_HOST_PTR,
             hostbuf=np.zeros(size),
         )
+        return real, imag
 
 
 class Foo(
