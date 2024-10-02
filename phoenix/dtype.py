@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/09/2024, 13:53
-# Version:     0.0.503
+# Last Update: 02/10/2024, 15:31
+# Version:     0.0.711
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -47,32 +47,88 @@ import cupy as cp
 import pyopencl as cl
 
 
-class DLayer:
-    """DLayer class description"""
+ZERO_TOL = 1e-14
+
+
+class ADAA:
+    """Aligned Data Access Array class description"""
 
     _IDENTIFIER = "_GENERIC_"
 
     def __init__(self, size: int):
-        self._ndata = size
+        self._meta = {"ndata": size}
         self._data_r = None
         self._data_i = None
 
     def __init_subclass__(cls, ident=None):
         if ident is None:
-            ident = cls._IDENTIFIER
+            # ident = cls._IDENTIFIER
+            ident = cls.__name__
         cls._IDENTIFIER = ident
 
     def _set_data_ref(self, real=None, imag=None):
-        """set data ref"""
+        """set data"""
         if real is not None:
             self._data_r = real
         if imag is not None:
             self._data_i = imag
         return self
 
+    @property
+    def real(self):
+        """access read-only attribute real"""
+        return self._data_r
+
+    @property
+    def imag(self):
+        """access read-only attribute imag"""
+        return self._data_i
+
     @classmethod
     def _from_scalar(cls, scalar_real, scalar_imag):
         return scalar_real, scalar_imag
+
+    @classmethod
+    def _maxval(cls, array):
+        return max(array.real), max(array.imag)
+
+    @classmethod
+    def _minval(cls, array):
+        return min(array.real), min(array.imag)
+
+    @classmethod
+    def _coeff_conjugate(cls, array):
+        return cls(array.size)._set_data_ref(array.real, -array.imag)
+
+    @classmethod
+    def _coeff_norm2(cls, array):
+        return array * cls._coeff_conjugate(array)
+
+    @classmethod
+    def _all_coeff_positive(cls, array, real=True, imag=False):
+        """checks if all real parts of the array are non-negative"""
+        if real:
+            if cls._minval(array.real) < -ZERO_TOL:
+                return False
+        if imag:
+            if cls._minval(array.imag) < -ZERO_TOL:
+                return False
+        return True
+
+    @classmethod
+    def allclose(cls, array_a, array_b, rtol=1e-05, atol=1e-8):
+        """check if the values are all close
+
+        checks for each component, if
+        |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
+        """
+        dif_squared = cls._coeff_norm2(array_a - array_b)
+        ref_squared = cls._from_scalar(atol**2, 0) + cls._from_scalar(
+            rtol**2 / 4, 0
+        ) * (cls._coeff_norm2(array_a) + cls._coeff_norm2(array_b))
+        return cls._all_coeff_positive(
+            ref_squared - dif_squared, real=True, imag=False
+        )
 
     @classmethod
     def _basic_linop(cls, op_a=None, sc_b=None, op_c=None):
@@ -81,14 +137,14 @@ class DLayer:
         if op_a is None:
             oar, oai = cls._from_scalar(0, 0)
         else:
-            oar = op_a._data_r
-            oai = op_a._data_i
+            oar = op_a.real
+            oai = op_a.imag
 
         if op_c is None:
             ocr, oci = cls._from_scalar(1, 0)
         else:
-            ocr = op_c._data_r
-            oci = op_c._data_i
+            ocr = op_c.real
+            oci = op_c.imag
 
         if sc_b is None:
             sbr, sbi = cls._from_scalar(1, 0)
@@ -101,7 +157,7 @@ class DLayer:
         return (real_part, imag_part)
 
     def __add__(self, other):
-        if isinstance(other, DLayer):
+        if isinstance(other, self.__class__):
             assert self.size == other.size
             assert self.ident == other.ident
             (real_part, imag_part) = self._basic_linop(
@@ -117,7 +173,7 @@ class DLayer:
         )
 
     def __sub__(self, other):
-        if isinstance(other, DLayer):
+        if isinstance(other, self.__class__):
             assert self.size == other.size
             assert self.ident == other.ident
             (real_part, imag_part) = self._basic_linop(
@@ -133,7 +189,8 @@ class DLayer:
         )
 
     def __mul__(self, other):
-        assert not isinstance(other, DLayer)
+        if isinstance(other, ADAA):
+            raise ValueError("Dividing through operator is not supported")
         (real_part, imag_part) = self._basic_linop(
             op_a=None, sc_b=other, op_c=self
         )
@@ -143,7 +200,8 @@ class DLayer:
         )
 
     def __truediv__(self, other):
-        assert not isinstance(other, DLayer)
+        if isinstance(other, ADAA):
+            raise ValueError("Dividing through operator is not supported")
         inv_other = 1.0 / other
         (real_part, imag_part) = self._basic_linop(
             op_a=None, sc_b=inv_other, op_c=self
@@ -154,11 +212,12 @@ class DLayer:
         )
 
     def __rmul__(self, other):
-        # assume commutative
+        # assume commutative, because if the other operator is an ADAA as well,
+        # why should rmul be called anyways?
         return self.__mul__(other)
 
     def __radd__(self, other):
-        # assume commutative
+        # assume commutative, because addition is.
         return self.__add__(other)
 
     def __neg__(self):
@@ -171,7 +230,8 @@ class DLayer:
         )
 
     def __rsub__(self, other):
-        assert not isinstance(other, DLayer)
+        if isinstance(other, ADAA):
+            raise ValueError("This should not have happened")
         (real_part, imag_part) = self._basic_linop(
             op_a=-self, sc_b=other, op_c=None
         )
@@ -179,6 +239,22 @@ class DLayer:
             real=real_part,
             imag=imag_part,
         )
+
+    def __pow__(self, exponent):
+        raise NotImplementedError(
+            "power operation not implemented in generic ADAA"
+        )
+
+    def __len__(self):
+        return self.size
+
+    def __bool__(self):
+        return self.size > 0
+
+    def __eq__(self, other):
+        return self.__class__.allclose(
+            self, other
+        )  # , rtol=1e-08, atol=1e-12)
 
     @property
     def ident(self) -> str:
@@ -188,7 +264,7 @@ class DLayer:
     @property
     def size(self) -> int:
         """access write-protected property ndata"""
-        return self._ndata
+        return self._meta["ndata"]
 
     def unpack(self) -> tuple:
         """unpack the layer"""
@@ -198,7 +274,7 @@ class DLayer:
 class DContainer:
     """DContainer class description"""
 
-    _LAYERS = {}
+    _LAYERS: dict[str, ADAA] = {}
 
     def __init__(self, *sizes):
         self._layers = {
@@ -232,17 +308,17 @@ class DContainer:
 
 
 class DLC(DContainer):
-    """Dual Layer Container class description"""
+    """Dual Layer Container class"""
 
 
 class SDLC(DLC):
-    """Synced Dual Layer Container class description"""
+    """Synced Dual Layer Container class"""
 
 
 ###############################################################################
 
 
-class DLayerPurePy(DLayer):
+class PurePyADAA(ADAA):
     """Pure Python data layer"""
 
     _IDENTIFIER = "PUREPYTHON"
@@ -253,7 +329,7 @@ class DLayerPurePy(DLayer):
         self._data_i = [0.0 for _ in range(size)]
 
 
-class DLayerNumpy(DLayer):
+class NumpyADAA(ADAA):
     """Numpy based data layer"""
 
     _IDENTIFIER = "NUMPY"
@@ -264,7 +340,18 @@ class DLayerNumpy(DLayer):
         self._data_i = np.zeros(size)
 
 
-class DLayerCupy(DLayer):
+class FortranADAA(ADAA):
+    """FORTRAN based data layer (implemented via NumPy)"""
+
+    _IDENTIFIER = "FORTRAN"
+
+    def __init__(self, size):
+        super().__init__(size)
+        self._data_r = np.zeros(size)
+        self._data_i = np.zeros(size)
+
+
+class CupyADAA(ADAA):
     """Cupy based data layer"""
 
     _IDENTIFIER = "CUPY"
@@ -275,10 +362,10 @@ class DLayerCupy(DLayer):
         self._data_i = cp.zeros(size)
 
 
-class DLayerOCLGPU(DLayer):
+class OpenClADAA(ADAA):
     """Cupy based data layer"""
 
-    _IDENTIFIER = "CUPY"
+    _IDENTIFIER = "OPENCL"
 
     _CL_CTX = cl.create_some_context()
     _CL_QUEUE = cl.CommandQueue(_CL_CTX)
@@ -301,10 +388,10 @@ class DLayerOCLGPU(DLayer):
 
 class Foo(
     DContainer,
-    layer1=DLayerPurePy,
-    layer2=DLayerNumpy,
-    layer3=DLayerOCLGPU,
-    layer4=DLayerCupy,
+    layer1=PurePyADAA,
+    layer2=NumpyADAA,
+    layer3=OpenClADAA,
+    layer4=CupyADAA,
 ):
     pass
 
@@ -345,7 +432,7 @@ print(
 )
 
 
-class MyLayerPurePy(DLayerPurePy, ident="PurePy2"):
+class MyLayerPurePy(PurePyADAA, ident="PurePy2"):
     pass
 
 
