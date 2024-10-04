@@ -5,12 +5,25 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/10/2024, 13:01
-# Version:     0.0.1046
+# Last Update: 04/10/2024, 14:57
+# Version:     0.0.1058
 #
 #################################################end#of#autoheader#do#not#modify
 
 
+
+TODO:
+=====
+
+[ ]:  from_numpy, to_numpy/as_numpy: these methods shortcut the data transfer
+        between host and potential device without using a container object.
+        This strategy does not require any host/local data representation in the
+        datatype, does not require syncing and is cheap to implement.
+[ ]:  auto-implement pure, gpu and cpu data type. Have a lib variable set upon
+        initialisation to read the availability of cupy, pycuda, opencl, ... and
+        have an automated choice for the data type if "GPU", "CPU" or "PURE" is
+        passed as an initializer. Check how ADAA is best implemented to have a
+        choice of hardware
 """
 
 __doc__ = """
@@ -60,6 +73,15 @@ class ADAA:
         self._data_r = None
         self._data_i = None
         self._reinit(size)
+
+    @classmethod
+    def from_numpy(cls, arr):
+        """transfer data from numpy"""
+        raise NotImplementedError("Subclass must implement from_numpy")
+
+    def to_numpy(self):
+        """transfer data to numpy"""
+        raise NotImplementedError("Subclass must implement to_numpy")
 
     @classmethod
     def _new_data(cls, size):
@@ -289,7 +311,7 @@ class DContainer:
         assert key in self._layers
         return self._layers[key]
 
-    def unpack(self, key, **kwargs):
+    def unpack(self, key, **kwargs):1
         """unpack the requested layer"""
         assert key in self._layers
         return self._layers[key].unpack(**kwargs)
