@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/10/2024, 15:01
-# Version:     0.0.507
+# Last Update: 07/10/2024, 16:16
+# Version:     0.0.577
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,31 +19,6 @@ Instruction module description
 ==============================
 
 """
-
-
-# suggested monad design for instruction types.
-# better idea:
-#  - merge parent reference into instruction and point to parent CLASS
-#  - update get_common_itype routine to make a parent tree check by resolving
-#    the MRO
-
-# class IType:
-#     """manages instruction types"""
-#
-#     def __init__(self, identifier, description="", parent=None):
-#         self._ident = identifier
-#         self._descr = description
-#         self._parent = parent
-#
-#     def derive(self, identifier, description=""):
-#         """derive a new instruction type"""
-#         return IType(
-#             identifier=identifier,
-#             description=description,
-#             parent=self,
-#         )
-#
-# ITYPE_INSTR = IType("instruction", "instruction base type")
 
 
 def all_same(somelist):
@@ -71,6 +46,18 @@ def segment_overlap(*segments_list):
     return common_segments
 
 
+def mro_latest_common_parent(*class_list):
+    """class based approach to find the common instruction type by scanning the
+    MRO to find the latest common parent of all classes given"""
+    latest = None
+    for this_classes in zip(*class_list):
+        try:
+            latest = all_same(this_classes)
+        except ValueError:
+            break
+    return latest
+
+
 class Instruction:
     """Base class for instructions"""
 
@@ -81,6 +68,23 @@ class Instruction:
         if len(instruction_list) == 0:
             return None
         segments_list = [instr.itype.split(".") for instr in instruction_list]
+        # pylint: disable=pointless-string-statement
+        # TODO: maybe implement this later:
+        """  
+        alternative_segment_list = list(
+            [
+                list(
+                    filter(
+                        lambda x: issubclass(x, Instruction),
+                        instr.__class__.__mro__,
+                    )
+                )[::-1]
+                for instr in instruction_list
+            ]
+        )
+        print(mro_latest_common_parent(*alternative_segment_list))
+        """
+        # pylint: enable=pointless-string-statement
         return ".".join(segment_overlap(*segments_list))
 
     def __len__(self):
@@ -101,10 +105,13 @@ class Instruction:
         # break recursive loop
         yield self
 
+    # pylint: disable=unused-argument
     def unpack(self, recursive=True):
         """unpack the instruction"""
         # break recursive loop
         yield self
+
+    # pylint: enable=unused-argument
 
     @property
     def itype(self):
@@ -443,6 +450,6 @@ if __name__ == "__main__":
             )
         )
 
-    print(SpecificInstruction.__mro__[::-1])
-    print(MoreSpecificInstruction.__mro__[::-1])
-    print(OtherSpecificInstruction.__mro__[::-1])
+    # print(SpecificInstruction.__mro__[::-1])
+    # print(MoreSpecificInstruction.__mro__[::-1])
+    # print(OtherSpecificInstruction.__mro__[::-1])
