@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 07/10/2024, 14:43
-# Version:     0.0.9
+# Last Update: 07/10/2024, 17:34
+# Version:     0.0.45
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,15 +32,107 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 
 """
 
+import pickle
+from tomography import Tomography
+from instruction3 import InstructionGroup
+
 
 class Routine:
     """Routine class description"""
 
-    def __init__(self, identifier: str, ftype, out_var, in_vars):
+    def __init__(
+        self, identifier: str, ftype, out_var, in_vars, instruction_group=None
+    ):
         self._identifier = identifier
-        self.instruction_group = None
+        self.instruction_group = instruction_group
 
-        self.inp_vars = in_vars
+        self.in_vars = in_vars
         self.out_var = out_var
-        self._ftype = ftype
+        self._itype = ftype
         self._ready = False
+
+    def __len__(self):
+        return len(self.instruction_group)
+
+    @property
+    def ftype(self):
+        """write-protected access to ftype"""
+        return self._itype
+
+    @property
+    def instructions(self):
+        """generator through all instructions.
+        Forward the call into the instruction into the top level instruction
+        group
+        """
+        yield from self.instruction_group.instructions
+
+    def checksum(self):
+        """a checksum to make sure, that the naming is safe"""
+        test_tuple = (
+            self._identifier,
+            self.ftype,
+            len(self.in_vars),
+            self.out_var.get_size(),
+            *[inp_var.get_size() for inp_var in self.in_vars],
+        )
+        return test_tuple
+
+    def from_file(self):
+        """get from file"""
+        filename = f"routine_{self._identifier}_data.pckl"
+        try:
+            with open(filename, "rb") as f:
+                checksum, instgrp = pickle.load(f)
+                if checksum == self.checksum():
+                    self.instruction_group = instgrp
+                    self._ready = True
+                    return self
+                else:
+                    return False
+        except FileNotFoundError:
+            return False
+
+    def to_file(self):
+        """write to file"""
+        filename = f"routine_{self._identifier}_data.pckl"
+        with open(filename, "wb") as f:
+            pickle.dump((self.checksum(), self.instruction_group), f)
+
+    @staticmethod
+    def from_function(
+        function,  # generating function
+        ftype,  # function type
+        out_var,  # output var
+        in_vars,  # input vars
+        identifier=None,  # identifier
+        parallel=True,  # use multiple cores for generation
+        verbose=False,
+        **kwargs,  # catch other arguments if any
+    ):
+        """generate instructions from function tomography"""
+
+        if identifier is None:
+            identifier = function.__name__
+        tomography = Tomography.new(ftype, out_var, in_vars, **kwargs)
+
+        # change here: tomography will return an instruction group directly
+        instruction_group = tomography.apply(
+            function,
+            verbose=verbose,
+            parallel=parallel,
+        )
+        return Routine(
+            identifier=identifier,
+            ftype=ftype,
+            out_var=out_var,
+            in_vars=in_vars,
+            instruction_group=instruction_group,
+        )
+
+    @property
+    def identifier(self):
+        """make the identifier read-only, to conserve association to
+        instructions and filenames
+        """
+        return self._identifier
