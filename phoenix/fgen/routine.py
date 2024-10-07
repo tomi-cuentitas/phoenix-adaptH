@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2024, 17:42
-# Version:     0.0.5
+# Last Update: 07/10/2024, 14:43
+# Version:     0.0.9
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,3 +35,12 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 
 class Routine:
     """Routine class description"""
+
+    def __init__(self, identifier: str, ftype, out_var, in_vars):
+        self._identifier = identifier
+        self.instruction_group = None
+
+        self.inp_vars = in_vars
+        self.out_var = out_var
+        self._ftype = ftype
+        self._ready = False

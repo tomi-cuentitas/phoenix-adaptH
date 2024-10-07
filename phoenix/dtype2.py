@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/10/2024, 14:57
-# Version:     0.0.1058
+# Last Update: 07/10/2024, 15:52
+# Version:     0.0.1060
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -311,7 +311,7 @@ class DContainer:
         assert key in self._layers
         return self._layers[key]
 
-    def unpack(self, key, **kwargs):1
+    def unpack(self, key, **kwargs):
         """unpack the requested layer"""
         assert key in self._layers
         return self._layers[key].unpack(**kwargs)

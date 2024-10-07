@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 01/10/2024, 17:03
-# Version:     0.0.452
+# Last Update: 07/10/2024, 15:01
+# Version:     0.0.507
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,7 +20,30 @@ Instruction module description
 
 """
 
-_ALL_INSTRUCTIONS = {}
+
+# suggested monad design for instruction types.
+# better idea:
+#  - merge parent reference into instruction and point to parent CLASS
+#  - update get_common_itype routine to make a parent tree check by resolving
+#    the MRO
+
+# class IType:
+#     """manages instruction types"""
+#
+#     def __init__(self, identifier, description="", parent=None):
+#         self._ident = identifier
+#         self._descr = description
+#         self._parent = parent
+#
+#     def derive(self, identifier, description=""):
+#         """derive a new instruction type"""
+#         return IType(
+#             identifier=identifier,
+#             description=description,
+#             parent=self,
+#         )
+#
+# ITYPE_INSTR = IType("instruction", "instruction base type")
 
 
 def all_same(somelist):
@@ -142,6 +165,7 @@ class GenericInstruction(Instruction, ftype="generic"):
 
     def __enter__(self):
         self._protected = False
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
         self._protected = True
@@ -202,7 +226,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return {key: self.get(key, defaults.get(key, None)) for key in keys}
+            return {
+                key: self.get(key, defaults.get(key, None)) for key in keys
+            }
         return {
             key: self.get(key, defaults.get(key, None)) for key in self.keys()
         }
@@ -213,7 +239,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -343,17 +371,19 @@ if __name__ == "__main__":
     print(x.ftype)
 
     class SpecificInstruction(GenericInstruction, ftype="specific"):
-        pass
+        def __init__(self, *, foo):
+            super().__init__(foo=foo)
 
     class OtherSpecificInstruction(GenericInstruction, ftype="otherspecific"):
         pass
 
     class MoreSpecificInstruction(SpecificInstruction, ftype="more"):
-        pass
+        def __init__(self):
+            super().__init__(foo="default")
 
     y = SpecificInstruction(foo="foo")
     z = OtherSpecificInstruction(foo="bar")
-    k = MoreSpecificInstruction(foo="baz")
+    k = MoreSpecificInstruction()
     print(y.ftype)
 
     print(InstructionGroup._get_itype_common_root([z, k]))
@@ -389,11 +419,30 @@ if __name__ == "__main__":
     for instruction in baz.instructions:
         print(instruction)
 
+    try:
+        next(baz.instructions)["foo"] = "bazbaz"
+    except ValueError as e:
+        print(e)
+
+    with next(baz.instructions) as this_instruction:
+        print("Here", this_instruction)
+        this_instruction["foo"] = "bazbazbaz"
+
     test = InstructionGroup(list(baz.unpack()) + [z, z])
 
     print(len(test))
     for ins in test.instructions:
         print(ins)
 
+    print()
     for ins in foo.unpack(recursive=True):
         print(ins, len(ins), ins.to_dict(), ins.to_tuple())
+        print(
+            "in this test we output 'foo' as {foo} and we like it.".format(
+                **ins
+            )
+        )
+
+    print(SpecificInstruction.__mro__[::-1])
+    print(MoreSpecificInstruction.__mro__[::-1])
+    print(OtherSpecificInstruction.__mro__[::-1])
