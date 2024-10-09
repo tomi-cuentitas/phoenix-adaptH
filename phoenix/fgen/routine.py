@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 07/10/2024, 17:34
-# Version:     0.0.45
+# Last Update: 09/10/2024, 16:34
+# Version:     0.0.52
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,30 +33,37 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 """
 
 import pickle
-from tomography import Tomography
-from instruction3 import InstructionGroup
+from phoenix.fgen.tomography import Tomography
+
+# pylint: disable=too-many-arguments
 
 
 class Routine:
     """Routine class description"""
 
     def __init__(
-        self, identifier: str, ftype, out_var, in_vars, instruction_group=None
+        self,
+        identifier: str,
+        *,
+        itype,
+        out_var,
+        in_vars,
+        instruction_group=None,
     ):
         self._identifier = identifier
         self.instruction_group = instruction_group
 
         self.in_vars = in_vars
         self.out_var = out_var
-        self._itype = ftype
+        self._itype = itype
         self._ready = False
 
     def __len__(self):
         return len(self.instruction_group)
 
     @property
-    def ftype(self):
-        """write-protected access to ftype"""
+    def itype(self):
+        """write-protected access to itype"""
         return self._itype
 
     @property
@@ -71,7 +78,7 @@ class Routine:
         """a checksum to make sure, that the naming is safe"""
         test_tuple = (
             self._identifier,
-            self.ftype,
+            self.itype,
             len(self.in_vars),
             self.out_var.get_size(),
             *[inp_var.get_size() for inp_var in self.in_vars],
@@ -102,7 +109,7 @@ class Routine:
     @staticmethod
     def from_function(
         function,  # generating function
-        ftype,  # function type
+        itype,  # function type
         out_var,  # output var
         in_vars,  # input vars
         identifier=None,  # identifier
@@ -114,7 +121,7 @@ class Routine:
 
         if identifier is None:
             identifier = function.__name__
-        tomography = Tomography.new(ftype, out_var, in_vars, **kwargs)
+        tomography = Tomography.new(itype, out_var, in_vars, **kwargs)
 
         # change here: tomography will return an instruction group directly
         instruction_group = tomography.apply(
@@ -124,7 +131,7 @@ class Routine:
         )
         return Routine(
             identifier=identifier,
-            ftype=ftype,
+            itype=itype,
             out_var=out_var,
             in_vars=in_vars,
             instruction_group=instruction_group,

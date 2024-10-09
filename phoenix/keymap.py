@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 25/09/2024, 17:44
-# Version:     0.0.2182
+# Last Update: 09/10/2024, 17:26
+# Version:     0.0.2231
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,7 +20,28 @@ __doc__ = """
 KeyMap module description
 =========================
 
+Module overview:
 
+- CLASS KeyMap
+    - KeyMap.name (property)
+    - KeyMap.size (property)
+    - KeyMap.key()
+    - KeyMap.flag_ud()
+    - KeyMap.append()
+    - KeyMap.add_parent()
+    - KeyMap.update()
+    - KeyMap.values()
+    - KeyMap.find()
+    - KeyMap.whats_at()
+
+    - CLASS Region -> KeyMap
+        - Region.append()
+        - Region.reorder()
+
+        - CLASS Entry -> Region
+            - Entry.values()
+
+- CLASS Key
 
 """
 
@@ -46,9 +67,11 @@ from collections.abc import Hashable
 
 
 def autoname(function) -> Callable:
-    """decorator to automatically fill a proper name if None is given."""
+    """decorator to automatically fill a proper name if None is given.
+    Requires the function to have an optional keyword argument 'name'
+    with default value None"""
 
-    def wrapper(self, name=None):
+    def wrapper(self, name: str | None = None):
         if name is None:
             name = f"{self._IDENTIFIER}{self._enum}"
         self.__class__._enum += 1  # count
@@ -56,6 +79,12 @@ def autoname(function) -> Callable:
         function(self, name=name)
 
     return wrapper
+
+
+class _KeyMap:
+    """This class serves as a generic dummy to avoid cross referencing in the
+    KeyMap module and allow implementation of more abstract KeyMaps
+    """
 
 
 ###############################################################################
@@ -107,7 +136,7 @@ class _KeySegment:
         # check explicit parent, use class parent otherwise
         if parent is not None:
             assert self._cparent is None, "Cannot overwrite parent tag"
-            assert isinstance(parent, KeyMap), f"Invalid parent {type(parent)}"
+            assert isinstance(parent, _KeyMap), f"Invalid parent {type(parent)}"
             self._parent = parent
         else:
             self._parent = self._cparent
@@ -177,7 +206,7 @@ class Key:
     Class Key
     =========
 
-    Keys can be composed from other keys to access nested classes. Internally,
+    Keys can be composed from other keys to access nested keymaps. Internally,
     they store the _KeySegment objects they are made from. The main complexity
     of this class is due to the task of managing proper conversions and handling
     tagged keys.
@@ -278,7 +307,7 @@ class Key:
 ###############################################################################
 
 
-class KeyMap:
+class KeyMap(_KeyMap):
     """Keymap class description"""
 
     _IDENTIFIER = "KeyMap"
@@ -288,7 +317,6 @@ class KeyMap:
     @autoname
     def __init__(self, name=None):
         super().__init__()
-
         self._name = name
 
         # start empty
@@ -482,14 +510,15 @@ class KeyMap:
         return self._is_ud_flag
 
     def __getitem__(self, key):
-        self.update()
-        if isinstance(key, Key):
-            return self._key2reg[key._keys[0]]
-        if not isinstance(key, _KeySegment):
-            return self._key2reg[_KeySegment(key)]
-        return self._key2reg[key]
+        return self.find(key)
+        # self.update()
+        # if isinstance(key, Key):
+        #     return self._key2reg[key._keys[0]]
+        # if not isinstance(key, _KeySegment):
+        #     return self._key2reg[_KeySegment(key)]
+        # return self._key2reg[key]
 
-    def keys(self, recursive=False, prefix=Key()):
+    def keys(self, recursive: bool = False, prefix: Key = Key()):
         """generator equivalent to dict's keys function"""
         for key, reg in self._key2reg.items():
             if recursive:
@@ -497,7 +526,7 @@ class KeyMap:
             else:
                 yield Key(prefix, key)
 
-    def items(self, recursive=False, prefix=Key()):
+    def items(self, recursive: bool = False, prefix: Key = Key()):
         """generator equivalent to dict's items function"""
         for key, reg in self._key2reg.items():
             if recursive:
@@ -505,7 +534,7 @@ class KeyMap:
             else:
                 yield Key(key), reg
 
-    def values(self, recursive=False):
+    def values(self, recursive: bool = False):
         """generator equivalent to dict's values function"""
         for key, reg in self._key2reg.items():
             if recursive:
@@ -736,19 +765,25 @@ if __name__ == "__main__":
     print(testkey.as_list())
     print(testkey.as_list(tagged=True))
 
-    # print(len(a))
-
-    # print(Key("a", Key(Key("a") | Key("b") | Key("c"))))
-
-    # print(b.key("FOOOo").__doc__)
+    print(Key("a", Key(Key("a") | Key("b") | Key("c"))))
 
     print(kma.find(kma.key("test"), kmb.key("x")))
     print(kma.find(Key(kma.key("test"), kmb.key("x"))))
     print(kma.find(Key("test", "x")))
     print(kma.find("test", "x"))
 
+    print("\nwhats at...:")
     for num in range(len(kma)):
-        print(kma.whats_at(num))
+        print(num, kma.whats_at(num))
 
+    print("\nkeys, recursive=True:")
+    for num, key in enumerate(kma.keys(recursive=True)):
+        print(num, key)
+
+    print("\nkeys, recursive=False:")
+    for num, key in enumerate(kma.keys(recursive=False)):
+        print(num, key)
+
+    print("\nitems:")
     print(list(kma.items(recursive=True)))
-    print(len(kma))
+    print("lengh", len(kma))
