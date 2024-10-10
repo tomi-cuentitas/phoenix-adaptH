@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 10/10/2024, 18:15
-# Version:     0.0.2661
+# Last Update: 11/10/2024, 00:15
+# Version:     0.0.2663
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -87,7 +87,7 @@ class _KeySegment:
     # assigned to them if they are generated on the fly.
     _cparent = None
 
-    def __init__(self, label: Hashable, parent: Section | None = None):
+    def __init__(self, label: Hashable, parent: Domain | None = None):
         assert not isinstance(label, (_KeySegment, Key)), "Invalid label"
 
         # label is an actual label. Make sure the label is hashable
@@ -99,12 +99,10 @@ class _KeySegment:
             self._parent = self._cparent
         else:
             assert self._cparent is None, "Cannot overwrite parent tag"
-            assert isinstance(
-                parent, Section
-            ), f"Invalid parent {type(parent)}"
+            assert isinstance(parent, Domain), f"Invalid parent {type(parent)}"
             self._parent = parent
 
-    def __init_subclass__(cls, parent: Section | None = None):
+    def __init_subclass__(cls, parent: Domain | None = None):
         """set default parent upon inheritance"""
         cls._cparent = parent
 
@@ -124,7 +122,7 @@ class _KeySegment:
         return self._label
 
     @property
-    def parent(self) -> Section | None:
+    def parent(self) -> Domain | None:
         """access read-only parameter parent"""
         return self._parent
 
@@ -208,9 +206,7 @@ class Key:
             raise ValueError("Key must have exactly one label")
         return self._key_segments[0].label
 
-    def _as_list(
-        self, tagged: bool = True
-    ) -> List[Tuple[Section | None, Any]]:
+    def _as_list(self, tagged: bool = True) -> List[Tuple[Domain | None, Any]]:
         """access the keys as a list, optionally, include tags"""
         return [
             (parent, kseg.label)
@@ -282,13 +278,13 @@ class Key:
 ###############################################################################
 
 
-class Section:
+class Domain:
     """This class serves as a generic dummy to avoid cross referencing in the
     KeyMap module and allow implementation of more abstract KeyMaps.
     Also later extensions can start there as they might not derive from KeyMap
     """
 
-    _IDENTIFIER = "Section"
+    _IDENTIFIER = "Domain"
     _IDENTIFIER_SHORT = "SC"
     _enum = 0
 
@@ -396,7 +392,7 @@ class Section:
 ###############################################################################
 
 
-class KeyMap(Section):
+class KeyMap(Domain):
     """Keymap class description"""
 
     _IDENTIFIER = "KeyMap"
