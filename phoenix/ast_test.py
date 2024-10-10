@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/10/2024
-# Last Update: 10/10/2024, 13:04
-# Version:     0.0.308
+# Last Update: 10/10/2024, 13:11
+# Version:     0.0.309
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -67,15 +67,15 @@ class FunctionNode(ImportantNode):
     def __init__(self, node):
         super().__init__(node, name=node.name)
         self.args = [arg.arg for arg in node.args.args]
-        print(dir(node.args))
-        print(self.name)
-        print("args", node.args.args)
-        print("defaults", node.args.defaults)
-        print("kw_defaults", node.args.kw_defaults)
-        print("kwarg", node.args.kwarg)
-        print("kwonlyargs", node.args.kwonlyargs)
-        print("posonlyargs", node.args.posonlyargs)
-        print("vararg", node.args.vararg)
+        # print(dir(node.args))
+        # print(self.name)
+        # print("args", node.args.args)
+        # print("defaults", node.args.defaults)
+        # print("kw_defaults", node.args.kw_defaults)
+        # print("kwarg", node.args.kwarg)
+        # print("kwonlyargs", node.args.kwonlyargs)
+        # print("posonlyargs", node.args.posonlyargs)
+        # print("vararg", node.args.vararg)
         self.decorators = [
             deco.id
             for deco in node.decorator_list

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 09/10/2024, 17:26
-# Version:     0.0.2231
+# Last Update: 10/10/2024, 15:27
+# Version:     0.0.2500
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 
 from __future__ import annotations
-
+import warnings
 
 __doc__ = """
 KeyMap module description
@@ -117,32 +117,22 @@ class _KeySegment:
     # assigned to them if they are generated on the fly.
     _cparent = None
 
-    def __init__(self, key, parent=None):
-        if __debug__:
-            print(f"generate key from {type(key).__name__} '{key}'")
+    def __init__(self, label, parent=None):
+        assert not isinstance(label, (_KeySegment, Key)), "Invalid label"
 
-        # make sure key is hashable
-        assert isinstance(key, Hashable)
-
-        # check for potential input arg conversion
-        if isinstance(key, _KeySegment):
-            self._key = key.key
-        elif isinstance(key, Key):
-            assert len(key.keys) == 1, "cannot generate _Key from chained key"
-            self._key = key.keys[0].key
-        else:
-            self._key = key
+        # label is an actual label. Make sure the label is hashable
+        assert isinstance(label, Hashable)
+        self._label = label
 
         # check explicit parent, use class parent otherwise
-        if parent is not None:
-            assert self._cparent is None, "Cannot overwrite parent tag"
-            assert isinstance(parent, _KeyMap), f"Invalid parent {type(parent)}"
-            self._parent = parent
-        else:
+        if parent is None:
             self._parent = self._cparent
-
-        # final check
-        assert not isinstance(self._key, (_KeySegment, Key))
+        else:
+            assert self._cparent is None, "Cannot overwrite parent tag"
+            assert isinstance(
+                parent, _KeyMap
+            ), f"Invalid parent {type(parent)}"
+            self._parent = parent
 
     def __init_subclass__(cls, parent=None):
         """set default parent upon inheritance"""
@@ -150,29 +140,26 @@ class _KeySegment:
 
     def __hash__(self):
         """pull the hash request into the key attribute"""
-        return hash(self._key)
+        return hash(self._label)
 
     def __eq__(self, other):
         assert isinstance(
             other, _KeySegment
         ), f"Invalid comparison between {type(self)} and {type(other)}"
-        return self.key == other.key
+        return self.label == other.label
 
     @property
-    def key(self) -> Any:
-        """access protected attribute key."""
-        return self._key
+    def label(self) -> Any:
+        """access protected attribute label."""
+        return self._label
 
     @property
     def parent(self):
         """access read-only parameter parent"""
         return self._parent
 
-    def __str__(self):
-        return f"[{self._key}]"
-
     def __repr__(self):
-        return f"[{self._key}]"
+        return f"[{self._label}]"
 
 
 class _ForbiddenKey(_KeySegment):
@@ -216,34 +203,59 @@ class Key:
     """
 
     def __init__(self, *keys):
-        self._keys = []
-        # decompose into _Key objects
-        for _key in keys:
-            if isinstance(_key, _KeySegment):
-                self._keys += [_key]
-            elif isinstance(_key, Key):
-                self._keys += _key.as_list(tagged=False)
+        self._key_segments = []
+        # decompose into _KeySegments
+        for key in keys:
+            # if _key is None:
+            #     continue
+            if isinstance(key, _KeySegment):
+                self._key_segments += [key]
+            elif isinstance(key, Key):
+                self._key_segments += [
+                    _KeySegment(label, parent=parent)
+                    for parent, label in key._as_list(tagged=True)
+                ]
             else:
-                self._keys += [_KeySegment(_key)]
+                self._key_segments += [_KeySegment(key)]
         # and check
         if __debug__:
-            for _key in self._keys:
-                assert isinstance(_key, _KeySegment)
+            for keyseg in self._key_segments:
+                assert isinstance(keyseg, _KeySegment)
 
-    def unchain(self) -> Generator:
+    @property
+    def labels(self) -> Tuple[Any]:
+        """access the actual keys, do not return keysegments here"""
+        return tuple(kseg.label for kseg in self._key_segments)
+
+    @property
+    def parents(self) -> Tuple[KeyMap]:
+        """access the classes parent attribute"""
+        return tuple(kseg.parent for kseg in self._key_segments)
+
+    def _as_list(self, tagged=True) -> List[Tuple[_KeyMap | None, Any]]:
+        """access the keys as a list, optionally, include tags"""
+        return [
+            (parent, kseg.label)
+            for parent, kseg in self._unchain(tagged=tagged)
+        ]
+
+    def _unchain(self, tagged=True) -> Generator:
         """unpack all the key objects chained up, together with their tags"""
-        for _key in self._keys:
-            yield (_key.parent, _key)
+        for kseg in self._key_segments:
+            if tagged:
+                yield (kseg.parent, kseg)
+            else:
+                yield (None, kseg)
 
     def __hash__(self):
         """as _KeySegments are hashable, so are tuples made from them"""
-        return hash(self.keys)
+        return hash((self.labels, self.parents))
 
     def __eq__(self, other):
         """check whether the keys match. Include parent check. If any of the
         two parents is None, assume them to be universal."""
         for (p_left, k_left), (p_right, k_right) in zip(
-            self.unchain(), other.unchain()
+            self._unchain(), other._unchain()
         ):
             # check keys for compatability
             if k_left != k_right:
@@ -256,41 +268,24 @@ class Key:
         # if we got here, everything is fine I guess...
         return True
 
-    @property
-    def keys(self) -> Tuple[_KeySegment]:
-        """unpack the key signature as a tuple for hashing and more"""
-        return tuple(key for _, key in self.unchain())
-
-    def as_list(self, tagged=False) -> List:
-        """access the keys as a list, optionally, include tags"""
-        if tagged:
-            return list(self.unchain())
-        return [key for _, key in self.unchain()]
-
     def __repr__(self):
-        return f"[{'|'.join(map(lambda x: str(x.key), self._keys))}]"
+        return f"[{'|'.join(map(lambda x: str(x.label), self._key_segments))}]"
 
     def __str__(self):
         return f"<K{self.__repr__()}>"
 
     def __or__(self, other) -> Key:
-        if isinstance(other, Key):
-            return Key(self, other)
-        if isinstance(other, _KeySegment):
+        if isinstance(other, (Key, _KeySegment)):
             return Key(self, other)
         return Key(self, _KeySegment(other))
 
     def __ror__(self, other) -> Key:
-        if isinstance(other, Key):
-            return Key(other, self)
-        if isinstance(other, _KeySegment):
+        if isinstance(other, (Key, _KeySegment)):
             return Key(other, self)
         return Key(_KeySegment(other), self)
 
-    @property
-    def parents(self) -> Tuple[KeyMap]:
-        """access the classes parent attribute"""
-        return tuple(_key.parent for _key in self._keys)
+    def __len__(self) -> int:
+        return len(self._key_segments)
 
 
 ###############################################################################
@@ -341,7 +336,7 @@ class KeyMap(_KeyMap):
         # start with False
         self._is_ud_flag = False
 
-        self._keygen = self._generate_keygen(name)
+        self._kseg_factory = self._create_keyseg_factory(name)
 
     def _reset(self):
         """reset anything that has to do with counters and offsets"""
@@ -359,7 +354,9 @@ class KeyMap(_KeyMap):
 
     @name.setter
     def name(self, name):
-        print("Bad programmer, bad! But seriously, be careful with renaming.")
+        warnings.warn(
+            "Bad programmer, bad! But seriously, be careful with renaming."
+        )
         self._name = name
 
     @property
@@ -382,13 +379,24 @@ class KeyMap(_KeyMap):
         )
         return self._size
 
-    def key(self, key):
-        """generate a key object from with the KeyMaps own keygen"""
-        return self._keygen(key)
+    def key(self, label):
+        """generate a key object from the KeyMaps own key factory"""
+        if isinstance(label, Key):
+            assert (
+                len(label.labels) == 1
+            ), "cannot derive local key for chained key"
+            label = label.labels[0]
+        elif isinstance(label, _KeySegment):
+            label = label.label
+        return Key(self._kseg_factory(label))
 
-    def _generate_keygen(self, name) -> Type:
+    def _keyseg(self, label):
+        return self._kseg_factory(label)
+
+    def _create_keyseg_factory(self, name) -> Type:
         """the keygenerator class can be tagged by a parent"""
-        this_class = type(
+        # inherit from _KeySegment and set self as the default parent
+        factory = type(
             f"auto_KeyGen_{name}",
             (_KeySegment,),
             {
@@ -396,7 +404,7 @@ class KeyMap(_KeyMap):
             },
             parent=self,
         )
-        return this_class
+        return factory
 
     @property
     def is_ud(self) -> bool:
@@ -440,25 +448,35 @@ class KeyMap(_KeyMap):
     def append(self, key=None, keymap=None, no_override=True):
         """append a keymap object at a key"""
 
+        label = key
         if key is None:
             assert keymap is not None
-            key = keymap.name
+            label = keymap.name
+            assert isinstance(label, str)
+
+        elif isinstance(key, Key):
+            if len(key) != 1:
+                raise ValueError("Key cannot be a chained key")
+            label = key.labels[0]
+
+        if isinstance(key, _KeySegment):
+            label = key.label
 
         # force-make it a key
-        key_obj = self.key(key)
+        key_seg = self._keyseg(label)
 
         if keymap is None:
             # default thing to add is an entry
-            keymap = Entry(str(key_obj))
+            keymap = Entry(str(key_seg))
 
         # check if key is duplicate
         if no_override:
             for tkey, _ in self._content:
-                if tkey == key_obj:
-                    raise KeyError(f"Key '{key_obj}' already exists")
+                if tkey == key_seg:
+                    raise KeyError(f"Key '{key_seg}' already exists")
 
         # acutal append
-        self._append(key_obj, keymap)
+        self._append(key_seg, keymap)
 
         # register the current keymap as a parent to the included keymap
         keymap.add_parent(self)
@@ -518,16 +536,22 @@ class KeyMap(_KeyMap):
         #     return self._key2reg[_KeySegment(key)]
         # return self._key2reg[key]
 
-    def keys(self, recursive: bool = False, prefix: Key = Key()):
+    def keys(self, recursive: bool = False, prefix: Key | None = None):
         """generator equivalent to dict's keys function"""
+        # NOTE: one COULD have prefix: Key = Key() in the args list, as the
+        # empty key as default could be a monad, but it is cleaner like that.
+        if prefix is None:
+            prefix = Key()
         for key, reg in self._key2reg.items():
             if recursive:
                 yield from reg.keys(recursive=True, prefix=Key(prefix, key))
             else:
                 yield Key(prefix, key)
 
-    def items(self, recursive: bool = False, prefix: Key = Key()):
+    def items(self, recursive: bool = False, prefix: Key | None = None):
         """generator equivalent to dict's items function"""
+        if prefix is None:
+            prefix = Key()
         for key, reg in self._key2reg.items():
             if recursive:
                 yield from reg.items(recursive=True, prefix=Key(prefix, key))
@@ -547,14 +571,14 @@ class KeyMap(_KeyMap):
         key = Key(*keys)
         current_obj = self
         current_pos = 0
-        for kmap, tkey in key.unchain():
+        for kmap, kseg in key._unchain():
             if kmap is not None:
                 if kmap != current_obj:
                     raise KeyError(
-                        f"Tagged key {tkey} not from keymap {current_obj}"
+                        f"Tagged key {kseg.label} not from keymap {current_obj}"
                     )
-            current_pos += current_obj._key2pos[tkey]
-            current_obj = current_obj._key2reg[tkey]
+            current_pos += current_obj._key2pos[kseg]
+            current_obj = current_obj._key2reg[kseg]
 
         return current_pos, current_obj
 
@@ -598,7 +622,9 @@ class Region(KeyMap):
         self.update()
 
     def append(self, entry):
-        assert isinstance(entry, Entry), "only entries can be added to regions."
+        assert isinstance(
+            entry, Entry
+        ), "only entries can be added to regions."
         super().append(key=self._counter, keymap=entry)
         self._counter += 1
 
@@ -635,13 +661,19 @@ class Entry(Region):
     # -----------------------------------------------------------
     # NOTE: keys, items and values break the recursive call here!
 
-    def keys(self, recursive=False, prefix=Key()):
+    def keys(self, recursive=False, prefix: Key | None = None):
         # we break the recursive call here.
-        yield Key(prefix)
+        if prefix is None:
+            yield Key()
+        else:
+            yield Key(prefix)
 
-    def items(self, recursive=False, prefix=Key()):
+    def items(self, recursive=False, prefix: Key | None = None):
         # we break the recursive call here.
-        yield Key(prefix), self
+        if prefix is None:
+            yield Key()
+        else:
+            yield Key(prefix), self
 
     def values(self, recursive=False):
         # we break the recursive call here.
@@ -658,7 +690,7 @@ class Entry(Region):
         """Entry always has length 1"""
         return 1
 
-    def _generate_keygen(self, name):
+    def _create_keyseg_factory(self, name):
         """this type, use the _ForbiddenKey class to derive"""
         return _ForbiddenKey
 
@@ -717,22 +749,21 @@ if __name__ == "__main__":
     c = Key("C")
 
     d = Key(a, b, "C")
-    print(d.as_list())
+    print(d._as_list())
     e = Key(a, Key(a, b, b), "F")
-    print(e.as_list())
-    print(e.keys)
+    print(e._as_list())
 
     print(e)
 
     f = e | e
 
-    for _, key in e.unchain():
+    for _, key in e._unchain():
         print(key)
 
     print("f", f.parents)
 
     kma = KeyMap("foobar")
-    print(kma._keygen.__doc__)
+    print(kma._kseg_factory.__doc__)
     kma.append("foo", Region(3, name="reg@foo"))
     kma.append("bar", Region(3, name="reg@bar"))
     kma.append("baz", Region(3, name="reg@baz"))
@@ -762,15 +793,17 @@ if __name__ == "__main__":
 
     testkey = next(kma.keys(recursive=True))
     print(testkey)
-    print(testkey.as_list())
-    print(testkey.as_list(tagged=True))
+    print(testkey._as_list())
+    print(testkey._as_list(tagged=True))
 
     print(Key("a", Key(Key("a") | Key("b") | Key("c"))))
 
-    print(kma.find(kma.key("test"), kmb.key("x")))
-    print(kma.find(Key(kma.key("test"), kmb.key("x"))))
-    print(kma.find(Key("test", "x")))
-    print(kma.find("test", "x"))
+    print()
+    print("how to find keys")
+    print("A", kma.find(kma.key("test"), kmb.key("x")))
+    print("B", kma.find(Key(kma.key("test"), kmb.key("x"))))
+    print("C", kma.find(Key("test", "x")))
+    print("D", kma.find("test", "x"))
 
     print("\nwhats at...:")
     for num in range(len(kma)):
