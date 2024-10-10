@@ -5,51 +5,141 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/10/2024
-# Last Update: 09/10/2024, 17:54
-# Version:     0.0.93
+# Last Update: 10/10/2024, 13:04
+# Version:     0.0.308
 #
 #################################################end#of#autoheader#do#not#modify
 
+
+TODO:
+I need a to_str function to properly translate all nodes that come in, so I do
+not have to resolve display names for nodes all over the place
 
 """
 import ast
 
 
-def def_classes(node, this_class=None):
-    yield this_class, node
-    if isinstance(node, ast.ClassDef):
-        this_class = node.name
-        print(f"class {node.name} defined")
-        for base in node.bases:
-            if isinstance(base, ast.Name):
-                print("-> inherits from:", base.id)
-    for child in ast.iter_child_nodes(node):
-        yield from def_classes(child, this_class=this_class)
+class Node:
+    def __init__(self, node):
+        self.node = node
+        self.classes = []
+        self.functions = []
+
+    def scan_nodes(self):
+        yield self
+        for child in ast.iter_child_nodes(self.node):
+            if isinstance(child, ast.FunctionDef):
+                yield from FunctionNode(child).scan_nodes()
+            elif isinstance(child, ast.ClassDef):
+                yield from ClassNode(child).scan_nodes()
+            else:
+                yield from Node(child).scan_nodes()
+
+
+class ImportantNode(Node):
+    def __init__(self, node, name=None):
+        super().__init__(node)
+        self.name = name
+        self.classes = []
+        self.functions = []
+
+    def scan_nodes(self):
+        for node in super().scan_nodes():
+            if isinstance(node, FunctionNode):
+                self.functions.append(node)
+            elif isinstance(node, ClassNode):
+                self.classes.append(node)
+        yield self
+        for node in super().scan_nodes():
+            if not isinstance(node, (FunctionNode, ClassNode)):
+                yield node
+
+
+class ClassNode(ImportantNode):
+    def __init__(self, node):
+        super().__init__(node, name=node.name)
+        self.parents = [
+            parent.id for parent in node.bases if isinstance(parent, ast.Name)
+        ]
+
+
+class FunctionNode(ImportantNode):
+    def __init__(self, node):
+        super().__init__(node, name=node.name)
+        self.args = [arg.arg for arg in node.args.args]
+        print(dir(node.args))
+        print(self.name)
+        print("args", node.args.args)
+        print("defaults", node.args.defaults)
+        print("kw_defaults", node.args.kw_defaults)
+        print("kwarg", node.args.kwarg)
+        print("kwonlyargs", node.args.kwonlyargs)
+        print("posonlyargs", node.args.posonlyargs)
+        print("vararg", node.args.vararg)
+        self.decorators = [
+            deco.id
+            for deco in node.decorator_list
+            if isinstance(deco, ast.Name)
+        ]
+        self.returns = node.returns
+        # print(self.name)
+        # print(dir(self.node))
+        if node.returns:
+            if isinstance(node.returns, ast.Constant):
+                self.returns = str(node.returns.value)
+            elif isinstance(node.returns, ast.Name):
+                self.returns = str(node.returns.id)
+            elif isinstance(node.returns, ast.Subscript):
+                self.returns = str(node.returns.value.id)
 
 
 with open("keymap.py", "r") as file:
     tree = ast.parse(file.read())
 
-print()
+main = Node(tree)
 
-expList = []
+for node in main.scan_nodes():
+    if isinstance(node, FunctionNode):
+        print("FUNCTION", node.name)
+        print()
+    if isinstance(node, ClassNode):
+        inheritance_string = ""
+        if node.parents:
+            inheritance_string = f"({', '.join(node.parents)})"
+        print(f"CLASS {node.name}" + inheritance_string)
+        print()
+        for function in node.functions:
+            for deco in function.decorators:
+                print(f"  @{deco}")
+            returns_string = ""
+            if function.returns:
+                returns_string = f" -> {function.returns}"
+            print(
+                f"  def {function.name}({', '.join(function.args)}){returns_string}"
+            )
+            print()
+        print()
 
-for this_class, node in def_classes(tree):
-    if isinstance(node, ast.FunctionDef):
-        expList.append(
-            (this_class, node.name, [arg.arg for arg in node.args.args])
-        )
-        # print(
-        #     # node,
-        #     node.name,
-        #     node.args,
-        #     node.returns,
-        #     node.decorator_list,
-        # )
-        # for arg in node.args.args:
-        #     print(f"\t argument '{arg.arg}'")
+# print()
 
-# print(expList)
+# expList = []
 
-for this_class, function_name, arg_list in expList:
-    print(f"{this_class}.{function_name}({', '.join(arg_list)})")
+# for this_class, node in yield_with_class_context(tree):
+#     if isinstance(node, ast.FunctionDef):
+#         expList.append(
+#             (this_class, node.name, [arg.arg for arg in node.args.args])
+#         )
+#         # print(
+#         #     # node,
+#         #     node.name,
+#         #     node.args,
+#         #     node.returns,
+#         #     node.decorator_list,
+#         # )
+#         # for arg in node.args.args:
+#         #     print(f"\t argument '{arg.arg}'")
+
+# # print(expList)
+
+# for this_class, function_name, arg_list in expList:
+#     print(f"{this_class}.{function_name}({', '.join(arg_list)})")
