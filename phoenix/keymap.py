@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 11/10/2024, 14:57
-# Version:     0.0.2900
+# Last Update: 11/10/2024, 15:04
+# Version:     0.0.2903
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,11 +19,12 @@ from __future__ import annotations
 import warnings
 
 __doc__ = """
-The keymap module builds around two main classes: Key and Domain.
+
+The keymap module builds around two main classes: Key and KeyMap.
 While a keymap represents a tree-like datastructure, keys are used to select
 branches within that map.
-Domain is the KeyMaps parent class, that allows a generalization of the
-concept. However, KeyMaps are indexed by keys and are the center of
+Domain is the KeyMaps parent class and is used to illustrate generalization.
+However, only KeyMaps are indexed by keys and are the center of
 attention within this module.
 
 Keys can be based on anything that a hash can be generated from. They can be

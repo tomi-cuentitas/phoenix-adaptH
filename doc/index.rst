@@ -19,9 +19,18 @@ Indices and tables
 * :ref:`search`
 
 
+Module Overview
+===============
+
+dtype
+-----
+
 .. automodule:: phoenix.dtype2
    :members:
    :private-members:
+
+keymap
+------
 
 .. automodule:: phoenix.keymap
    :members:
