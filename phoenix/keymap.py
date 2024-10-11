@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 11/10/2024, 00:15
-# Version:     0.0.2663
+# Last Update: 11/10/2024, 12:00
+# Version:     0.0.2743
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,6 +19,19 @@ import warnings
 __doc__ = """
 KeyMap module description
 =========================
+
+The keymap module builds around two main classes: Key and KeyMap.
+While a keymap represents a tree-like datastructure, keys are used to select
+branches within that map.
+
+Keys can be based on anything that a hash can be generated from. They can be
+chained into longer keys to summarize multiple branching decisions in a multi
+level tree.
+
+The KeyMap provides multiple routines to add new domains to it. The routine
+put(key, keymap) appends the keymap at 'key'. The routine extend(keymap)
+derives the key automatically from the name of the extending keymap object.
+The routine entry(label) appends an Entry object at key Key(label).
 
 """
 
@@ -77,7 +90,8 @@ class _KeySegment:
     ==========================
 
     Simple dataclass that contains any hashable as a key and optionally a link
-    to the parent, i.e. the KeyMap instance where this key is registered at.
+    to the parent, i.e. the KeyMap instance where this key is registered at
+    and/or created from.
 
     This is supposed to be a private class, so ideally the normal user will
     never actively get in contact with this.
@@ -158,8 +172,8 @@ class _ForbiddenKey(_KeySegment):
 
 class Key:
     """
-    Class Key
-    =========
+    Key
+    ====
 
     Keys can be composed from other keys to access nested keymaps. Internally,
     they store the _KeySegment objects they are made from. The main complexity
@@ -177,10 +191,13 @@ class Key:
             # if _key is None:
             #     continue
             if isinstance(tkey, _KeySegment):
-                self._key_segments += [tkey]
+                self._key_segments += [tkey]  # no-copy
+                # tkey.parnet._tagged_keyseg(tkey.label)  # copy
             elif isinstance(tkey, Key):
                 self._key_segments += [
-                    _KeySegment(label, parent=parent)
+                    parent._tagged_keyseg(label)
+                    if parent
+                    else _KeySegment(label)
                     for parent, label in tkey._as_list(tagged=True)
                 ]
             else:
@@ -266,26 +283,37 @@ class Key:
 
 ###############################################################################
 #
-# .oPYo.                    o    o
-# 8                         8
-# `Yooo.  .oPYo.  .oPYo.   o8P  o8  .oPYo.  odYo.
-#     `8  8oooo8  8    '    8    8  8    8  8' `8
-#      8  8.      8    .    8    8  8    8  8   8
-# `YooP'  `Yooo'  `YooP'    8    8  `YooP'  8   8
-# :.....: :.....: :.....: ::..: :.. :.....: ..::..
-# ::::::: ::::::: ::::::: ::::: ::: ::::::: ::::::
-# ::::::: ::::::: ::::::: ::::: ::: ::::::: ::::::
+# ooo.                              o
+# 8  `8.
+# 8   `8  .oPYo.  ooYoYo.  .oPYo.  o8  odYo.
+# 8    8  8    8  8' 8  8  .oooo8   8  8' `8
+# 8   .P  8    8  8  8  8  8    8   8  8   8
+# 8ooo'   `YooP'  8  8  8  `YooP8   8  8   8
+# .....:: :.....: ..:..:.. :.....: :.. ..::..
+# ::::::: ::::::: :::::::: ::::::: ::: ::::::
+# ::::::: ::::::: :::::::: ::::::: ::: ::::::
 ###############################################################################
 
 
 class Domain:
-    """This class serves as a generic dummy to avoid cross referencing in the
-    KeyMap module and allow implementation of more abstract KeyMaps.
-    Also later extensions can start there as they might not derive from KeyMap
+    """
+    Domain
+    ======
+
+    We grow a tree-like data structure. Any named set of contiguous entries in
+    this structure is referred to as a domain.
+
+    This class serves as a generic parent class for any other data structure
+    occuring in such a tree.
+
+    The class handles the base functionality about name and update procedure
+    as well as str and repr display.
+
+    NOTE: might become an abstract class. Not supposed to be used directly.
     """
 
     _IDENTIFIER = "Domain"
-    _IDENTIFIER_SHORT = "SC"
+    _IDENTIFIER_SHORT = "D"
     _enum = 0
 
     @autoname
@@ -338,10 +366,11 @@ class Domain:
         ret = True
         if not self.is_ud:
             ret = self._update()
-        assert ret, "update did not succeed"
+        if not ret:
+            raise RuntimeError("update did not succeed")
         return self
 
-    def _update(self):
+    def _update(self) -> bool:
         """placeholder for update"""
         return True
 
@@ -355,27 +384,30 @@ class Domain:
         self._is_ud_flag = False
         for parent in self._parents:
             parent.flag_ud()
+        return self
 
     @staticmethod
-    def from_file(filename) -> KeyMap:
+    def from_file(filename) -> Domain:
         """get the keymap from a file"""
         with open(filename, "rb") as handle:
-            ret = pickle.load(handle)
-        ret.flag_ud()
-        ret.__class__._enum += 1
-        ret.update()
-        return ret
+            dom = pickle.load(handle)
+        dom.flag_ud()
+        dom.__class__._enum += 1
+        dom.update()
+        return dom
 
-    def to_file(self, filename) -> None:
+    def to_file(self, filename) -> Self:
         """write the keymap to a file"""
         self.update()
         with open(filename, "wb") as handle:
             pickle.dump(self, handle)
+        return self
 
-    def add_parent(self, parent):
+    def add_parent(self, parent) -> Self:
         """add as a parent if not yet there"""
         if parent not in self._parents:
             self._parents.append(parent)
+        return self
 
 
 ###############################################################################
@@ -431,7 +463,7 @@ class KeyMap(Domain):
             label = label.label
         return Key(self._kseg_factory(label))
 
-    def _keyseg(self, label):
+    def _tagged_keyseg(self, label):
         return self._kseg_factory(label)
 
     def _create_keyseg_factory(self, name) -> Type:
@@ -466,61 +498,53 @@ class KeyMap(Domain):
         self.put(key, Entry(name=key.onlylabel()))
 
     def extend(self, keymap, autorename=True):
-        """extend by a keymap, derive the key from the name"""
+        """extend by a keymap, derive the corresponding key from the name.
+        If the autorename flag is set, counting numbers are attached to the
+        name if the name is already taken to make it unique.
+        """
         if not isinstance(keymap, KeyMap):
             raise ValueError("Not a KeyMap")
-        if autorename:
-            num = 0
-            name = keymap.name
-            success = False
-            while not success:
-                try:
-                    self.put(Key(name), keymap)
-                except KeyError as e:
-                    name = f"{keymap.name}-{num}"
+        name = keymap.name
+        kseg = self._tagged_keyseg(name)
+
+        # find a working kseg or raise exception
+        if kseg in self:
+            if autorename:
+                num = 1
+                while kseg in self:
                     num += 1
-                    continue
-                success = True
-        else:
-            self.put(Key(keymap.name), keymap)
+                    name = f"{keymap.name}.{num}"
+                    kseg = self._tagged_keyseg(name)
+            else:
+                raise KeyError(f"Key '{kseg.label}' already exists")
+        self._put(kseg, keymap)
 
     def put(self, keylike, /, keymap, no_override=True):
         """append a keymap object at a key.
         The key is either given or generated from the keymaps name.
         If no keymap is given, an entry is generated at the key location.
-        The keylike object is copied for application.
+        The e object is copied for application.
         """
 
-        label = keylike
-        # if keylike is None:
-        #     if keymap is None:
-        #         raise ValueError("No key or keymap provided")
-        #     label = keymap.name
-        #     assert isinstance(label, str)
-
-        if isinstance(keylike, Key):
-            if len(keylike) != 1:
-                raise ValueError("Key cannot be a chained key")
-            label = keylike.onlylabel()
-
-        if isinstance(keylike, _KeySegment):
-            label = keylike.label
-
         # use a kseg from this map
-        key_seg = self._keyseg(label)
-
-        if keymap is None:
-            # default thing to add is an entry
-            keymap = Entry(name=str(label))
+        kseg = self._to_tagged_keyseg(keylike)
 
         # check if key is duplicate
         if no_override:
-            for tkey, _ in self._content:
-                if tkey == key_seg:
-                    raise KeyError(f"Key '{key_seg}' already exists")
+            if kseg in self:
+                raise KeyError(f"Key '{kseg}' already exists")
+
+        if keymap is None:
+            # default thing to add is an entry
+            keymap = Entry(name=str(kseg.label))
+
+        self._put(kseg, keymap)
+
+    def _put(self, kseg, keymap):
+        """the actual put routine"""
 
         # acutal append
-        self._append(key_seg, keymap)
+        self._append(kseg, keymap)
 
         # register the current keymap as a parent to the included keymap
         keymap.add_parent(self)
@@ -558,6 +582,30 @@ class KeyMap(Domain):
     def __getitem__(self, key):
         _, entry = self.find(key)
         return entry
+
+    def __contains__(self, keylike):
+        kseg = self._to_tagged_keyseg(keylike)
+        for tkey, _ in self._content:
+            if tkey == kseg:
+                return True
+        return False
+
+    def _to_tagged_keyseg(self, keylike):
+        """transform a keylike into a KeySegment"""
+        label = keylike  # assume hashable
+
+        # check if key
+        if isinstance(keylike, Key):
+            if len(keylike) != 1:
+                raise ValueError("Key cannot be a chained key")
+            label = keylike.onlylabel()
+
+        # check if keysegment
+        if isinstance(keylike, _KeySegment):
+            label = keylike.label
+
+        # use a kseg from this map
+        return self._tagged_keyseg(label)
 
     def keys(self, recursive: bool = False, prefix: Key | None = None):
         """generator equivalent to dict's keys function"""
@@ -636,13 +684,17 @@ class KeyMap(Domain):
 
 
 class Region(KeyMap):
-    """Region is a keymap which is trivially indexed by integer keys"""
+    """
+    Region
+    ======
+
+    Region is a keymap which is trivially indexed by integer keys
+    """
 
     _IDENTIFIER = "Region"
-    _IDENTIFIER_SHORT = "RG"
+    _IDENTIFIER_SHORT = "R"
     _enum = 0
 
-    @autoname
     def __init__(self, size, *, name=None):
         super().__init__(name=name)
         self._counter = 0
@@ -650,10 +702,15 @@ class Region(KeyMap):
             self.extend(Entry(name=f"{self.name}+{count}"))
         self.update()
 
-    def entry(self, entry, /):
+    def put(self, keylike, /, keymap, no_override=True):
+        raise ValueError("In regions, use 'entry' to append new entries.")
+
+    def entry(self, entry=None, /):
+        if entry is None:
+            entry = Entry(name=f"{self.name}+{self._counter}")
         if not isinstance(entry, Entry):
             raise ValueError("only entries can be added to regions.")
-        super().put(self._counter, keymap=entry)
+        self._put(self._tagged_keyseg(self._counter), keymap=entry)
         self._counter += 1
 
     def reorder(self, function):
@@ -675,13 +732,17 @@ class Region(KeyMap):
 
 
 class Entry(Region):
-    """A Region of size 1 with no keys allowed inside"""
+    """
+    Entry
+    =====
+
+    A Region of size 1 with no keys allowed inside
+    """
 
     _IDENTIFIER = "Entry"
     _IDENTIFIER_SHORT = "E"
     _enum = 0
 
-    @autoname
     def __init__(self, *, name=None):
         super().__init__(0, name=name)
         self._size = 1
@@ -725,3 +786,12 @@ class Entry(Region):
 
     def reorder(self, function):
         return self
+
+    def put(self, keylike, /, keymap, no_override=True):
+        raise ValueError("Entries cannot be extended.")
+
+    def extend(self, keymap, autorename=True):
+        raise ValueError("Entries cannot be extended.")
+
+    def entry(self, entry, /):
+        raise ValueError("Entries cannot be extended.")
