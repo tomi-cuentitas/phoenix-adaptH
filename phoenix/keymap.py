@@ -5,10 +5,12 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 11/10/2024, 12:00
-# Version:     0.0.2743
+# Last Update: 11/10/2024, 13:26
+# Version:     0.0.2745
 #
 #################################################end#of#autoheader#do#not#modify
+
+
 
 
 """
@@ -59,7 +61,11 @@ from collections.abc import Hashable
 def autoname(function) -> Callable:
     """decorator to automatically fill a proper name if None is given.
     Requires the function to have an optional keyword argument 'name'
-    with default value None"""
+    with default value None
+
+    :param function: the function to decorate
+    :return: the decorated function
+    """
 
     def wrapper(self: KeyMap, *args, name: str | None = None):
         if name is None:
@@ -224,14 +230,20 @@ class Key:
         return self._key_segments[0].label
 
     def _as_list(self, tagged: bool = True) -> List[Tuple[Domain | None, Any]]:
-        """access the keys as a list, optionally, include tags"""
+        """access the keys as a list, optionally, include tags
+        :param tagged: whether to include parent tags in the list
+        :returns: a list of tuples, each containing a parent and a label. If not tagged, the parent is None
+        """
         return [
             (parent, kseg.label)
             for parent, kseg in self._unchain(tagged=tagged)
         ]
 
     def _unchain(self, tagged: bool = True) -> Generator:
-        """unpack all the key objects chained up, together with their tags"""
+        """unpack all the key objects chained up, together with their tags.
+        :param tagged: whether to include parent tags in the generator
+        :returns: a generator of tuples, each containing a parent and a label. If not tagged, the parent is None
+        """
         for kseg in self._key_segments:
             if tagged:
                 yield (kseg.parent, kseg)
@@ -362,7 +374,10 @@ class Domain:
 
     def update(self):
         """user-friendly update procedure. Skips update if already up to date,
-        asserts up-to-date flag and"""
+        asserts up-to-date flag.
+        :returns: self, so you can chain calls
+        :raises: RuntimeError if update did not succeed
+        """
         ret = True
         if not self.is_ud:
             ret = self._update()
@@ -380,7 +395,8 @@ class Domain:
         return self._is_ud_flag
 
     def flag_ud(self):
-        """mark for update"""
+        """mark for update
+        :returns: self, so you can chain calls"""
         self._is_ud_flag = False
         for parent in self._parents:
             parent.flag_ud()
@@ -388,23 +404,37 @@ class Domain:
 
     @staticmethod
     def from_file(filename) -> Domain:
-        """get the keymap from a file"""
-        with open(filename, "rb") as handle:
-            dom = pickle.load(handle)
+        """get the keymap from a file.
+        :param filename: the file to read from
+        :returns: the loaded Domain object, flagged for update
+        :raises: FileNotFoundError if the file does not exist
+        """
+        dom = None
+        dom = pickle.load(open(filename, "rb"))
         dom.flag_ud()
         dom.__class__._enum += 1
         dom.update()
         return dom
 
     def to_file(self, filename) -> Self:
-        """write the keymap to a file"""
+        """write the keymap to a file.
+        :param filename: the file to write to
+        :returns: self, so you can chain calls
+        :raises: IOError if the file could not be opened or written to
+        """
         self.update()
         with open(filename, "wb") as handle:
             pickle.dump(self, handle)
         return self
 
     def add_parent(self, parent) -> Self:
-        """add as a parent if not yet there"""
+        """add as a parent if not yet there.
+        :param parent: the parent domain
+        :returns: self, so you can chain calls
+        :raises: ValueError if parent is not a Domain
+        """
+        if not isinstance(parent, Domain):
+            raise ValueError("parent must be a Domain")
         if parent not in self._parents:
             self._parents.append(parent)
         return self
@@ -455,12 +485,19 @@ class KeyMap(Domain):
         self._key2pos = {}
         self._key2reg = {}
 
-    def key(self, label, /):
-        """generate a key object from the KeyMaps own key factory"""
+    def key(self, keylike, /):
+        """generate a key object from the KeyMaps own key factory.
+        :param label: the label of the key to generate
+        :returns: the Key object
+        """
+        label = keylike
         if isinstance(label, Key):
             label = label.onlylabel()
         elif isinstance(label, _KeySegment):
             label = label.label
+        else:
+            if not isinstance(label, Hashable):
+                raise ValueError("keylike must be a Hashable object")
         return Key(self._kseg_factory(label))
 
     def _tagged_keyseg(self, label):
@@ -481,7 +518,10 @@ class KeyMap(Domain):
 
     def reorder(self, function) -> Self:
         """reorder the arrangement of keys in the map by sorting function.
-        The function must take"""
+        The function must take a key object as an input and return a sorting id.
+        :param function: the sorting function
+        :returns: self, so you can chain calls
+        """
         aux = sorted(
             [
                 (sort_id, key, keymap)
@@ -493,14 +533,21 @@ class KeyMap(Domain):
         return self
 
     def entry(self, keylike, /):
-        """add a new entry at key"""
-        key = Key(keylike)
+        """add a new entry at key.
+        The key must be a Hashable object.
+        :param keylike: the key to add
+        :returns: self, so you can chain calls"""
+        key = self.key(keylike)
         self.put(key, Entry(name=key.onlylabel()))
+        return self
 
     def extend(self, keymap, autorename=True):
         """extend by a keymap, derive the corresponding key from the name.
         If the autorename flag is set, counting numbers are attached to the
         name if the name is already taken to make it unique.
+        :param keymap: the keymap to extend
+        :param autorename: whether to automatically rename if the name is already taken
+        :returns: self, so you can chain calls
         """
         if not isinstance(keymap, KeyMap):
             raise ValueError("Not a KeyMap")
@@ -518,12 +565,17 @@ class KeyMap(Domain):
             else:
                 raise KeyError(f"Key '{kseg.label}' already exists")
         self._put(kseg, keymap)
+        return self
 
     def put(self, keylike, /, keymap, no_override=True):
         """append a keymap object at a key.
         The key is either given or generated from the keymaps name.
         If no keymap is given, an entry is generated at the key location.
-        The e object is copied for application.
+        The key object is copied for application.
+        :param keylike: the key to add
+        :param keymap: the keymap to add
+        :param no_override: whether to raise an exception if the key already exists
+        :returns: self, so you can chain calls
         """
 
         # use a kseg from this map
@@ -539,6 +591,7 @@ class KeyMap(Domain):
             keymap = Entry(name=str(kseg.label))
 
         self._put(kseg, keymap)
+        return self
 
     def _put(self, kseg, keymap):
         """the actual put routine"""
@@ -557,6 +610,7 @@ class KeyMap(Domain):
 
     def _update(self):
         """the actual update routine"""
+
         self._reset()
         offset_pointer = 0
 
@@ -608,7 +662,11 @@ class KeyMap(Domain):
         return self._tagged_keyseg(label)
 
     def keys(self, recursive: bool = False, prefix: Key | None = None):
-        """generator equivalent to dict's keys function"""
+        """generator equivalent to dict's keys function.
+        :param recursive: whether to forward recursive call for each keymap
+        :param prefix: a Key to start from
+        :returns: a generator of Key objects
+        """
         # we COULD have prefix: Key = Key() in the args list, as the empty key
         # as default could be a monad, but it is cleaner like that.
         if prefix is None:
@@ -620,7 +678,11 @@ class KeyMap(Domain):
                 yield Key(prefix, key)
 
     def items(self, recursive: bool = False, prefix: Key | None = None):
-        """generator equivalent to dict's items function"""
+        """generator equivalent to dict's items function
+        :param recursive: whether to forward recursive call for each keymap
+        :param prefix: a Key to start from
+        :returns: a generator of Key objects
+        """
         if prefix is None:
             prefix = Key()
         for key, reg in self._key2reg.items():
@@ -630,7 +692,10 @@ class KeyMap(Domain):
                 yield Key(key), reg
 
     def values(self, recursive: bool = False):
-        """generator equivalent to dict's values function"""
+        """generator equivalent to dict's values function
+        :param recursive: whether to forward recursive call for each keymap
+        :returns: a generator of Key objects
+        """
         for _, reg in self._key2reg.items():
             if recursive:
                 yield from reg.values(recursive=True)
@@ -639,7 +704,8 @@ class KeyMap(Domain):
 
     def find(self, *keys, _gen=None):
         """find a key and return position and entry
-        returns (position, KeyMap)"""
+        :param keys: keys to find
+        :returns: a tuple of (position, KeyMap)"""
         self.update()
         key = Key(*keys)
         current_obj = self
@@ -657,7 +723,8 @@ class KeyMap(Domain):
 
     def whats_at(self, offset: int, _collect=None):
         """find out what is at a certain position
-        returns (KeyMap, Key)
+        :param offset: the position to find
+        :returns: (KeyMap, Key)
         """
         if _collect is None:
             _collect = Key()
