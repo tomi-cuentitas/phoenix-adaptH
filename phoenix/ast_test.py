@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/10/2024
-# Last Update: 10/10/2024, 13:11
-# Version:     0.0.309
+# Last Update: 11/10/2024, 13:26
+# Version:     0.0.310
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -93,53 +93,54 @@ class FunctionNode(ImportantNode):
                 self.returns = str(node.returns.value.id)
 
 
-with open("keymap.py", "r") as file:
-    tree = ast.parse(file.read())
+if __name__ == "__main__":
+    with open("keymap.py", "r") as file:
+        tree = ast.parse(file.read())
 
-main = Node(tree)
+    main = Node(tree)
 
-for node in main.scan_nodes():
-    if isinstance(node, FunctionNode):
-        print("FUNCTION", node.name)
-        print()
-    if isinstance(node, ClassNode):
-        inheritance_string = ""
-        if node.parents:
-            inheritance_string = f"({', '.join(node.parents)})"
-        print(f"CLASS {node.name}" + inheritance_string)
-        print()
-        for function in node.functions:
-            for deco in function.decorators:
-                print(f"  @{deco}")
-            returns_string = ""
-            if function.returns:
-                returns_string = f" -> {function.returns}"
-            print(
-                f"  def {function.name}({', '.join(function.args)}){returns_string}"
-            )
+    for node in main.scan_nodes():
+        if isinstance(node, FunctionNode):
+            print("FUNCTION", node.name)
             print()
-        print()
+        if isinstance(node, ClassNode):
+            inheritance_string = ""
+            if node.parents:
+                inheritance_string = f"({', '.join(node.parents)})"
+            print(f"CLASS {node.name}" + inheritance_string)
+            print()
+            for function in node.functions:
+                for deco in function.decorators:
+                    print(f"  @{deco}")
+                returns_string = ""
+                if function.returns:
+                    returns_string = f" -> {function.returns}"
+                print(
+                    f"  def {function.name}({', '.join(function.args)}){returns_string}"
+                )
+                print()
+            print()
 
-# print()
+    # print()
 
-# expList = []
+    # expList = []
 
-# for this_class, node in yield_with_class_context(tree):
-#     if isinstance(node, ast.FunctionDef):
-#         expList.append(
-#             (this_class, node.name, [arg.arg for arg in node.args.args])
-#         )
-#         # print(
-#         #     # node,
-#         #     node.name,
-#         #     node.args,
-#         #     node.returns,
-#         #     node.decorator_list,
-#         # )
-#         # for arg in node.args.args:
-#         #     print(f"\t argument '{arg.arg}'")
+    # for this_class, node in yield_with_class_context(tree):
+    #     if isinstance(node, ast.FunctionDef):
+    #         expList.append(
+    #             (this_class, node.name, [arg.arg for arg in node.args.args])
+    #         )
+    #         # print(
+    #         #     # node,
+    #         #     node.name,
+    #         #     node.args,
+    #         #     node.returns,
+    #         #     node.decorator_list,
+    #         # )
+    #         # for arg in node.args.args:
+    #         #     print(f"\t argument '{arg.arg}'")
 
-# # print(expList)
+    # # print(expList)
 
-# for this_class, function_name, arg_list in expList:
-#     print(f"{this_class}.{function_name}({', '.join(arg_list)})")
+    # for this_class, function_name, arg_list in expList:
+    #     print(f"{this_class}.{function_name}({', '.join(arg_list)})")

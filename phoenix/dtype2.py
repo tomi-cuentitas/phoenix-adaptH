@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 07/10/2024, 15:52
-# Version:     0.0.1060
+# Last Update: 11/10/2024, 13:52
+# Version:     0.0.1065
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,19 +28,16 @@ TODO:
 
 __doc__ = """
 DType module description
-========================
 
-DLayer
-------
+ADAA
 
-The DLayer class holds data references to HPC backends and unpacks accordingly
+The ADAA class holds data references to HPC backends and unpacks accordingly
 for function calls.
 
 Basic arithemtic operations are implemented via a mapping into a basic
 linop(A, b, C) -> A + b * C operation
 
 DContainer
-----------
 
 DContainer combines multiple Layers to a combined datatype and can be extended
 to manage inter-layer data conversion, host-device sync and consistency checks.
@@ -60,6 +57,7 @@ import cupy as cp
 import pyopencl as cl
 import warnings
 
+print(cl.get_platforms()[0].get_devices()[0])
 ZERO_TOL = 1e-14
 
 

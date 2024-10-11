@@ -19,7 +19,7 @@ Indices and tables
 * :ref:`search`
 
 
-.. automodule:: phoenix.dtype
+.. automodule:: phoenix.dtype2
    :members:
    :private-members:
 
@@ -28,23 +28,23 @@ Indices and tables
    :private-members:
 
 
-.. automodule:: phoenix.fgen.instruction
+... automodule:: phoenix.fgen.instruction3
    :members:
    :private-members:
 
-.. automodule:: phoenix.fgen.routine
+... automodule:: phoenix.fgen.routine
    :members:
    :private-members:
 
-.. automodule:: phoenix.fgen.library
+... automodule:: phoenix.fgen.library
    :members:
    :private-members:   
    
-.. automodule:: phoenix.fgen.subroutine
+... automodule:: phoenix.fgen.subroutine
    :members:
    :private-members:
 
-.. automodule:: phoenix.fgen.tomography
+... automodule:: phoenix.fgen.tomography
    :members:
    :private-members:
 

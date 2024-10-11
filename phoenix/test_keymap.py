@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/10/2024
-# Last Update: 11/10/2024, 11:51
-# Version:     0.0.33
+# Last Update: 11/10/2024, 14:59
+# Version:     0.0.37
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -49,6 +49,8 @@ rgc.extend(Entry(name="something"))
 print(rgc)
 for key, entry in rgc.items():
     print(key, entry)
+
+print(rgc, len(rgc), 4 in rgc, 12 in rgc, "4" in rgc)
 
 print("a", kma)
 
