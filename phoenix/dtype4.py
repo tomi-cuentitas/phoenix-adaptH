@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 14/10/2024, 13:15
-# Version:     0.0.1472
+# Last Update: 14/10/2024, 13:47
+# Version:     0.0.1558
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -47,19 +47,115 @@ factually wrong.
 
 # pylint: disable=too-many-arguments
 
-from typing import Tuple, Any
+from typing import Any
+from abc import ABCMeta, abstractmethod
 
-import numpy as np
-import cupy as cp
-import pyopencl as cl
 import warnings
+import numpy as np
+
 
 ZERO_TOL = 1e-14
 
-from abc import ABCMeta, abstractmethod
+
+class CoeffBackend(metaclass=ABCMeta):
+    """
+    The coefficient based backend.
+
+    This routine collection is implemented as a class, because for specific
+    backend implementations, auxilliary variables, special libraries or
+    initialization might be required.
+    """
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def coeff_add(self, op_r, op_a, op_b, size: int, dtype: str = "f64"):
+        """Adds operands op_a and op_b, write result to op_r."""
+        return self.coeff_linop(
+            op_r, 1.0, op_a, 1.0, op_b, size=size, dtype=dtype
+        )
+
+    def coeff_smul(self, op_r, op_a, scal, size: int, dtype: str = "f64"):
+        """Scalar-multiply op_a with scal, write result to op_r."""
+        return self.coeff_linop(
+            op_r, scal, op_a, None, None, size=size, dtype=dtype
+        )
+
+    def coeff_safe_access(self, reference, size: int, dtype: str = "f64"):
+        """
+        Provide safe access to coeff array by generating a copy or guarantee
+        read-only access privileges.
+        """
+        targ = self.coeff_new_array(size=size, dtype=dtype)
+        return self.coeff_copy(targ, reference, size=size, dtype=dtype)
+
+    def coeff_to_zero(self, reference, size: int, dtype: str = "f64"):
+        """Set the passed coefficient vector to zero."""
+        if size is None:
+            size = len(reference)
+        self.coeff_smul(reference, reference, 0.0, size=size, dtype=dtype)
+
+    def coeff_copy(self, targ, source, size: int, dtype: str = "f64"):
+        """Copy the data from source to targ."""
+        self.coeff_smul(targ, source, 1.0, size=size, dtype=dtype)
+
+    def coeff_free(self, reference, size: int, dtype: str = "f64"):
+        """free the memory at ref."""
+        return None
+
+    def coeff_allclose(
+        self, coeff_a, coeff_b, atol, rtol, size, dtype="f64"
+    ) -> bool:
+        """
+        Perform the all-close-check:
+        Check if the values are all sufficiently close by checking, if
+        |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
+        is fulfilled for all coefficients."""
+        return np.allclose(
+            self.coeff_to_numpy(coeff_a, size=size, dtype="f64"),
+            self.coeff_to_numpy(coeff_b, size=size, dtype="f64"),
+            atol=atol,
+            rtol=rtol,
+        )
+
+    @abstractmethod
+    def coeff_new_array(self, size: int, dtype: str = "f64") -> Any:
+        """Create an empty coeff array."""
+
+    @abstractmethod
+    def coeff_from_numpy(
+        self, targ: Any, array: np.ndarray, size, dtype="f64"
+    ) -> None:
+        """Fill the coeffs from a numpy array."""
+
+    @abstractmethod
+    def coeff_to_numpy(
+        self, coeff_array: Any, size, dtype="f64"
+    ) -> np.ndarray:
+        """Export the coeffs as a numpy array."""
+
+    @abstractmethod
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float,
+        arr_x: Any,
+        scal_b: float | None = 1,
+        arr_y: Any = None,
+        *,
+        size: int,
+        dtype: str = "f64",
+    ):
+        """
+        Performs the basic linear operation
+            a * x (+ b * y)
+        where and a and b are scalar and x and y are a coeff array.
+        """
+        # writes the result of scal_a * arr_x (+ scal_b * arr_y if arr_e) into arr_r
 
 
-class ADAA(metaclass=ABCMeta):
+class ADAA:
     """
     ADAA is an acronym for Aligned Data Access Array.
     This data type is intended for the systematic distribution of data into
@@ -74,6 +170,7 @@ class ADAA(metaclass=ABCMeta):
     """
 
     _IDENTIFIER = "COMPLEX_ARRAY"
+    BACKEND: CoeffBackend
 
     def __init__(self, size: int):
         self._size = size
@@ -84,8 +181,8 @@ class ADAA(metaclass=ABCMeta):
     @property
     def real(self):
         """Access protected attribute real."""
-        return self.coeff_safe_access(
-            self._data_r, dtype="f64", size=self.size
+        return self.BACKEND.coeff_safe_access(
+            reference=self._data_r, dtype="f64", size=self.size
         )
 
     @real.setter
@@ -97,8 +194,8 @@ class ADAA(metaclass=ABCMeta):
     @property
     def imag(self):
         """Access protected attribute imag."""
-        return self.coeff_safe_access(
-            self._data_i, dtype="f64", size=self.size
+        return self.BACKEND.coeff_safe_access(
+            reference=self._data_i, dtype="f64", size=self.size
         )
 
     @imag.setter
@@ -117,19 +214,33 @@ class ADAA(metaclass=ABCMeta):
         """Access write-protected property 'size'"""
         return self._size
 
+    def to_zero(self):
+        """Set the coefficient data to zero."""
+        self.BACKEND.coeff_to_zero(self._data_r, size=self.size, dtype="f64")
+        self.BACKEND.coeff_to_zero(self._data_i, size=self.size, dtype="f64")
+        return self
+
     @classmethod
     def from_numpy(cls, arr: np.ndarray) -> ADAA:
         """Import data from numpy array."""
         size = len(arr)
         obj = cls(size)
-        cls.coeff_from_numpy(obj.real, arr.real)
-        cls.coeff_from_numpy(obj.imag, arr.imag)
+        cls.BACKEND.coeff_from_numpy(
+            obj.real, arr.real, size=size, dtype="f64"
+        )
+        cls.BACKEND.coeff_from_numpy(
+            obj.imag, arr.imag, size=size, dtype="f64"
+        )
         return obj
 
     def to_numpy(self) -> np.ndarray:
         """Export data as numpy array."""
-        real_part = self.__class__.coeff_to_numpy(self.real)
-        imag_part = self.__class__.coeff_to_numpy(self.imag)
+        real_part = self.__class__.BACKEND.coeff_to_numpy(
+            self.real, size=self.size, dtype="f64"
+        )
+        imag_part = self.__class__.BACKEND.coeff_to_numpy(
+            self.imag, size=self.size, dtype="f64"
+        )
         return real_part + 1j * imag_part
 
     def unpack(self) -> tuple:
@@ -139,8 +250,12 @@ class ADAA(metaclass=ABCMeta):
     def copy(self) -> ADAA:
         """Creates a real copy of self."""
         copy = self.__class__(self.size)
-        self.__class__.coeff_linop(copy.real, 1.0, self.real)
-        self.__class__.coeff_linop(copy.imag, 1.0, self.imag)
+        self.__class__.BACKEND.coeff_linop(
+            copy.real, 1.0, self.real, size=self.size, dtype="f64"
+        )
+        self.__class__.BACKEND.coeff_linop(
+            copy.imag, 1.0, self.imag, size=self.size, dtype="f64"
+        )
         return copy
 
     @classmethod
@@ -150,87 +265,17 @@ class ADAA(metaclass=ABCMeta):
         |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
         is fulfilled for all coefficients.
         """
-        real_all_close = cls.coeff_all_close(op_a.real, op_b.real, rtol, atol)
-        imag_all_close = cls.coeff_all_close(op_a.imag, op_b.imag, rtol, atol)
+        if op_a.size != op_b.size:
+            raise ValueError("Compared operators must have the same size.")
+        real_all_close = cls.BACKEND.coeff_allclose(
+            op_a.real, op_b.real, rtol, atol, size=op_a.size, dtype="f64"
+        )
+        imag_all_close = cls.BACKEND.coeff_allclose(
+            op_a.imag, op_b.imag, rtol, atol, size=op_a.size, dtype="f64"
+        )
         return real_all_close and imag_all_close
 
-        # ref_squared = cls.new_data_array(op_a.size, "f64")
-        # dif_squared = cls.new_data_array(op_a.size, "f64")
-        # dif = op_a - op_b
-        # cls.coeff_linop(
-        #     dif_squared,
-        #     0.0,
-        #     1.0,
-        #     cls.coeff_norm2(dif.real, dif.imag),
-        # )
-        # cls.coeff_linop(
-        #     ref_squared,
-        #     atol**2,
-        #     rtol**2 / 4,
-        #     cls.coeff_norm2(op_a.real, op_a.imag),
-        #     rtol**2 / 4,
-        #     cls.coeff_norm2(op_b.real, op_b.imag),
-        # )
-
-        # # check if ref_squared - dif_squared >= 0
-        # return cls.coeff_all_nonneg(
-        #     cls.coeff_linop(0.0, -1.0, dif_squared, 1.0, ref_squared)
-        # )
-
-    def free_memory(self):
-        """free the occupied memory"""
-        self._data_r = self.__class__.coeff_free(self._data_r)
-        self._data_i = self.__class__.coeff_free(self._data_i)
-
-    def _reinit(self, size=None):
-        """Reinitialize the data for a certain size"""
-        if size is None:
-            size = self.size
-        else:
-            if size == self.size:
-                return
-        self.reinit(size)
-
-    def reinit(self, size):
-        """Actual reinitialization. Forced."""
-        self.free_memory()
-        self._size = size
-        self._data_r = self.coeff_new_array(size, dtype="f64")
-        self._data_i = self.coeff_new_array(size, dtype="f64")
-
-    def __init_subclass__(cls, ident=None):
-        """
-        When a new subclass is derived, introduce the class
-        variable _IDENTIFIER.
-        """
-        if ident is None:
-            ident = cls.__name__
-        cls._IDENTIFIER = ident
-
-    def _set_data(self, real=None, imag=None):
-        """Set the data."""
-        if real is not None:
-            self._data_r = real
-        if imag is not None:
-            self._data_i = imag
-        return self
-
-    ###########################################################################
-    #
-    # ABSTRACT methods
-    # ================
-    #
-    # general routines
-    # ----------------
-
-    @abstractmethod
-    def to_zero(self):
-        """Set the coefficient data to zero."""
-        self.coeff_to_zero(self._data_r, size=self.size, dtype="f64")
-        self.coeff_to_zero(self._data_i, size=self.size, dtype="f64")
-
     @classmethod
-    @abstractmethod
     def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
         """returns operator_a + scalar_b * operator_c"""
 
@@ -239,8 +284,6 @@ class ADAA(metaclass=ABCMeta):
 
         if size is None:
             size = op_r.size
-
-        op_r._reinit(size)
 
         if op_a is None:
             zero = cls(size).to_zero()
@@ -257,135 +300,61 @@ class ADAA(metaclass=ABCMeta):
         else:
             sbr, sbi = (complex(sc_b).real, complex(sc_b).real)
 
-        aux_r = cls.coeff_new_array(size, dtype="f64")
-        aux_i = cls.coeff_new_array(size, dtype="f64")
+        aux_r = cls.BACKEND.coeff_new_array(size, dtype="f64")
+        aux_i = cls.BACKEND.coeff_new_array(size, dtype="f64")
 
         # sbr * ocr - sbi * oci -> aux_r
-        cls.coeff_linop(aux_r, sbr, ocr, -1 * sbi, oci, size=size, dtype="f64")
+        cls.BACKEND.coeff_linop(
+            aux_r, sbr, ocr, -1 * sbi, oci, size=size, dtype="f64"
+        )
         # sbi * ocr + sbr * oci -> aux_i
-        cls.coeff_linop(aux_i, sbi, ocr, sbr, oci, size=size, dtype="f64")
+        cls.BACKEND.coeff_linop(
+            aux_i, sbi, ocr, sbr, oci, size=size, dtype="f64"
+        )
 
         # bracket + oar -> op_r.real
-        cls.coeff_add(op_r.real, aux_r, oar, size=size, dtype="f64")
+        cls.BACKEND.coeff_add(op_r.real, aux_r, oar, size=size, dtype="f64")
         # bracket + oai -> op_r.imag
-        cls.coeff_add(op_r.imag, aux_i, oai, size=size, dtype="f64")
+        cls.BACKEND.coeff_add(op_r.imag, aux_i, oai, size=size, dtype="f64")
 
-    ###########################################################################
-    #
-    # BACKEND methods
-    # ===============
-    #
-    # applied @ coefficients
-    # ----------------------
+    def free_memory(self):
+        """free the occupied memory"""
+        self._data_r = self.__class__.BACKEND.coeff_free(self._data_r)
+        self._data_i = self.__class__.BACKEND.coeff_free(self._data_i)
 
-    @classmethod
-    @abstractmethod
-    def coeff_new_array(cls, size: int, dtype: str = "f64") -> Any:
-        """Create an empty coeff array."""
-        # match dtype:
-        #     case "f64":
-        #         return (np.zeros(size, dtype=np.float64),)
-        #     case _:
-        #         raise ValueError(f"Unsupported dtype: {dtype}")
-
-    @classmethod
-    def coeff_safe_access(cls, reference, size: int, dtype: str = "f64"):
-        """
-        Provide safe access to coeff array by generating a copy or guarantee
-        read-only access privileges.
-        """
-        target = cls.coeff_new_array(size=size, dtype=dtype)
-        return cls.coeff_copy(target, reference, size=size, dtype=dtype)
-
-    @classmethod
-    def coeff_to_zero(cls, reference, size: int, dtype: str = "f64"):
-        """Set the coefficient vector to zero"""
+    def _reinit(self, size=None):
+        """Reinitialize the data for a certain size"""
         if size is None:
-            size = len(reference)
-        cls.coeff_smul(reference, reference, 0.0, size=size, dtype=dtype)
+            size = self.size
+        else:
+            if size == self.size:
+                return
+        self.reinit(size)
 
-    @classmethod
-    def coeff_copy(cls, target, source, size: int, dtype: str = "f64"):
-        """Copy the data from source to target"""
-        cls.coeff_smul(target, source, 1.0, size=size, dtype=dtype)
+    def reinit(self, size):
+        """Actual reinitialization. Forced."""
+        self.free_memory()
+        self._size = size
+        self._data_r = self.BACKEND.coeff_new_array(size, dtype="f64")
+        self._data_i = self.BACKEND.coeff_new_array(size, dtype="f64")
 
-    @classmethod
-    def coeff_free(cls, reference, size: int, dtype: str = "f64"):
-        """free the memory at ref"""
-        return None
-
-    @classmethod
-    @abstractmethod
-    def coeff_all_close(cls, coeef_a, coeff_b, atol, rtol, size, dtype="f64"):
-        """all-close-check"""
-        return False
-
-    @classmethod
-    @abstractmethod
-    def coeff_from_numpy(
-        cls, target: Any, array: np.ndarray, size=size, dtype="f64"
-    ):
-        """Internal call from_numpy."""
-        # size = len(array)
-        # return cls(size)._set_data(
-        #     real=np.array(array).real, imag=np.array(array).imag
-        # )
-
-    @abstractmethod
-    def coeff_to_numpy(self) -> np.ndarray:
-        """Transfer data to numpy."""
-        # return (
-        #     0
-        #     + (self._data_r if self._data_r else 0)
-        #     + (1j * self._data_i.copy() if self._data_i else 0)
-        # )
-
-    # @classmethod
-    # @abstractmethod
-    # def coeff_norm2(cls, arr_real: Any, arr_imag: Any = None):
-    #     """return a coeff array with the normed square in each entry"""
-    #     # return arr_real * arr_real (+ arr_imag * arr_imag if arr_imag)
-
-    # @classmethod
-    # @abstractmethod
-    # def coeff_all_nonneg(cls, array):
-    #     """Checks if all entries in the coeffs are positive"""
-    #     # return np.min(array) >= 0
-
-    @classmethod
-    def coeff_add(cls, op_r, op_a, op_b, size: int, dtype: str = "f64"):
-        """adds operands op_a and op_b, write result to op_r"""
-        return cls.coeff_linop(
-            op_r, 1.0, op_a, 1.0, op_b, size=size, dtype=dtype
-        )
-
-    @classmethod
-    def coeff_smul(cls, op_r, op_a, scal, size: int, dtype: str = "f64"):
-        """scalar-multiply op_a with scal, write result to op_r"""
-        return cls.coeff_linop(
-            op_r, scal, op_a, None, None, size=size, dtype=dtype
-        )
-
-    @classmethod
-    @abstractmethod
-    def coeff_linop(
-        cls,
-        arr_r: Any,
-        /,
-        scal_b: float,
-        arr_c: Any,
-        scal_d: float | None = 1,
-        arr_e: Any = None,
-        *,
-        size: int,
-        dtype: str = "f64",
-    ):
+    def __init_subclass__(cls, backend, identifier=None):
         """
-        Performs the basic linear operation
-            a + b * c (+ d * e)
-        where a and b are scalar and c is a coeff array.
+        When a new subclass is derived, introduce the class
+        variable _IDENTIFIER.
         """
-        # writes the result of scal_b * arr_c (+ scal_d * arr_e if arr_e) into arr_r
+        cls.BACKEND = backend
+        if identifier is None:
+            ident = cls.__name__
+        cls._IDENTIFIER = ident
+
+    def _set_data(self, real=None, imag=None):
+        """Set the data."""
+        if real is not None:
+            self._data_r = real
+        if imag is not None:
+            self._data_i = imag
+        return self
 
     ###########################################################################
     #
@@ -500,50 +469,63 @@ class SDLC(DLC):
 ###############################################################################
 
 
-class PurePyADAA(ADAA):
-    """Pure Python data layer"""
+class PurePyCoeffBackend(CoeffBackend):
+    """implement the backend for 'PurePy'"""
 
-    _IDENTIFIER = "PUREPYTHON"
+
+class NumpyCoeffBackend(CoeffBackend):
+    """implement the backend for 'Numpy'"""
+
+
+class FortranCoeffBackend(CoeffBackend):
+    """implement the backend for 'Fortran'"""
+
+
+class CupyCoeffBackend(CoeffBackend):
+    """implement the backend for 'Cupy'"""
+
+
+class OpenClCoeffBackend(CoeffBackend):
+    """implement the backend for 'OpenCl'"""
+
+
+###############################################################################
+
+
+class PurePyADAA(ADAA, backend=PurePyCoeffBackend, identifier="PUREPYTHON"):
+    """Pure Python data layer"""
 
     @classmethod
     def _new_data(cls, size):
         return [0.0 for _ in range(size)], [0.0 for _ in range(size)]
 
 
-class NumpyADAA(ADAA):
+class NumpyADAA(ADAA, backend=NumpyCoeffBackend, identifier="NUMPY"):
     """Numpy based data layer"""
 
-    _IDENTIFIER = "NUMPY"
-
     @classmethod
     def _new_data(cls, size):
         return np.zeros(size), np.zeros(size)
 
 
-class FortranADAA(ADAA):
+class FortranADAA(ADAA, backend=FortranCoeffBackend, identifier="FORTRAN"):
     """FORTRAN based data layer (implemented via NumPy)"""
 
-    _IDENTIFIER = "FORTRAN"
-
     @classmethod
     def _new_data(cls, size):
         return np.zeros(size), np.zeros(size)
 
 
-class CupyADAA(ADAA):
+class CupyADAA(ADAA, backend=CupyCoeffBackend, identifier="CUPY"):
     """Cupy based data layer"""
-
-    _IDENTIFIER = "CUPY"
 
     @classmethod
     def _new_data(cls, size):
         return cp.zeros(size), cp.zeros(size)
 
 
-class OpenClADAA(ADAA):
+class OpenClADAA(ADAA, backend=OpenClCoeffBackend, identifier="OPENCL"):
     """Cupy based data layer"""
-
-    _IDENTIFIER = "OPENCL"
 
     _CL_CNTXT = cl.create_some_context()
     _CL_QUEUE = cl.CommandQueue(_CL_CNTXT)
