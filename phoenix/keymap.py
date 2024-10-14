@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 11/10/2024, 15:04
-# Version:     0.0.2903
+# Last Update: 14/10/2024, 10:41
+# Version:     0.0.2922
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -386,33 +386,33 @@ class Domain:
         return self._size
 
     def __str__(self):
-        self.update()
+        self._update()
         return f"<{self._IDENTIFIER} '{self.name}'>"
 
     def __repr__(self):
-        self.update()
+        self._update()
         return f"<{self._IDENTIFIER_SHORT}[{self.name}]>"
 
     def __len__(self):
-        self.update()
+        self._update()
         return self._size
 
-    def update(self):
+    def _update(self) -> Self:
         """
-        User access to the update procedure. Skips update if already up to
+        Wrapped call to internal update procedure. Skips update if already up to
         date.
 
         :returns: self, so you can chain calls.
         :raises: RuntimeError if update did not succeed.
         """
         if not self.is_ud:
-            self._is_ud_flag = self._update()
+            self._is_ud_flag = self.update()
         if not self.is_ud:
             raise RuntimeError("update did not succeed")
         return self
 
-    def _update(self) -> bool:
-        """Placeholder for internal update. Overwritten later."""
+    def update(self) -> bool:
+        """Placeholder for user update. Overwritten later."""
         return True
 
     @property
@@ -439,12 +439,14 @@ class Domain:
         :param filename: the file to read from.
         :returns: the loaded Domain object, flagged for update.
         :raises: FileNotFoundError (from pickle) if the file does not exist.
+        :raises: RuntimeError if the update call did not succeed.
         """
         dom = None
         dom = pickle.load(open(filename, "rb"))
         dom.flag_ud()
         dom.__class__._enum += 1
-        dom.update()
+        if not dom.update():
+            raise RuntimeError("update did not succeed")
         return dom
 
     def to_file(self, filename) -> Self:
@@ -456,7 +458,7 @@ class Domain:
         :raises: IOError (from pickle) if the file could not be opened or
                  written to.
         """
-        self.update()
+        self._update()
         with open(filename, "wb") as handle:
             pickle.dump(self, handle)
         return self
@@ -705,7 +707,7 @@ class KeyMap(Domain):
 
         # go through domains in content
         for tkey, domain in self._content:
-            domain.update()
+            domain._update()
             if domain.size <= 0:
                 print(f"skipping domain {domain} as it is empty")
                 continue
@@ -719,7 +721,7 @@ class KeyMap(Domain):
                 offset_pointer += 1
         assert len(self._pos2dom) == offset_pointer
         self._size = offset_pointer
-        return True
+        return self
 
     def __getitem__(self, key):
         _, entry = self.find(key)
@@ -803,7 +805,7 @@ class KeyMap(Domain):
 
         :param keys: keys to find
         :returns: a tuple of (position, Domain)"""
-        self.update()
+        self._update()
         key = Key(*keys)
         current_obj = self
         current_pos = 0
@@ -863,7 +865,7 @@ class Region(KeyMap):
         self._counter = 0
         for count in range(size):
             self.entry()
-        self.update()
+        self._update()
 
     def put(self, keylike, /, domain, no_override=True):
         """
@@ -963,7 +965,7 @@ class Entry(Region):
     def _update(self):
         # just to be sure, let us reassure the initialization here
         self._size = 1
-        return True
+        return self
 
     def __len__(self):
         return 1

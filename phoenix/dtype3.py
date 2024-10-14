@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 11/10/2024, 17:37
-# Version:     0.0.1328
+# Last Update: 14/10/2024, 10:31
+# Version:     0.0.1337
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -129,8 +129,8 @@ class ADAA(metaclass=ABCMeta):
     def copy(self) -> ADAA:
         """Creates a real copy of self."""
         copy = self.__class__(self.size)
-        self.__class__._coeff_linop(copy.real, 0.0, 1.0, self.real)
-        self.__class__._coeff_linop(copy.imag, 0.0, 1.0, self.imag)
+        self.__class__.coeff_linop(copy.real, 0.0, 1.0, self.real)
+        self.__class__.coeff_linop(copy.imag, 0.0, 1.0, self.imag)
         return copy
 
     @classmethod
@@ -140,35 +140,35 @@ class ADAA(metaclass=ABCMeta):
         |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
         is fulfilled for all coefficients.
         """
-        ref_squared = cls._new_data_array(op_a.size)
-        dif_squared = cls._new_data_array(op_a.size)
+        ref_squared = cls.new_data_array(op_a.size, "f64")
+        dif_squared = cls.new_data_array(op_a.size, "f64")
         dif = op_a - op_b
-        cls._coeff_linop(
+        cls.coeff_linop(
             dif_squared,
             0.0,
             1.0,
-            cls._coeff_norm2(dif.real, dif.imag),
+            cls.coeff_norm2(dif.real, dif.imag),
         )
-        cls._coeff_linop(
+        cls.coeff_linop(
             ref_squared,
             atol**2,
             rtol**2 / 4,
-            cls._coeff_norm2(op_a.real, op_a.imag),
+            cls.coeff_norm2(op_a.real, op_a.imag),
             rtol**2 / 4,
-            cls._coeff_norm2(op_b.real, op_b.imag),
+            cls.coeff_norm2(op_b.real, op_b.imag),
         )
 
         # check if ref_squared - dif_squared >= 0
-        return cls._coeff_all_nonneg(
-            cls._coeff_linop(0.0, -1.0, dif_squared, 1.0, ref_squared)
+        return cls.coeff_all_nonneg(
+            cls.coeff_linop(0.0, -1.0, dif_squared, 1.0, ref_squared)
         )
 
     @classmethod
     def _new_data_arrays(cls, size: int) -> Tuple:
         """Create all arrays for a new array."""
         return (
-            cls._new_data_array(size),
-            cls._new_data_array(size),
+            cls.new_data_array(size, "f64"),
+            cls.new_data_array(size, "f64"),
         )
 
     def reinit(self, size=None):
@@ -182,8 +182,8 @@ class ADAA(metaclass=ABCMeta):
 
     def _reinit(self, size):
         """Actual reinitialization. Forced."""
-        self._data_r = self._new_data_array(size)
-        self._data_i = self._new_data_array(size)
+        self._data_r = self.new_data_array(size, "f64")
+        self._data_i = self.new_data_array(size, "f64")
         assert self._size == size
 
     def __init_subclass__(cls, ident=None):
@@ -241,9 +241,13 @@ class ADAA(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def _new_data_array(cls, size: int) -> Any:
+    def new_data_array(cls, size: int, dtype: str = "f64") -> Any:
         """Create one of the arrays for a new ADAA."""
-        # return np.zeros(size, dtype=np.float64),
+        # match dtype:
+        #     case "f64":
+        #         return (np.zeros(size, dtype=np.float64),)
+        #     case _:
+        #         raise ValueError(f"Unsupported dtype: {dtype}")
 
     @abstractmethod
     def to_zero(self):
@@ -264,19 +268,19 @@ class ADAA(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def _coeff_norm2(cls, arr_real, arr_imag=None):
+    def coeff_norm2(cls, arr_real, arr_imag=None):
         """return a coeff array with the normed square in each entry"""
         # return arr_real * arr_real (+ arr_imag * arr_imag if arr_imag)
 
     @classmethod
     @abstractmethod
-    def _coeff_all_nonneg(cls, array):
+    def coeff_all_nonneg(cls, array):
         """Checks if all entries in the coeffs are positive"""
         # return np.min(array) >= 0
 
     @classmethod
     @abstractmethod
-    def _coeff_linop(
+    def coeff_linop(
         cls, arr_r, /, scal_a, scal_b, arr_c, scal_d=1, arr_e=None
     ):
         """
@@ -288,7 +292,7 @@ class ADAA(metaclass=ABCMeta):
 
     @classmethod
     @abstractmethod
-    def _basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
+    def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
         """returns operator_a + scalar_b * operator_c"""
 
         assert op_c is not None
@@ -317,21 +321,21 @@ class ADAA(metaclass=ABCMeta):
         aux_r, aux_i = cls._new_data_arrays(size)
 
         # sbr * ocr - sbi * oci -> aux_r
-        cls._coeff_linop(aux_r, 0.0, sbr, ocr, -1 * sbi, oci)
+        cls.coeff_linop(aux_r, 0.0, sbr, ocr, -1 * sbi, oci)
         # sbi * ocr + sbr * oci -> aux_i
-        cls._coeff_linop(aux_i, 0.0, sbi, ocr, sbr, oci)
+        cls.coeff_linop(aux_i, 0.0, sbi, ocr, sbr, oci)
 
         # bracket + oar -> op_r.real
-        cls._coeff_linop(op_r.real, 0.0, 1.0, aux_r, 1.0, oar)
+        cls.coeff_linop(op_r.real, 0.0, 1.0, aux_r, 1.0, oar)
         # bracket + oai -> op_r.imag
-        cls._coeff_linop(op_r.imag, 0.0, 1.0, aux_i, 1.0, oai)
+        cls.coeff_linop(op_r.imag, 0.0, 1.0, aux_i, 1.0, oai)
 
     def __add__(self, other):
         if isinstance(other, self.__class__):
             assert self.size == other.size
             assert self.ident == other.ident
             result = self.__class__(size=self.size)
-            self._basic_linop(result, op_a=self, sc_b=1, op_c=other)
+            self.basic_linop(result, op_a=self, sc_b=1, op_c=other)
             return result
         raise ValueError(
             "Subtraction between operator and non-operator is not supported"
@@ -342,7 +346,7 @@ class ADAA(metaclass=ABCMeta):
             assert self.size == other.size
             assert self.ident == other.ident
             result = self.__class__(size=self.size)
-            self._basic_linop(result, op_a=self, sc_b=-1, op_c=other)
+            self.basic_linop(result, op_a=self, sc_b=-1, op_c=other)
             return result
         raise ValueError(
             "Subtraction between operator and non-operator is not supported"
@@ -354,7 +358,7 @@ class ADAA(metaclass=ABCMeta):
                 "Multiplication with other operator is not supported"
             )
         result = self.__class__(size=self.size)
-        self._basic_linop(result, op_a=None, sc_b=other, op_c=self)
+        self.basic_linop(result, op_a=None, sc_b=other, op_c=self)
         return result
 
     def __truediv__(self, other):
@@ -362,7 +366,7 @@ class ADAA(metaclass=ABCMeta):
             raise ValueError("Dividing through operator is not supported")
         result = self.__class__(size=self.size)
         inv_other = 1.0 / other
-        self._basic_linop(result, op_a=None, sc_b=inv_other, op_c=self)
+        self.basic_linop(result, op_a=None, sc_b=inv_other, op_c=self)
         return result
 
     def __rmul__(self, other):
@@ -372,7 +376,7 @@ class ADAA(metaclass=ABCMeta):
 
     def __neg__(self):
         result = self.__class__(size=self.size)
-        self._basic_linop(result, op_a=None, sc_b=-1, op_c=self)
+        self.basic_linop(result, op_a=None, sc_b=-1, op_c=self)
         return result
 
     def __len__(self):
