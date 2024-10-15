@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/10/2024
-# Last Update: 14/10/2024, 17:12
-# Version:     0.0.10
+# Last Update: 15/10/2024, 09:21
+# Version:     0.0.37
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -36,12 +36,12 @@ class CoeffBackend(metaclass=ABCMeta):
     """
 
     def __init__(self, *args, **kwargs):
-        pass
+        print(f"Backend '{self.__class__.__name__}': __init__()")
 
     def coeff_add(self, op_r, op_a, op_b, size: int, dtype: str = "f64"):
         """Adds operands op_a and op_b, write result to op_r."""
         return self.coeff_linop(
-            op_r, 1.0, op_a, 1.0, op_b, size=size, dtype=dtype
+            op_r, None, op_a, None, op_b, size=size, dtype=dtype
         )
 
     def coeff_smul(self, op_r, op_a, scal, size: int, dtype: str = "f64"):
@@ -81,47 +81,53 @@ class CoeffBackend(metaclass=ABCMeta):
         |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
         is fulfilled for all coefficients."""
         return np.allclose(
-            self.coeff_to_numpy(coeff_a, size=size, dtype="f64"),
-            self.coeff_to_numpy(coeff_b, size=size, dtype="f64"),
+            self.coeff_to_numpy(coeff_a, size=size, dtype=dtype),
+            self.coeff_to_numpy(coeff_b, size=size, dtype=dtype),
             atol=atol,
             rtol=rtol,
         )
 
-    @abstractmethod
+    ### @abstractmethod
     def coeff_new_array(self, size: int, dtype: str = "f64") -> Any:
         """Create an empty coeff array."""
 
-    @abstractmethod
+    ### @abstractmethod
     def coeff_from_numpy(
         self, targ: Any, array: np.ndarray, size, dtype="f64"
     ) -> None:
         """Fill the coeffs from a numpy array."""
 
-    @abstractmethod
+    ### @abstractmethod
     def coeff_to_numpy(
         self, coeff_array: Any, size, dtype="f64"
     ) -> np.ndarray:
         """Export the coeffs as a numpy array."""
 
-    @abstractmethod
+    ### @abstractmethod
     def coeff_linop(
         self,
         arr_r: Any,
         /,
-        scal_a: float,
+        scal_a: float | None,
         arr_x: Any,
-        scal_b: float | None = 1,
+        scal_b: float | None,
         arr_y: Any = None,
         *,
         size: int,
         dtype: str = "f64",
+        inplace: bool = False,
     ):
         """
         Performs the basic linear operation
-            a * x (+ b * y)
+            r = a * x (+ b * y)
         where and a and b are scalar and x and y are a coeff array.
+        If the inplace flag is set, perform
+            r += a * x (+ b * y)
+        instead.
+
+        if the scalars are to be ignored, pass None. This may cause a default
+        value of 1 to take this place.
         """
-        # writes the result of scal_a * arr_x (+ scal_b * arr_y if arr_e) into arr_r
 
 
 ###############################################################################
@@ -130,71 +136,57 @@ class CoeffBackend(metaclass=ABCMeta):
 class PurePyCoeffBackend(CoeffBackend):
     """implement the backend for 'PurePy'"""
 
-    @classmethod
-    def _new_data(cls, size):
+    def coeff_new_array(self, size, dtype="f64"):
         return [0.0 for _ in range(size)], [0.0 for _ in range(size)]
 
 
 class NumpyCoeffBackend(CoeffBackend):
     """implement the backend for 'Numpy'"""
 
-    @classmethod
-    def _new_data(cls, size):
+    def coeff_new_array(self, size, dtype="f64"):
         return np.zeros(size), np.zeros(size)
 
 
 class FortranCoeffBackend(CoeffBackend):
     """implement the backend for 'Fortran'"""
 
-    @classmethod
-    def _new_data(cls, size):
+    def coeff_new_array(self, size, dtype="f64"):
         return np.zeros(size), np.zeros(size)
 
 
 class CupyCoeffBackend(CoeffBackend):
     """implement the backend for 'Cupy'"""
 
-    @classmethod
-    def _new_data(cls, size):
+    def coeff_new_array(self, size, dtype="f64"):
+        print(size)
         return cp.zeros(size), cp.zeros(size)
 
 
 class OpenClCoeffBackend(CoeffBackend):
     """implement the backend for 'OpenCl'"""
 
-    _CL_CNTXT = cl.create_some_context()
-    _CL_QUEUE = cl.CommandQueue(_CL_CNTXT)
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
 
-    _CL_MFLAG = cl.mem_flags
+        self._cl_cntxt = cl.create_some_context()
+        self._cl_queue = cl.CommandQueue(self._cl_cntxt)
 
-    @classmethod
-    def _new_data(cls, size, init_zeros=True):
+        self._cl_mflag = cl.mem_flags
+
+    def coeff_new_array(self, size, dtype="f64"):
         try:
-            read_write = cls._CL_MFLAG.READ_WRITE
-            if init_zeros:
-                copy_from_host = cls._CL_MFLAG.COPY_HOST_PTR
-                zeros = np.zeros(size)
-                real = cl.Buffer(
-                    cls._CL_CNTXT,
-                    read_write | copy_from_host,
-                    hostbuf=zeros,
-                )
-                imag = cl.Buffer(
-                    cls._CL_CNTXT,
-                    read_write | copy_from_host,
-                    hostbuf=np.zeros(size),
-                )
-            else:
-                real = cl.Buffer(
-                    cls._CL_CNTXT,
-                    read_write,
-                    size=8 * size,  # size in bytes
-                )
-                imag = cl.Buffer(
-                    cls._CL_CNTXT,
-                    read_write,
-                    size=8 * size,  # size in bytes
-                )
+            read_write = self._cl_mflag.READ_WRITE
+
+            real = cl.Buffer(
+                self._cl_cntxt,
+                read_write,
+                size=8 * size,  # size in bytes
+            )
+            imag = cl.Buffer(
+                self._cl_cntxt,
+                read_write,
+                size=8 * size,  # size in bytes
+            )
         except cl.Error as e:
             warnings.warn("Failed to create OpenCL buffer: {}".format(str(e)))
             return (None, None)

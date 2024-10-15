@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 14/10/2024, 17:12
-# Version:     0.0.1569
+# Last Update: 15/10/2024, 09:20
+# Version:     0.0.1577
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -83,7 +83,7 @@ class ADAA:
         self._size = size
         self._data_r = None
         self._data_i = None
-        self._reinit(size)
+        self.reinit(size)
 
     # def _set_data(self, real=None, imag=None):
     #     """Set the data."""
@@ -150,10 +150,10 @@ class ADAA:
 
     def to_numpy(self) -> np.ndarray:
         """Export data as numpy array."""
-        real_part = self.__class__.BACKEND.coeff_to_numpy(
+        real_part = self.BACKEND.coeff_to_numpy(
             self.real, size=self.size, dtype="f64"
         )
-        imag_part = self.__class__.BACKEND.coeff_to_numpy(
+        imag_part = self.BACKEND.coeff_to_numpy(
             self.imag, size=self.size, dtype="f64"
         )
         return real_part + 1j * imag_part
@@ -165,10 +165,10 @@ class ADAA:
     def copy(self) -> ADAA:
         """Creates a real copy of self."""
         copy = self.__class__(self.size)
-        self.__class__.BACKEND.coeff_linop(
+        self.BACKEND.coeff_linop(
             copy.real, 1.0, self.real, size=self.size, dtype="f64"
         )
-        self.__class__.BACKEND.coeff_linop(
+        self.BACKEND.coeff_linop(
             copy.imag, 1.0, self.imag, size=self.size, dtype="f64"
         )
         return copy
@@ -234,8 +234,12 @@ class ADAA:
 
     def free_memory(self):
         """free the occupied memory"""
-        self._data_r = self.__class__.BACKEND.coeff_free(self._data_r)
-        self._data_i = self.__class__.BACKEND.coeff_free(self._data_i)
+        self._data_r = self.BACKEND.coeff_free(
+            self._data_r, size=self.size, dtype="f64"
+        )
+        self._data_i = self.BACKEND.coeff_free(
+            self._data_i, size=self.size, dtype="f64"
+        )
 
     def _reinit(self, size=None):
         """Reinitialize the data for a certain size"""
@@ -376,23 +380,23 @@ class SDLC(DLC):
 ###############################################################################
 
 
-class PurePyADAA(ADAA, backend=PurePyCoeffBackend, identifier="PUREPYTHON"):
+class PurePyADAA(ADAA, backend=PurePyCoeffBackend(), identifier="PUREPYTHON"):
     """Pure Python data layer"""
 
 
-class NumpyADAA(ADAA, backend=NumpyCoeffBackend, identifier="NUMPY"):
+class NumpyADAA(ADAA, backend=NumpyCoeffBackend(), identifier="NUMPY"):
     """Numpy based data layer"""
 
 
-class FortranADAA(ADAA, backend=FortranCoeffBackend, identifier="FORTRAN"):
+class FortranADAA(ADAA, backend=FortranCoeffBackend(), identifier="FORTRAN"):
     """FORTRAN based data layer (implemented via NumPy)"""
 
 
-class CupyADAA(ADAA, backend=CupyCoeffBackend, identifier="CUPY"):
+class CupyADAA(ADAA, backend=CupyCoeffBackend(), identifier="CUPY"):
     """Cupy based data layer"""
 
 
-class OpenClADAA(ADAA, backend=OpenClCoeffBackend, identifier="OPENCL"):
+class OpenClADAA(ADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"):
     """Cupy based data layer"""
 
 
@@ -407,49 +411,49 @@ class Foo(
     pass
 
 
-# print(Foo._LAYERS)
+print(Foo._LAYERS)
 
-# test = Foo(10, 12, 14, 16, 9)
+test = Foo(10, 12, 14, 16, 9)
 
-# print(
-#     test["layer1"].unpack(),
-#     "\n",
-#     type(test["layer1"].unpack()[0]),
-#     type(test["layer1"].unpack()[0][0]),
-#     "\n",
-# )
+print(
+    test["layer1"].unpack(),
+    "\n",
+    type(test["layer1"].unpack()[0]),
+    # type(test["layer1"].unpack()[0][0]),
+    "\n",
+)
 
-# print(
-#     test["layer2"].unpack(),
-#     "\n",
-#     type(test["layer2"].unpack()[0]),
-#     type(test["layer2"].unpack()[0][0]),
-#     "\n",
-# )
+print(
+    test["layer2"].unpack(),
+    "\n",
+    type(test["layer2"].unpack()[0]),
+    # type(test["layer2"].unpack()[0][0]),
+    "\n",
+)
 
-# print(
-#     test["layer3"].unpack(),
-#     "\n",
-#     type(test["layer3"].unpack()[0]),
-#     "<skip unpacking the cl buffer>",
-#     "\n",
-# )
+print(
+    test["layer3"].unpack(),
+    "\n",
+    type(test["layer3"].unpack()[0]),
+    "<skip unpacking the cl buffer>",
+    "\n",
+)
 
-# print(
-#     test["layer4"].unpack(),
-#     "\n",
-#     type(test["layer4"].unpack()[0]),
-#     type(test["layer4"].unpack()[0][0]),
-#     "\n",
-# )
+print(
+    test["layer4"].unpack(),
+    "\n",
+    type(test["layer4"].unpack()[0]),
+    # type(test["layer4"].unpack()[0][0]),
+    "\n",
+)
 
-# print(
-#     test["layer5"].unpack(),
-#     "\n",
-#     type(test["layer5"].unpack()[0]),
-#     type(test["layer5"].unpack()[0][0]),
-#     "\n",
-# )
+print(
+    test["layer5"].unpack(),
+    "\n",
+    type(test["layer5"].unpack()[0]),
+    # type(test["layer5"].unpack()[0][0]),
+    "\n",
+)
 
 
 # class MyLayerPurePy(PurePyADAA, identifier="PurePy2"):
