@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/10/2024
-# Last Update: 15/10/2024, 09:21
-# Version:     0.0.37
+# Last Update: 15/10/2024, 12:33
+# Version:     0.0.66
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,33 +38,31 @@ class CoeffBackend(metaclass=ABCMeta):
     def __init__(self, *args, **kwargs):
         print(f"Backend '{self.__class__.__name__}': __init__()")
 
-    def coeff_add(self, op_r, op_a, op_b, size: int, dtype: str = "f64"):
+    def coeff_add(
+        self, co_r: Any, co_a: Any, co_b: Any, size: int, dtype: str = "f64"
+    ) -> None:
         """Adds operands op_a and op_b, write result to op_r."""
         return self.coeff_linop(
-            op_r, None, op_a, None, op_b, size=size, dtype=dtype
+            co_r, None, co_a, None, co_b, size=size, dtype=dtype
         )
 
-    def coeff_smul(self, op_r, op_a, scal, size: int, dtype: str = "f64"):
-        """Scalar-multiply op_a with scal, write result to op_r."""
+    def coeff_smul(
+        self, co_r: Any, co_a: Any, scal, size: int, dtype: str = "f64"
+    ) -> None:
+        """Scalar-multiply co_a with scal, write result to co_r."""
         return self.coeff_linop(
-            op_r, scal, op_a, None, None, size=size, dtype=dtype
+            co_r, scal, co_a, None, None, size=size, dtype=dtype
         )
 
-    def coeff_safe_access(self, reference, size: int, dtype: str = "f64"):
-        """
-        Provide safe access to coeff array by generating a copy or guarantee
-        read-only access privileges.
-        """
-        targ = self.coeff_new_array(size=size, dtype=dtype)
-        return self.coeff_copy(targ, reference, size=size, dtype=dtype)
-
-    def coeff_to_zero(self, reference, size: int, dtype: str = "f64"):
+    def coeff_to_zero(self, coeff_like: Any, size: int, dtype: str = "f64"):
         """Set the passed coefficient vector to zero."""
         if size is None:
-            size = len(reference)
-        self.coeff_smul(reference, reference, 0.0, size=size, dtype=dtype)
+            size = len(coeff_like)
+        self.coeff_smul(coeff_like, coeff_like, 0.0, size=size, dtype=dtype)
 
-    def coeff_copy(self, targ, source, size: int, dtype: str = "f64"):
+    def coeff_copy_data(
+        self, targ: Any, source: Any, size: int, dtype: str = "f64"
+    ):
         """Copy the data from source to targ."""
         self.coeff_smul(targ, source, 1.0, size=size, dtype=dtype)
 
@@ -73,7 +71,13 @@ class CoeffBackend(metaclass=ABCMeta):
         return None
 
     def coeff_allclose(
-        self, coeff_a, coeff_b, atol, rtol, size, dtype="f64"
+        self,
+        coeff_a,
+        coeff_b,
+        atol: float,
+        rtol: float,
+        size: int,
+        dtype: str = "f64",
     ) -> bool:
         """
         Perform the all-close-check:
@@ -87,23 +91,33 @@ class CoeffBackend(metaclass=ABCMeta):
             rtol=rtol,
         )
 
-    ### @abstractmethod
+    ###########################################################################
+    #
+    # ABSTRACT METHODS
+    # ================
+    #
+
+    @abstractmethod
     def coeff_new_array(self, size: int, dtype: str = "f64") -> Any:
         """Create an empty coeff array."""
 
-    ### @abstractmethod
+    @abstractmethod
     def coeff_from_numpy(
-        self, targ: Any, array: np.ndarray, size, dtype="f64"
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str = "f64",
     ) -> None:
         """Fill the coeffs from a numpy array."""
 
-    ### @abstractmethod
+    @abstractmethod
     def coeff_to_numpy(
-        self, coeff_array: Any, size, dtype="f64"
+        self, coeff_like: Any, size: int, dtype: str = "f64"
     ) -> np.ndarray:
         """Export the coeffs as a numpy array."""
 
-    ### @abstractmethod
+    @abstractmethod
     def coeff_linop(
         self,
         arr_r: Any,
@@ -136,30 +150,146 @@ class CoeffBackend(metaclass=ABCMeta):
 class PurePyCoeffBackend(CoeffBackend):
     """implement the backend for 'PurePy'"""
 
-    def coeff_new_array(self, size, dtype="f64"):
-        return [0.0 for _ in range(size)], [0.0 for _ in range(size)]
+    def coeff_new_array(self, size: int, dtype: str = "f64"):
+        return [0.0 for _ in range(size)]
+
+    def coeff_from_numpy(
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str = "f64",
+    ) -> None:
+        pass
+
+    def coeff_to_numpy(
+        self, coeff_like: Any, size: int, dtype: str = "f64"
+    ) -> np.ndarray:
+        return np.zeros(size)
+
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float | None,
+        arr_x: Any,
+        scal_b: float | None,
+        arr_y: Any = None,
+        *,
+        size: int,
+        dtype: str = "f64",
+        inplace: bool = False,
+    ):
+        pass
 
 
 class NumpyCoeffBackend(CoeffBackend):
     """implement the backend for 'Numpy'"""
 
-    def coeff_new_array(self, size, dtype="f64"):
-        return np.zeros(size), np.zeros(size)
+    def coeff_new_array(self, size: int, dtype: str = "f64"):
+        return np.zeros(size)
+
+    def coeff_from_numpy(
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str = "f64",
+    ) -> None:
+        pass
+
+    def coeff_to_numpy(
+        self, coeff_like: Any, size: int, dtype: str = "f64"
+    ) -> np.ndarray:
+        return np.zeros(size)
+
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float | None,
+        arr_x: Any,
+        scal_b: float | None,
+        arr_y: Any = None,
+        *,
+        size: int,
+        dtype: str = "f64",
+        inplace: bool = False,
+    ):
+        pass
 
 
 class FortranCoeffBackend(CoeffBackend):
     """implement the backend for 'Fortran'"""
 
-    def coeff_new_array(self, size, dtype="f64"):
-        return np.zeros(size), np.zeros(size)
+    def coeff_new_array(self, size: int, dtype: str = "f64"):
+        return np.zeros(size)
+
+    def coeff_from_numpy(
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str = "f64",
+    ) -> None:
+        pass
+
+    def coeff_to_numpy(
+        self, coeff_like: Any, size: int, dtype: str = "f64"
+    ) -> np.ndarray:
+        return np.zeros(size)
+
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float | None,
+        arr_x: Any,
+        scal_b: float | None,
+        arr_y: Any = None,
+        *,
+        size: int,
+        dtype: str = "f64",
+        inplace: bool = False,
+    ):
+        pass
 
 
 class CupyCoeffBackend(CoeffBackend):
     """implement the backend for 'Cupy'"""
 
-    def coeff_new_array(self, size, dtype="f64"):
+    def coeff_new_array(self, size: int, dtype: str = "f64"):
         print(size)
-        return cp.zeros(size), cp.zeros(size)
+        return cp.zeros(size)
+
+    def coeff_from_numpy(
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str = "f64",
+    ) -> None:
+        pass
+
+    def coeff_to_numpy(
+        self, coeff_like: Any, size: int, dtype: str = "f64"
+    ) -> np.ndarray:
+        return np.zeros(size)
+
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float | None,
+        arr_x: Any,
+        scal_b: float | None,
+        arr_y: Any = None,
+        *,
+        size: int,
+        dtype: str = "f64",
+        inplace: bool = False,
+    ):
+        pass
 
 
 class OpenClCoeffBackend(CoeffBackend):
@@ -173,16 +303,11 @@ class OpenClCoeffBackend(CoeffBackend):
 
         self._cl_mflag = cl.mem_flags
 
-    def coeff_new_array(self, size, dtype="f64"):
+    def coeff_new_array(self, size: int, dtype: str = "f64"):
         try:
             read_write = self._cl_mflag.READ_WRITE
 
-            real = cl.Buffer(
-                self._cl_cntxt,
-                read_write,
-                size=8 * size,  # size in bytes
-            )
-            imag = cl.Buffer(
+            floats = cl.Buffer(
                 self._cl_cntxt,
                 read_write,
                 size=8 * size,  # size in bytes
@@ -190,4 +315,33 @@ class OpenClCoeffBackend(CoeffBackend):
         except cl.Error as e:
             warnings.warn("Failed to create OpenCL buffer: {}".format(str(e)))
             return (None, None)
-        return real, imag
+        return floats
+
+    def coeff_from_numpy(
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str = "f64",
+    ) -> None:
+        pass
+
+    def coeff_to_numpy(
+        self, coeff_like: Any, size: int, dtype: str = "f64"
+    ) -> np.ndarray:
+        return np.zeros(size)
+
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float | None,
+        arr_x: Any,
+        scal_b: float | None,
+        arr_y: Any = None,
+        *,
+        size: int,
+        dtype: str = "f64",
+        inplace: bool = False,
+    ):
+        pass

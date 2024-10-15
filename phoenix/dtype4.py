@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 15/10/2024, 09:20
-# Version:     0.0.1577
+# Last Update: 15/10/2024, 10:34
+# Version:     0.0.1607
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -77,7 +77,7 @@ class ADAA:
     """
 
     _IDENTIFIER = "COMPLEX_ARRAY"
-    BACKEND: CoeffBackend
+    BACKEND: CoeffBackend = None
 
     def __init__(self, size: int):
         self._size = size
@@ -96,9 +96,7 @@ class ADAA:
     @property
     def real(self):
         """Access protected attribute real."""
-        return self.BACKEND.coeff_safe_access(
-            reference=self._data_r, dtype="f64", size=self.size
-        )
+        return self._data_r
 
     @real.setter
     def real(self, arr):
@@ -109,9 +107,7 @@ class ADAA:
     @property
     def imag(self):
         """Access protected attribute imag."""
-        return self.BACKEND.coeff_safe_access(
-            reference=self._data_i, dtype="f64", size=self.size
-        )
+        return self._data_i
 
     @imag.setter
     def imag(self, arr):
@@ -165,11 +161,11 @@ class ADAA:
     def copy(self) -> ADAA:
         """Creates a real copy of self."""
         copy = self.__class__(self.size)
-        self.BACKEND.coeff_linop(
-            copy.real, 1.0, self.real, size=self.size, dtype="f64"
+        self.BACKEND.coeff_copy_data(
+            copy.real, self.real, size=self.size, dtype="f64"
         )
-        self.BACKEND.coeff_linop(
-            copy.imag, 1.0, self.imag, size=self.size, dtype="f64"
+        self.BACKEND.coeff_copy_data(
+            copy.imag, self.imag, size=self.size, dtype="f64"
         )
         return copy
 
@@ -257,11 +253,15 @@ class ADAA:
         self._data_r = self.BACKEND.coeff_new_array(size, dtype="f64")
         self._data_i = self.BACKEND.coeff_new_array(size, dtype="f64")
 
-    def __init_subclass__(cls, backend, identifier=None):
+    def __init_subclass__(cls, backend=None, identifier=None):
         """
         When a new subclass is derived, introduce the class
         variable _IDENTIFIER.
         """
+        if backend is None:
+            if cls.BACKEND is None:
+                raise ValueError("No backend specified.")
+            backend = cls.BACKEND  # get default
         cls.BACKEND = backend
         if identifier is None:
             identifier = cls.__name__
@@ -353,9 +353,15 @@ class DContainer:
         cls._LAYERS = layers
         return cls
 
-    def __getitem__(self, key):
-        assert key in self._layers
-        return self._layers[key]
+    def __getitem__(self, key: int | str):
+        if isinstance(key, str):
+            if key not in self._layers:
+                raise KeyError(f"Layer '{key}' not found")
+            return self._layers[key]
+        elif isinstance(key, int):
+            return self._layers[list(self._LAYERS.keys())[key]]
+        else:
+            raise TypeError("Key must be an integer or a string")
 
     def unpack(self, key, **kwargs):
         """unpack the requested layer"""
@@ -419,7 +425,7 @@ print(
     test["layer1"].unpack(),
     "\n",
     type(test["layer1"].unpack()[0]),
-    # type(test["layer1"].unpack()[0][0]),
+    type(test["layer1"].unpack()[0][0]),
     "\n",
 )
 
@@ -427,7 +433,7 @@ print(
     test["layer2"].unpack(),
     "\n",
     type(test["layer2"].unpack()[0]),
-    # type(test["layer2"].unpack()[0][0]),
+    type(test["layer2"].unpack()[0][0]),
     "\n",
 )
 
@@ -443,7 +449,7 @@ print(
     test["layer4"].unpack(),
     "\n",
     type(test["layer4"].unpack()[0]),
-    # type(test["layer4"].unpack()[0][0]),
+    type(test["layer4"].unpack()[0][0]),
     "\n",
 )
 
@@ -451,31 +457,15 @@ print(
     test["layer5"].unpack(),
     "\n",
     type(test["layer5"].unpack()[0]),
-    # type(test["layer5"].unpack()[0][0]),
+    type(test["layer5"].unpack()[0][0]),
     "\n",
 )
 
 
-# class MyLayerPurePy(PurePyADAA, identifier="PurePy2"):
-#     pass
+class TestADAA(PurePyADAA, identifier="TEST"):
+    pass
 
 
-# print(MyLayerPurePy._IDENTIFIER)
-
-# import gc
-
-
-# def free_mem(a):
-#     del a
-#     gc.collect()
-
-
-# import numpy as np
-
-
-# a = np.zeros(10)
-# print(a)
-
-# free_mem(a)
-
-# print(a)
+print(
+    test[0],
+)
