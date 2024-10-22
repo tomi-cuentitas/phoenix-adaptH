@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2024, 17:42
-# Version:     0.0.5
+# Last Update: 22/10/2024, 17:39
+# Version:     0.0.117
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,5 +33,93 @@ faucibus orci luctus et ultrices posuere cubilia curae.
 """
 
 
+from phoenix.fgen.instruction3 import InstructionGroup, Instruction
+from phoenix.keymap import KeyMap
+
+
+def neutral_generator(inp):
+    yield inp
+
+
+def outer(*lists, _accum=None):
+    if _accum is None:
+        _accum = []
+    if lists:
+        for elem in lists[0]:
+            yield from outer(*lists[1:], _accum=_accum + [elem])
+    else:
+        yield tuple(_accum)
+
+
 class Tomography:
     """Tomography class description"""
+
+    itype = None
+
+    def __init__(self, out_var, in_vars, **kwargs):
+        self.out_var = out_var
+        self.in_vars = in_vars
+        self.kwargs = kwargs
+        self.output_val_conv_func = None
+        self.input_key_conv_funcs = [neutral_generator for _ in in_vars]
+
+    @classmethod
+    def new(cls, itype, out_var, in_vars, **kwargs):
+        """create a new Tomography object, distinguish by itype"""
+        match itype:
+            case _:
+                # generic tomography
+                return Tomography(out_var, in_vars, **kwargs)
+
+    def get_input_key_combs(self):
+        """get all input key combinations as tuples"""
+        yield from outer(
+            *[list(in_var.KEYMAP.keys()) for in_var in self.in_vars]
+        )
+
+    def input_convert_from_keycomb(self, keycomb: tuple):
+        """convert the key kombination into proper input arguments"""
+        yield from outer(
+            *[
+                list(key_conv_func(key))
+                for key_conv_func, key in zip(
+                    self.input_key_conv_funcs, keycomb
+                )
+            ]
+        )
+
+    def output_convert_from_value(self, value):
+        """convert the output into a key and a complex split into real/imag"""
+        if self.output_val_conv_func is None:
+            yield value, 1.0, 0.0
+        else:
+            yield from self.output_val_conv_func(value)
+
+    def to_instruction(self, conv_outp, plain_inps):
+        """generate an instruction from the converted output and the inputs"""
+        # lookup input offsets
+        # lookup output offset
+        return Instruction()
+
+    def apply(self, function, parallel=0, verbose=True):
+        """apply automatically"""
+        all_instructions = []
+
+        # for all key combinations....
+        for inp_key_combs in self.get_input_key_combs():
+            # translate them into input arguments...
+            for converted_inps in self.input_convert_from_keycomb(
+                inp_key_combs
+            ):
+                # feed into function
+                return_value = function(*converted_inps)
+
+                # the return value is most likely not a key yet
+                for converted_output in self.output_convert_from_value(
+                    return_value
+                ):
+                    all_instructions.append(
+                        self.to_instruction(converted_output, inp_key_combs)
+                    )
+
+        return InstructionGroup(all_instructions, itype=self.itype)

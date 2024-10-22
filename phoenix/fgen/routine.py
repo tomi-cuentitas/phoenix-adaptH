@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 09/10/2024, 16:34
-# Version:     0.0.52
+# Last Update: 22/10/2024, 17:00
+# Version:     0.0.58
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -106,14 +106,15 @@ class Routine:
         with open(filename, "wb") as f:
             pickle.dump((self.checksum(), self.instruction_group), f)
 
+    # create a tomography object as in
+    # tomography = Tomography.new(itype, out_var, in_vars, **kwargs)
+
     @staticmethod
     def from_function(
         function,  # generating function
-        itype,  # function type
-        out_var,  # output var
-        in_vars,  # input vars
+        tomography: Tomography,
         identifier=None,  # identifier
-        parallel=True,  # use multiple cores for generation
+        parallel=0,  # use multiple cores for generation if > 0
         verbose=False,
         **kwargs,  # catch other arguments if any
     ):
@@ -121,19 +122,18 @@ class Routine:
 
         if identifier is None:
             identifier = function.__name__
-        tomography = Tomography.new(itype, out_var, in_vars, **kwargs)
 
         # change here: tomography will return an instruction group directly
         instruction_group = tomography.apply(
             function,
-            verbose=verbose,
             parallel=parallel,
+            verbose=verbose,
         )
         return Routine(
             identifier=identifier,
-            itype=itype,
-            out_var=out_var,
-            in_vars=in_vars,
+            itype=tomography.itype,
+            out_var=tomography.out_var,
+            in_vars=tomography.in_vars,
             instruction_group=instruction_group,
         )
 

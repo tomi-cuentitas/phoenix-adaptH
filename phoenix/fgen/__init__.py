@@ -3,11 +3,11 @@
 # from . import function
 # from . import library
 
-from .instruction3 import Instruction, InstructionGroup
-from .routine import Routine
-from .subroutine import Subroutine
-from .library import Library
-from .tomography import Tomography
+# from .instruction3 import Instruction, InstructionGroup
+# from .routine import Routine
+# from .subroutine import Subroutine
+# from .library import Library
+# from .tomography import Tomography
 
 # del instruction
 # del routine

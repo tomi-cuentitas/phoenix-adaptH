@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 14/10/2024, 10:41
-# Version:     0.0.2922
+# Last Update: 22/10/2024, 17:29
+# Version:     0.0.2923
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -383,6 +383,7 @@ class Domain:
 
         :returns: the size.
         """
+        self._update()
         return self._size
 
     def __str__(self):

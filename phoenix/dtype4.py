@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 15/10/2024, 10:34
-# Version:     0.0.1607
+# Last Update: 22/10/2024, 17:30
+# Version:     0.0.1671
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -59,6 +59,8 @@ from phoenix.backendwrappers import FortranCoeffBackend
 from phoenix.backendwrappers import CupyCoeffBackend
 from phoenix.backendwrappers import OpenClCoeffBackend
 
+from phoenix.keymap import KeyMap
+
 ZERO_TOL = 1e-14
 
 
@@ -78,8 +80,21 @@ class ADAA:
 
     _IDENTIFIER = "COMPLEX_ARRAY"
     BACKEND: CoeffBackend = None
+    KEYMAP: KeyMap = None
+    FIXED_SIZE = None
 
-    def __init__(self, size: int):
+    def __init__(self, size: int = 0):
+        if self.FIXED_SIZE is None and self.KEYMAP is None:
+            if not size:
+                raise ValueError("Size must be given or fixed.")
+        if self.FIXED_SIZE:
+            if size:
+                raise ValueError(f"Size is fixed ({self.FIXED_SIZE})")
+            size = self.FIXED_SIZE
+        if self.KEYMAP:
+            if size:
+                raise ValueError(f"Size is fixed by keymap {self.KEYMAP}")
+            size = self.KEYMAP.size
         self._size = size
         self._data_r = None
         self._data_i = None
@@ -253,7 +268,9 @@ class ADAA:
         self._data_r = self.BACKEND.coeff_new_array(size, dtype="f64")
         self._data_i = self.BACKEND.coeff_new_array(size, dtype="f64")
 
-    def __init_subclass__(cls, backend=None, identifier=None):
+    def __init_subclass__(
+        cls, backend=None, identifier=None, keymap=None, size=None
+    ):
         """
         When a new subclass is derived, introduce the class
         variable _IDENTIFIER.
@@ -261,11 +278,35 @@ class ADAA:
         if backend is None:
             if cls.BACKEND is None:
                 raise ValueError("No backend specified.")
-            backend = cls.BACKEND  # get default
-        cls.BACKEND = backend
+        else:
+            cls.BACKEND = backend
         if identifier is None:
-            identifier = cls.__name__
+            identifier = cls.__name__  # get default
         cls._IDENTIFIER = identifier
+        if size is not None and keymap is not None:
+            raise ValueError("Size and keymap cannot be set simultaneously.")
+        if keymap is not None:
+            cls.KEYMAP = keymap  # get default
+        if size is not None:
+            cls.FIXED_SIZE = size
+
+    @classmethod
+    def set_keymap(cls, keymap: KeyMap) -> type:
+        """derive a type with given keymap"""
+        if cls.FIXED_SIZE:
+            raise ValueError("Cannot set keymap when fixed size is given.")
+        if cls.KEYMAP is not None:
+            raise ValueError(f"KeyMap {cls.KEYMAP} already set.")
+        return type(cls._IDENTIFIER + f"<{keymap}>", (cls,), {}, keymap=keymap)
+
+    @classmethod
+    def fix_size(cls, size: int) -> type:
+        """derive a fixed size type"""
+        if cls.KEYMAP:
+            raise ValueError("Cannot derive fixed size when keymap is given.")
+        if cls.FIXED_SIZE:
+            raise ValueError(f"Fixed size {cls.FIXED_SIZE} already set.")
+        return type(cls._IDENTIFIER + f"[{size}]", (cls,), {}, size=size)
 
     ###########################################################################
     #
@@ -462,10 +503,17 @@ print(
 )
 
 
-class TestADAA(PurePyADAA, identifier="TEST"):
+class TestADAA(PurePyADAA, identifier="test"):
     pass
 
 
 print(
     test[0],
 )
+
+FixedSizeTest = TestADAA.fix_size(42)
+
+foo_object = FixedSizeTest()
+
+print(foo_object.identifier)
+print(len(foo_object))
