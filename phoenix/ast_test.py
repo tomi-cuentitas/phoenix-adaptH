@@ -5,15 +5,11 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/10/2024
-# Last Update: 11/10/2024, 13:26
-# Version:     0.0.310
+# Last Update: 22/10/2024, 15:40
+# Version:     0.0.410
 #
 #################################################end#of#autoheader#do#not#modify
 
-
-TODO:
-I need a to_str function to properly translate all nodes that come in, so I do
-not have to resolve display names for nodes all over the place
 
 """
 import ast
@@ -35,8 +31,17 @@ class Node:
             else:
                 yield from Node(child).scan_nodes()
 
+    def to_str(self):
+        if isinstance(self.node, ast.Attribute):
+            return str(self.node.value.id)
+        if isinstance(self.node, ast.Constant):
+            return str(self.node.value)
+        if isinstance(self.node, ast.Name):
+            return str(self.node.id)
+        return None
 
-class ImportantNode(Node):
+
+class NamedNode(Node):
     def __init__(self, node, name=None):
         super().__init__(node)
         self.name = name
@@ -55,20 +60,37 @@ class ImportantNode(Node):
                 yield node
 
 
-class ClassNode(ImportantNode):
+class AttributeNode(NamedNode):
+    def __init__(self, node):
+        super().__init__(node, name=node.name)
+
+
+class ClassNode(NamedNode):
     def __init__(self, node):
         super().__init__(node, name=node.name)
         self.parents = [
             parent.id for parent in node.bases if isinstance(parent, ast.Name)
         ]
 
+    def to_str(self):
+        inheritance_string = ""
+        if self.parents:
+            inheritance_string = f"({', '.join(self.parents)})"
+        return (
+            f"CLASS {self.name}"
+            + inheritance_string
+            + "\n"
+            + "\n".join(
+                ("  " + function.to_str() for function in self.functions)
+            )
+            + "\n"
+        )
 
-class FunctionNode(ImportantNode):
+
+class FunctionNode(NamedNode):
     def __init__(self, node):
         super().__init__(node, name=node.name)
         self.args = [arg.arg for arg in node.args.args]
-        # print(dir(node.args))
-        # print(self.name)
         # print("args", node.args.args)
         # print("defaults", node.args.defaults)
         # print("kw_defaults", node.args.kw_defaults)
@@ -81,45 +103,37 @@ class FunctionNode(ImportantNode):
             for deco in node.decorator_list
             if isinstance(deco, ast.Name)
         ]
-        self.returns = node.returns
-        # print(self.name)
-        # print(dir(self.node))
+        self.returns = None
         if node.returns:
-            if isinstance(node.returns, ast.Constant):
-                self.returns = str(node.returns.value)
-            elif isinstance(node.returns, ast.Name):
-                self.returns = str(node.returns.id)
-            elif isinstance(node.returns, ast.Subscript):
-                self.returns = str(node.returns.value.id)
+            self.returns = Node(node.returns).to_str()
+
+    def to_str(self):
+        decostring = []
+        for deco in self.decorators:
+            # print(f"  @{deco}")
+            decostring += [f"{deco}"]
+        if decostring:
+            decostring = f"<<{', '.join(decostring)}>> "
+        else:
+            decostring = ""
+        returns_string = ""
+        if self.returns:
+            returns_string = f" -> {self.returns}"
+        return f"def {decostring}{self.name}({', '.join(self.args)}){returns_string}"
 
 
 if __name__ == "__main__":
-    with open("keymap.py", "r") as file:
+    with open("backendwrappers.py", "r") as file:
         tree = ast.parse(file.read())
 
     main = Node(tree)
 
     for node in main.scan_nodes():
         if isinstance(node, FunctionNode):
-            print("FUNCTION", node.name)
+            print(node.to_str())
             print()
         if isinstance(node, ClassNode):
-            inheritance_string = ""
-            if node.parents:
-                inheritance_string = f"({', '.join(node.parents)})"
-            print(f"CLASS {node.name}" + inheritance_string)
-            print()
-            for function in node.functions:
-                for deco in function.decorators:
-                    print(f"  @{deco}")
-                returns_string = ""
-                if function.returns:
-                    returns_string = f" -> {function.returns}"
-                print(
-                    f"  def {function.name}({', '.join(function.args)}){returns_string}"
-                )
-                print()
-            print()
+            print(node.to_str())
 
     # print()
 

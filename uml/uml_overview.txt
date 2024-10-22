@@ -1,0 +1,184 @@
+===============================================================================
+DTYPE
+===============================================================================
+
+CLASS ADAA
+  def __init__(self, size)
+  def <<property>> real(self)
+  def real(self, arr)
+  def <<property>> imag(self)
+  def imag(self, arr)
+  def <<property>> identifier(self) -> str
+  def <<property>> size(self) -> int
+  def to_zero(self)
+  def <<classmethod>> from_numpy(cls, arr) -> ADAA
+  def to_numpy(self) -> np
+  def unpack(self) -> tuple
+  def copy(self) -> ADAA
+  def <<classmethod>> allclose(cls, op_a, op_b, rtol, atol)
+  def <<classmethod>> basic_linop(op_a, sc_b, op_c, size)
+  def free_memory(self)
+  def _reinit(self, size)
+  def reinit(self, size)
+  def __init_subclass__(cls, backend, identifier)
+  def __add__(self, other)
+  def __sub__(self, other)
+  def __mul__(self, other)
+  def __truediv__(self, other)
+  def __rmul__(self, other)
+  def __neg__(self)
+  def __len__(self)
+  def __bool__(self)
+  def __eq__(self, other)
+  def __del__(self)
+
+CLASS DContainer
+  def __init__(self)
+  def __init_subclass__(cls)
+  def __getitem__(self, key)
+  def unpack(self, key)
+  def unpack_multi(self, keys)
+  
+
+===============================================================================
+BACKEND
+===============================================================================
+
+CLASS CoeffBackend
+  def __init__(self)
+  def coeff_add(self, co_r, co_a, co_b, size, dtype) -> None
+  def coeff_smul(self, co_r, co_a, scal, size, dtype) -> None
+  def coeff_to_zero(self, coeff_like, size, dtype)
+  def coeff_copy_data(self, targ, source, size, dtype)
+  def coeff_free(self, reference, size, dtype)
+  def coeff_allclose(self, coeff_a, coeff_b, atol, rtol, size, dtype) -> bool
+  def <<abstractmethod>> coeff_new_array(self, size, dtype) -> Any
+  def <<abstractmethod>> coeff_from_numpy(self, coeff_like, nparray, size, dtype) -> None
+  def <<abstractmethod>> coeff_to_numpy(self, coeff_like, size, dtype) -> np
+  def <<abstractmethod>> coeff_linop(scal_a, arr_x, scal_b, arr_y)
+
+CLASS PurePyCoeffBackend(CoeffBackend)
+  def coeff_new_array(self, size, dtype)
+  def coeff_from_numpy(self, coeff_like, nparray, size, dtype) -> None
+  def coeff_to_numpy(self, coeff_like, size, dtype) -> np
+  def coeff_linop(scal_a, arr_x, scal_b, arr_y)
+
+CLASS NumpyCoeffBackend(CoeffBackend)
+  def coeff_new_array(self, size, dtype)
+  def coeff_from_numpy(self, coeff_like, nparray, size, dtype) -> None
+  def coeff_to_numpy(self, coeff_like, size, dtype) -> np
+  def coeff_linop(scal_a, arr_x, scal_b, arr_y)
+
+CLASS FortranCoeffBackend(CoeffBackend)
+  def coeff_new_array(self, size, dtype)
+  def coeff_from_numpy(self, coeff_like, nparray, size, dtype) -> None
+  def coeff_to_numpy(self, coeff_like, size, dtype) -> np
+  def coeff_linop(scal_a, arr_x, scal_b, arr_y)
+
+CLASS CupyCoeffBackend(CoeffBackend)
+  def coeff_new_array(self, size, dtype)
+  def coeff_from_numpy(self, coeff_like, nparray, size, dtype) -> None
+  def coeff_to_numpy(self, coeff_like, size, dtype) -> np
+  def coeff_linop(scal_a, arr_x, scal_b, arr_y)
+
+CLASS OpenClCoeffBackend(CoeffBackend)
+  def __init__(self)
+  def coeff_new_array(self, size, dtype)
+  def coeff_from_numpy(self, coeff_like, nparray, size, dtype) -> None
+  def coeff_to_numpy(self, coeff_like, size, dtype) -> np
+  def coeff_linop(scal_a, arr_x, scal_b, arr_y)
+
+
+===============================================================================
+KEYMAP
+===============================================================================
+
+def autoname(function) -> Callable
+
+CLASS _KeySegment
+  def __init__(self, label, parent)
+  def __init_subclass__(cls, parent)
+  def __hash__(self) -> int
+  def __eq__(self, other) -> bool
+  def <<property>> label(self) -> Any
+  def <<property>> parent(self) -> <ast.BinOp object at 0x7bf120bd7ad0>
+  def __repr__(self) -> str
+
+CLASS _ForbiddenKey(_KeySegment)
+  def __new__(cls)
+
+CLASS Key
+  def __init__(self)
+  def <<property>> labels(self) -> Tuple
+  def <<property>> parents(self) -> Tuple
+  def onlylabel(self) -> Any
+  def _as_list(self, tagged) -> List
+  def _unchain(self, tagged) -> Generator
+  def __hash__(self) -> int
+  def __eq__(self, other) -> bool
+  def __repr__(self) -> str
+  def __str__(self) -> str
+  def __or__(self, other) -> Key
+  def __ror__(self, other) -> Key
+  def __len__(self) -> int
+
+CLASS Domain
+  def <<autoname>> __init__(self)
+  def <<property>> name(self) -> str
+  def name(self, name)
+  def <<property>> size(self) -> int
+  def __str__(self)
+  def __repr__(self)
+  def __len__(self)
+  def _update(self) -> Self
+  def update(self) -> bool
+  def <<property>> is_ud(self) -> bool
+  def flag_ud(self)
+  def <<staticmethod>> from_file(filename) -> Domain
+  def to_file(self, filename) -> Self
+  def add_parent(self, parent) -> Self
+  def keys(self, recursive, prefix)
+  def items(self, recursive, prefix)
+  def values(self, recursive)
+
+CLASS KeyMap(Domain)
+  def <<autoname>> __init__(self)
+  def _reset(self)
+  def key()
+  def _tagged_keyseg(self, label)
+  def _create_keyseg_factory(self, name) -> Type
+  def reorder(self, function) -> Self
+  def entry()
+  def extend(self, domain, autorename)
+  def put(domain, no_override)
+  def _put(self, kseg, domain)
+  def _append(self, kseg, domain)
+  def _update(self)
+  def __getitem__(self, key)
+  def __contains__(self, keylike)
+  def _to_tagged_keyseg(self, keylike)
+  def keys(self, recursive, prefix)
+  def items(self, recursive, prefix)
+  def values(self, recursive)
+  def find(self)
+  def whats_at(self, offset, _collect)
+
+CLASS Region(KeyMap)
+  def __init__(self, size)
+  def put(domain, no_override)
+  def extend(self, domain, autorename)
+  def entry()
+  def reorder(self, function)
+
+CLASS Entry(Region)
+  def __init__(self)
+  def keys(self, recursive, prefix)
+  def items(self, recursive, prefix)
+  def values(self, recursive)
+  def _update(self)
+  def __len__(self)
+  def _create_keyseg_factory(self, name)
+  def reorder(self, function)
+  def put(domain, no_override)
+  def extend(self, domain, autorename)
+  def entry()
