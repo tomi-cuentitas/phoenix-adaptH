@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/10/2024
-# Last Update: 22/10/2024, 15:40
-# Version:     0.0.410
+# Last Update: 22/10/2024, 15:47
+# Version:     0.0.415
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -83,7 +83,6 @@ class ClassNode(NamedNode):
             + "\n".join(
                 ("  " + function.to_str() for function in self.functions)
             )
-            + "\n"
         )
 
 
@@ -122,39 +121,24 @@ class FunctionNode(NamedNode):
         return f"def {decostring}{self.name}({', '.join(self.args)}){returns_string}"
 
 
-if __name__ == "__main__":
-    with open("backendwrappers.py", "r") as file:
+def scan_document(filename):
+    with open(filename, "r") as file:
         tree = ast.parse(file.read())
 
     main = Node(tree)
 
+    ret = []
+
     for node in main.scan_nodes():
         if isinstance(node, FunctionNode):
-            print(node.to_str())
-            print()
+            ret.append(node.to_str())
+            ret.append("")
         if isinstance(node, ClassNode):
-            print(node.to_str())
+            ret.append(node.to_str())
+            ret.append("")
 
-    # print()
+    return "\n".join(ret)
 
-    # expList = []
 
-    # for this_class, node in yield_with_class_context(tree):
-    #     if isinstance(node, ast.FunctionDef):
-    #         expList.append(
-    #             (this_class, node.name, [arg.arg for arg in node.args.args])
-    #         )
-    #         # print(
-    #         #     # node,
-    #         #     node.name,
-    #         #     node.args,
-    #         #     node.returns,
-    #         #     node.decorator_list,
-    #         # )
-    #         # for arg in node.args.args:
-    #         #     print(f"\t argument '{arg.arg}'")
-
-    # # print(expList)
-
-    # for this_class, function_name, arg_list in expList:
-    #     print(f"{this_class}.{function_name}({', '.join(arg_list)})")
+if __name__ == "__main__":
+    print(scan_document("keymap.py"))
