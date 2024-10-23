@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/10/2024
-# Last Update: 15/10/2024, 12:33
-# Version:     0.0.66
+# Last Update: 23/10/2024, 14:29
+# Version:     0.0.117
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -64,7 +64,7 @@ class CoeffBackend(metaclass=ABCMeta):
         self, targ: Any, source: Any, size: int, dtype: str = "f64"
     ):
         """Copy the data from source to targ."""
-        self.coeff_smul(targ, source, 1.0, size=size, dtype=dtype)
+        self.coeff_linop(targ, None, source, size=size, dtype=dtype)
 
     def coeff_free(self, reference, size: int, dtype: str = "f64"):
         """free the memory at ref."""
@@ -151,7 +151,17 @@ class PurePyCoeffBackend(CoeffBackend):
     """implement the backend for 'PurePy'"""
 
     def coeff_new_array(self, size: int, dtype: str = "f64"):
-        return [0.0 for _ in range(size)]
+        match dtype:
+            case "f32":
+                return [0.0 for _ in range(size)]
+            case "f64":
+                return [0.0 for _ in range(size)]
+            case "i32":
+                return [0 for _ in range(size)]
+            case "i64":
+                return [0 for _ in range(size)]
+            case _:
+                raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_from_numpy(
         self,
@@ -160,12 +170,39 @@ class PurePyCoeffBackend(CoeffBackend):
         size: int,
         dtype: str = "f64",
     ) -> None:
-        pass
+        if dtype in ("f32", "f64"):
+            if nparray.dtype in [np.float32, np.float64]:
+                for num, val in enumerate(nparray):
+                    coeff_like[num] = float(val)
+            else:
+                raise ValueError(
+                    f"Wrong input datatype {nparray.dtype} for dtype {dtype}."
+                )
+        elif dtype in ("i32", "i64"):
+            if nparray.dtype in [np.int32, np.int64]:
+                for num, val in enumerate(nparray):
+                    coeff_like[num] = int(val)
+            else:
+                raise ValueError(
+                    f"Wrong input datatype {nparray.dtype} for dtype {dtype}."
+                )
+        else:
+            raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_to_numpy(
         self, coeff_like: Any, size: int, dtype: str = "f64"
     ) -> np.ndarray:
-        return np.zeros(size)
+        match dtype:
+            case "f32":
+                return np.array(coeff_like, dtype=np.float32)
+            case "f64":
+                return np.array(coeff_like, dtype=np.float64)
+            case "i32":
+                return np.array(coeff_like, dtype=np.int32)
+            case "i64":
+                return np.array(coeff_like, dtype=np.int64)
+            case _:
+                raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_linop(
         self,
@@ -180,14 +217,49 @@ class PurePyCoeffBackend(CoeffBackend):
         dtype: str = "f64",
         inplace: bool = False,
     ):
-        pass
+        match (inplace, scal_a):
+            case (True, None):
+                for num in range(size):
+                    arr_r[num] += arr_x[num]
+            case (True, scal_a):
+                for num in range(size):
+                    arr_r[num] += scal_a * arr_x[num]
+            case (False, None):
+                for num in range(size):
+                    arr_r[num] = arr_x[num]
+            case (False, scal_a):
+                for num in range(size):
+                    arr_r[num] = scal_a * arr_x[num]
+
+        match (scal_b, arr_y):
+            case (None, None):
+                return
+            case (None, arr_y):
+                for num in range(size):
+                    arr_r[num] += arr_y[num]
+            case (scal_b, None):
+                for num in range(size):
+                    arr_r[num] += scal_b
+            case (scal_b, arr_y):
+                for num in range(size):
+                    arr_r[num] += scal_b * arr_y[num]
 
 
 class NumpyCoeffBackend(CoeffBackend):
     """implement the backend for 'Numpy'"""
 
     def coeff_new_array(self, size: int, dtype: str = "f64"):
-        return np.zeros(size)
+        match dtype:
+            case "f32":
+                return np.zeros(size, dtype=np.float32)
+            case "f64":
+                return np.zeros(size, dtype=np.float64)
+            case "i32":
+                return np.zeros(size, dtype=np.int32)
+            case "i64":
+                return np.zeros(size, dtype=np.int64)
+            case _:
+                raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_from_numpy(
         self,
@@ -196,12 +268,37 @@ class NumpyCoeffBackend(CoeffBackend):
         size: int,
         dtype: str = "f64",
     ) -> None:
-        pass
+        if dtype in ("f32", "f64"):
+            if nparray.dtype in [np.float32, np.float64]:
+                coeff_like[:] = nparray
+            else:
+                raise ValueError(
+                    f"Wrong input datatype {nparray.dtype} for dtype {dtype}."
+                )
+        elif dtype in ("i32", "i64"):
+            if nparray.dtype in [np.int32, np.int64]:
+                coeff_like[:] = nparray
+            else:
+                raise ValueError(
+                    f"Wrong input datatype {nparray.dtype} for dtype {dtype}."
+                )
+        else:
+            raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_to_numpy(
         self, coeff_like: Any, size: int, dtype: str = "f64"
     ) -> np.ndarray:
-        return np.zeros(size)
+        match dtype:
+            case "f32":
+                return np.array(coeff_like, dtype=np.float32)
+            case "f64":
+                return np.array(coeff_like, dtype=np.float64)
+            case "i32":
+                return np.array(coeff_like, dtype=np.int32)
+            case "i64":
+                return np.array(coeff_like, dtype=np.int64)
+            case _:
+                raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_linop(
         self,
@@ -216,14 +313,32 @@ class NumpyCoeffBackend(CoeffBackend):
         dtype: str = "f64",
         inplace: bool = False,
     ):
-        pass
+        match (inplace, scal_a):
+            case (True, None):
+                arr_r += arr_x
+            case (True, scal_a):
+                arr_r += scal_a * arr_x
+            case (False, None):
+                arr_r = arr_x
+            case (False, scal_a):
+                arr_r = scal_a * arr_x
+
+        match (scal_b, arr_y):
+            case (None, None):
+                return
+            case (None, arr_y):
+                arr_r += arr_y
+            case (scal_b, None):
+                arr_r += scal_b
+            case (scal_b, arr_y):
+                arr_r += scal_b * arr_y
 
 
 class FortranCoeffBackend(CoeffBackend):
     """implement the backend for 'Fortran'"""
 
     def coeff_new_array(self, size: int, dtype: str = "f64"):
-        return np.zeros(size)
+        return NumpyCoeffBackend.coeff_new_array(self, size=size, dtype=dtype)
 
     def coeff_from_numpy(
         self,
@@ -232,12 +347,16 @@ class FortranCoeffBackend(CoeffBackend):
         size: int,
         dtype: str = "f64",
     ) -> None:
-        pass
+        return NumpyCoeffBackend.coeff_from_numpy(
+            self, coeff_like=coeff_like, nparray=nparray, size=size, dtype=dtype
+        )
 
     def coeff_to_numpy(
         self, coeff_like: Any, size: int, dtype: str = "f64"
     ) -> np.ndarray:
-        return np.zeros(size)
+        return NumpyCoeffBackend.coeff_to_numpy(
+            self, coeff_like=coeff_like, size=size, dtype=dtype
+        )
 
     def coeff_linop(
         self,
@@ -252,15 +371,34 @@ class FortranCoeffBackend(CoeffBackend):
         dtype: str = "f64",
         inplace: bool = False,
     ):
-        pass
+        return NumpyCoeffBackend.coeff_linop(
+            self,
+            arr_r,
+            scal_a=scal_a,
+            arr_x=arr_x,
+            scal_b=scal_b,
+            arr_y=arr_y,
+            size=size,
+            dtype=dtype,
+            inplace=inplace,
+        )
 
 
 class CupyCoeffBackend(CoeffBackend):
     """implement the backend for 'Cupy'"""
 
     def coeff_new_array(self, size: int, dtype: str = "f64"):
-        print(size)
-        return cp.zeros(size)
+        match dtype:
+            case "f32":
+                return cp.zeros(size, dtype=cp.float32)
+            case "f64":
+                return cp.zeros(size, dtype=cp.float64)
+            case "i32":
+                return cp.zeros(size, dtype=cp.int32)
+            case "i64":
+                return cp.zeros(size, dtype=cp.int64)
+            case _:
+                raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_from_numpy(
         self,
@@ -269,12 +407,37 @@ class CupyCoeffBackend(CoeffBackend):
         size: int,
         dtype: str = "f64",
     ) -> None:
-        pass
+        if dtype in ("f32", "f64"):
+            if nparray.dtype in [np.float32, np.float64]:
+                coeff_like[:] = cp.asarray(nparray)
+            else:
+                raise ValueError(
+                    f"Wrong input datatype {nparray.dtype} for dtype {dtype}."
+                )
+        elif dtype in ("i32", "i64"):
+            if nparray.dtype in [np.int32, np.int64]:
+                coeff_like[:] = cp.asarray(nparray)
+            else:
+                raise ValueError(
+                    f"Wrong input datatype {nparray.dtype} for dtype {dtype}."
+                )
+        else:
+            raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_to_numpy(
         self, coeff_like: Any, size: int, dtype: str = "f64"
     ) -> np.ndarray:
-        return np.zeros(size)
+        match dtype:
+            case "f32":
+                return np.array(coeff_like.asnumpy(), dtype=np.float32)
+            case "f64":
+                return np.array(coeff_like.asnumpy(), dtype=np.float64)
+            case "i32":
+                return np.array(coeff_like.asnumpy(), dtype=np.int32)
+            case "i64":
+                return np.array(coeff_like.asnumpy(), dtype=np.int64)
+            case _:
+                raise ValueError(f"dtype {dtype} not understood")
 
     def coeff_linop(
         self,
@@ -289,7 +452,25 @@ class CupyCoeffBackend(CoeffBackend):
         dtype: str = "f64",
         inplace: bool = False,
     ):
-        pass
+        match (inplace, scal_a):
+            case (True, None):
+                arr_r += arr_x
+            case (True, scal_a):
+                arr_r += scal_a * arr_x
+            case (False, None):
+                arr_r = arr_x
+            case (False, scal_a):
+                arr_r = scal_a * arr_x
+
+        match (scal_b, arr_y):
+            case (None, None):
+                return
+            case (None, arr_y):
+                arr_r += arr_y
+            case (scal_b, None):
+                arr_r += scal_b
+            case (scal_b, arr_y):
+                arr_r += scal_b * arr_y
 
 
 class OpenClCoeffBackend(CoeffBackend):
@@ -324,12 +505,12 @@ class OpenClCoeffBackend(CoeffBackend):
         size: int,
         dtype: str = "f64",
     ) -> None:
-        pass
+        raise NotImplementedError()
 
     def coeff_to_numpy(
         self, coeff_like: Any, size: int, dtype: str = "f64"
     ) -> np.ndarray:
-        return np.zeros(size)
+        raise NotImplementedError()
 
     def coeff_linop(
         self,
@@ -344,4 +525,4 @@ class OpenClCoeffBackend(CoeffBackend):
         dtype: str = "f64",
         inplace: bool = False,
     ):
-        pass
+        raise NotImplementedError()
