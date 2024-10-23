@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 22/10/2024, 17:39
-# Version:     0.0.117
+# Last Update: 23/10/2024, 09:38
+# Version:     0.0.163
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -42,26 +42,47 @@ def neutral_generator(inp):
 
 
 def outer(*lists, _accum=None):
+    """
+    An outer product of lists.
+    yields any combination of exactly one element from every input list.
+    During the process, the lists may be iterated through multiple times,
+    so in the first call, it converts potential generators into lists.
+    """
     if _accum is None:
-        _accum = []
+        # this is the first call. convert into lists and reset _accum
+        yield from outer([list(input_list) for input_list in lists], _accum=[])
     if lists:
+        # if there's still levels to work on, do another iteration
         for elem in lists[0]:
             yield from outer(*lists[1:], _accum=_accum + [elem])
     else:
+        # break recursion here
         yield tuple(_accum)
 
 
 class Tomography:
-    """Tomography class description"""
+    """
+    The Tomography class implements a simple analysis tool that, applied to
+    functions, extracts information on how these functions work when they are
+    fed any combination of potential input arguments from a discrete set.
+    """
 
     itype = None
 
     def __init__(self, out_var, in_vars, **kwargs):
         self.out_var = out_var
         self.in_vars = in_vars
+        try:
+            # extract keymap and lock it
+            self.out_keymap = self.out_var.KEYMAP.lock()
+            self.in_keymaps = [in_var.KEYMAP.lock() for in_var in self.in_vars]
+        except AttributeError as exc:
+            raise AttributeError(
+                "Error accessing keymap for variables"
+            ) from exc
         self.kwargs = kwargs
-        self.output_val_conv_func = None
-        self.input_key_conv_funcs = [neutral_generator for _ in in_vars]
+        self.out_ret2key_conv = neutral_generator
+        self.in_key2arg_convs = [neutral_generator for _ in in_vars]
 
     @classmethod
     def new(cls, itype, out_var, in_vars, **kwargs):
@@ -71,55 +92,51 @@ class Tomography:
                 # generic tomography
                 return Tomography(out_var, in_vars, **kwargs)
 
-    def get_input_key_combs(self):
+    def get_input_keycombs(self):
         """get all input key combinations as tuples"""
         yield from outer(
-            *[list(in_var.KEYMAP.keys()) for in_var in self.in_vars]
+            *[in_var.KEYMAP.keys(recursive=True) for in_var in self.in_vars]
         )
 
-    def input_convert_from_keycomb(self, keycomb: tuple):
+    def convert_keys_to_args(self, keycomb: tuple):
         """convert the key kombination into proper input arguments"""
         yield from outer(
             *[
-                list(key_conv_func(key))
-                for key_conv_func, key in zip(
-                    self.input_key_conv_funcs, keycomb
-                )
+                key2inp(key)
+                for key2inp, key in zip(self.in_key2arg_convs, keycomb)
             ]
         )
 
-    def output_convert_from_value(self, value):
-        """convert the output into a key and a complex split into real/imag"""
-        if self.output_val_conv_func is None:
-            yield value, 1.0, 0.0
-        else:
-            yield from self.output_val_conv_func(value)
+    def convert_ret_to_key(self, value):
+        """convert the output into a key and optionally numbers and more"""
+        yield from self.out_ret2key_conv(value)
 
-    def to_instruction(self, conv_outp, plain_inps):
+    def to_instruction(self, out_key, *inp_keys, **kwargs):
         """generate an instruction from the converted output and the inputs"""
-        # lookup input offsets
-        # lookup output offset
-        return Instruction()
+        return Instruction(
+            output_key=out_key,
+            **{
+                f"input{num}_key": inp_keys[num]
+                for num in range(len(inp_keys))
+            },
+            **kwargs,
+        )
 
     def apply(self, function, parallel=0, verbose=True):
         """apply automatically"""
         all_instructions = []
 
         # for all key combinations....
-        for inp_key_combs in self.get_input_key_combs():
+        for input_keycombs in self.get_input_keycombs():
             # translate them into input arguments...
-            for converted_inps in self.input_convert_from_keycomb(
-                inp_key_combs
-            ):
+            for converted_inps in self.convert_keys_to_args(input_keycombs):
                 # feed into function
                 return_value = function(*converted_inps)
 
                 # the return value is most likely not a key yet
-                for converted_output in self.output_convert_from_value(
-                    return_value
-                ):
+                for converted_output in self.convert_ret_to_key(return_value):
                     all_instructions.append(
-                        self.to_instruction(converted_output, inp_key_combs)
+                        self.to_instruction(converted_output, *input_keycombs)
                     )
 
         return InstructionGroup(all_instructions, itype=self.itype)

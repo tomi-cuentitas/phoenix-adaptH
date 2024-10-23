@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 22/10/2024, 17:29
-# Version:     0.0.2923
+# Last Update: 23/10/2024, 09:22
+# Version:     0.0.2960
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -361,6 +361,14 @@ class Domain:
         # start with False, better safe than sorry
         self._is_ud_flag = False
 
+        # domain can be locked for change
+        self._is_locked = False
+
+    @property
+    def is_locked(self) -> bool:
+        """check if the domain is locked"""
+        return self._is_locked
+
     @property
     def name(self) -> str:
         """
@@ -371,10 +379,13 @@ class Domain:
 
     @name.setter
     def name(self, name):
-        warnings.warn(
-            "Bad programmer, bad! But seriously, be careful with renaming."
-        )
-        self._name = name
+        if self.is_locked:
+            raise RuntimeError("Domain is locked!")
+        else:
+            warnings.warn(
+                "Bad programmer, bad! But seriously, be careful with renaming."
+            )
+            self._name = name
 
     @property
     def size(self) -> int:
@@ -427,6 +438,8 @@ class Domain:
 
         :returns: self, so you can chain calls.
         """
+        if self.is_locked:
+            raise ValueError("Cannot flag locked domain for update")
         self._is_ud_flag = False
         for parent in self._parents:
             parent.flag_ud()
@@ -516,6 +529,19 @@ class Domain:
         # we break the recursive call here.
         yield self
 
+    def lock(self) -> Self:
+        """
+        The domain can be locked to avoid further change.
+        Attempts an update before locking.
+
+        :returns: self, to place it in chained calls
+        """
+        self.update()
+        for content in self._content:
+            content.lock()
+        self._is_locked = True
+        return self
+
 
 ###############################################################################
 #
@@ -555,6 +581,7 @@ class KeyMap(Domain):
 
     def _reset(self):
         """Reset anything that has to do with counters and offsets."""
+        assert not self._is_locked
         self._is_ud_flag = False
         self._size = 0
         self._pos2dom = []
@@ -601,6 +628,8 @@ class KeyMap(Domain):
         :param function: the sorting function
         :returns: self, so you can chain calls
         """
+        if self.is_locked:
+            raise ValueError("Cannot reorder locked KeyMap")
         aux = sorted(
             [
                 (sort_id, key, keymap)
@@ -618,6 +647,8 @@ class KeyMap(Domain):
 
         :param keylike: the key to add
         :returns: self, so you can chain calls"""
+        if self.is_locked:
+            raise ValueError("Cannot add entry to a locked domain")
         key = self.key(keylike)
         self.put(key, Entry(name=key.onlylabel()))
         return self
@@ -633,6 +664,8 @@ class KeyMap(Domain):
                            already taken.
         :returns: self, so you can chain calls.
         """
+        if self.is_locked:
+            raise ValueError("Cannot extend locked domain")
         if not isinstance(domain, Domain):
             raise ValueError("Not a Domain")
         name = domain.name
@@ -664,6 +697,9 @@ class KeyMap(Domain):
                             exists.
         :returns: self, so you can chain calls.
         """
+
+        if self.is_locked:
+            raise ValueError("Cannot add to a locked domain")
 
         # use a kseg from this map
         kseg = self._to_tagged_keyseg(keylike)
@@ -878,7 +914,7 @@ class Region(KeyMap):
             "Placing in regions is not suppoerted. Use 'entry' instead."
         )
 
-    def extend(self, domain, autorename=None):
+    def extend(self, domain, autorename=False):
         """
         Regions are internally managed, so this will raise an Exception.
 
@@ -899,6 +935,8 @@ class Region(KeyMap):
         allowed. However, to provide consistency, entries can be generated from
         keylike labels.
         """
+        if self.is_locked:
+            raise ValueError("Cannot add new entry to a locked domain")
         if keylike is None:
             entry = Entry(name=f"{self.name}@{self._counter}")
         else:
