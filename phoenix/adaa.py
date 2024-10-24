@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/10/2024, 15:10
-# Version:     0.0.1758
+# Last Update: 24/10/2024, 15:28
+# Version:     0.0.1768
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,6 +25,9 @@ TODO:
         "PURE" is  passed as an initializer. Check how ADAA is best implemented
         to have a choice of hardware
 """
+
+# pylint: disable=too-many-arguments
+
 
 from __future__ import annotations
 
@@ -45,21 +48,13 @@ factually wrong.
 
 """
 
-# pylint: disable=too-many-arguments
 
 from typing import Type
-import warnings
 import numpy as np
 
-
-from phoenix.backendwrappers import CoeffBackend
-from phoenix.backendwrappers import PurePyCoeffBackend
-from phoenix.backendwrappers import NumpyCoeffBackend
-from phoenix.backendwrappers import FortranCoeffBackend
-from phoenix.backendwrappers import CupyCoeffBackend
-from phoenix.backendwrappers import OpenClCoeffBackend
-
+from phoenix.coeffbackend import CoeffBackend
 from phoenix.keymap import KeyMap
+
 
 ZERO_TOL = 1e-14
 
@@ -388,130 +383,7 @@ class ADAA:
 ###############################################################################
 
 
-class PurePyADAA(ADAA, backend=PurePyCoeffBackend(), identifier="PUREPYTHON"):
-    """Pure Python data layer"""
-
-
-class NumpyADAA(ADAA, backend=NumpyCoeffBackend(), identifier="NUMPY"):
-    """Numpy based data layer"""
-
-
-class FortranADAA(ADAA, backend=FortranCoeffBackend(), identifier="FORTRAN"):
-    """FORTRAN based data layer (implemented via NumPy)"""
-
-
-class CupyADAA(ADAA, backend=CupyCoeffBackend(), identifier="CUPY"):
-    """Cupy based data layer"""
-
-
-class OpenClADAA(ADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"):
-    """Cupy based data layer"""
-
-
 #
-
-
-class DContainer:
-    """DContainer class description"""
-
-    _LAYERS: dict[str, ADAA] = {}
-
-    def __init__(self, *sizes):
-        if len(sizes) != len(self._LAYERS):
-            raise ValueError("Sizes must match the number of layers")
-        self._layers = {
-            key: layer(size)
-            for (key, layer), size in zip(self._LAYERS.items(), sizes)
-        }
-
-    def __init_subclass__(cls, **layers):
-        cls._LAYERS = layers
-        return cls
-
-    def __getitem__(self, key: int | str):
-        if isinstance(key, str):
-            if key not in self._layers:
-                raise KeyError(f"Layer '{key}' not found")
-            return self._layers[key]
-        elif isinstance(key, int):
-            return self._layers[list(self._LAYERS.keys())[key]]
-        else:
-            raise TypeError("Key must be an integer or a string")
-
-    def unpack(self, key, **kwargs):
-        """unpack the requested layer"""
-        assert key in self._layers
-        return self._layers[key].unpack(**kwargs)
-
-    def unpack_multi(self, keys, **kwargs):
-        """unpack the requested layer"""
-        for key in keys:
-            assert key in self._layers
-        return [self._layers[key].unpack(**kwargs) for key in keys]
-
-
-class DLC(DContainer):
-    """Dual Layer Container class. Implements host-device interaction"""
-
-
-class SDLC(DLC):
-    """Synced Dual Layer Container class"""
-
-
-class Foo(
-    DContainer,
-    layer1=PurePyADAA,
-    layer2=NumpyADAA,
-    layer3=OpenClADAA,
-    layer4=CupyADAA,
-    layer5=FortranADAA,
-):
-    pass
-
-
-# print(Foo._LAYERS)
-
-# test = Foo(10, 12, 14, 16, 9)
-
-# print(
-#     test["layer1"].unpack(),
-#     "\n",
-#     type(test["layer1"].unpack()[0]),
-#     type(test["layer1"].unpack()[0][0]),
-#     "\n",
-# )
-
-# print(
-#     test["layer2"].unpack(),
-#     "\n",
-#     type(test["layer2"].unpack()[0]),
-#     type(test["layer2"].unpack()[0][0]),
-#     "\n",
-# )
-
-# print(
-#     test["layer3"].unpack(),
-#     "\n",
-#     type(test["layer3"].unpack()[0]),
-#     "<skip unpacking the cl buffer>",
-#     "\n",
-# )
-
-# print(
-#     test["layer4"].unpack(),
-#     "\n",
-#     type(test["layer4"].unpack()[0]),
-#     type(test["layer4"].unpack()[0][0]),
-#     "\n",
-# )
-
-# print(
-#     test["layer5"].unpack(),
-#     "\n",
-#     type(test["layer5"].unpack()[0]),
-#     type(test["layer5"].unpack()[0][0]),
-#     "\n",
-# )
 
 
 # class TestADAA(PurePyADAA, identifier="test"):

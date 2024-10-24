@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 09/10/2024, 17:25
-# Version:     0.0.592
+# Last Update: 24/10/2024, 14:54
+# Version:     0.0.593
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,7 +15,6 @@
 
 __doc__ = """
 Instruction module description
-==============================
 
 """
 
@@ -198,7 +197,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return {key: self.get(key, defaults.get(key, None)) for key in keys}
+            return {
+                key: self.get(key, defaults.get(key, None)) for key in keys
+            }
         return {
             key: self.get(key, defaults.get(key, None)) for key in self.keys()
         }
@@ -209,7 +210,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 23/10/2024, 09:38
-# Version:     0.0.163
+# Last Update: 24/10/2024, 15:09
+# Version:     0.0.164
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,18 +17,6 @@ __doc__ = """
 Tomography module description
 =============================
 
-Lorem ipsum dolor sit amet, consectetur adipiscing elit. Phasellus nisl lectus,
-gravida ut risus id, tincidunt pretium arcu. Duis tortor nulla, mattis ac leo
-id, pharetra imperdiet odio. Aliquam sit amet nisl sed nulla luctus commodo eget
-a est. Quisque iaculis sapien eget metus dignissim congue. Suspendisse cursus
-orci ex, a malesuada tellus laoreet in. Nulla eu metus vitae nunc vehicula
-consequat a ac erat. Phasellus fringilla tristique magna, sed fermentum enim
-malesuada eget. Curabitur mauris diam, vehicula ac odio a, lobortis ultrices
-dolor. Vivamus posuere, sem in egestas aliquam, lacus lorem aliquet sapien,
-quis tincidunt libero sem ac augue. Mauris eget rhoncus urna. Donec dapibus
-nulla lacus, at egestas ligula pulvinar nec. Quisque pellentesque fringilla sem
-ac molestie. Suspendisse convallis dolor felis. Vestibulum ante ipsum primis in
-faucibus orci luctus et ultrices posuere cubilia curae.
 
 """
 

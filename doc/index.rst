@@ -25,7 +25,7 @@ Module Overview
 dtype
 -----
 
-.. automodule:: phoenix.dtype2
+.. automodule:: phoenix.dtype4
    :members:
    :private-members:
 
