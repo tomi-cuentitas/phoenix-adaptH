@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   08/11/2024
-# Last Update: 12/11/2024, 19:21
-# Version:     0.0.905
+# Last Update: 12/11/2024, 19:29
+# Version:     0.0.930
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -356,28 +356,30 @@ class Scalar(Coeff):
     # ----------
 
     @classmethod
-    def _no_simplify_mul(cls, first, second) -> Scalar:
-        return cls(first._real * second._real)
+    def _no_simplify_mul(cls, first, second, polar=True) -> Scalar:
+        return cls(first._real * second._real, polar=polar)
         # TODO
 
     @classmethod
-    def _no_simplify_div(cls, first, second) -> Scalar:
-        return cls(first._real / second._real)
+    def _no_simplify_div(cls, first, second, polar=True) -> Scalar:
+        return cls(first._real / second._real, polar=polar)
         # TODO
 
     @classmethod
-    def _no_simplify_add(cls, first, second) -> Scalar:
-        return cls(first._real + second._real)
+    def _no_simplify_add(cls, first, second, polar=False) -> Scalar:
+        return cls(first._real + second._real, polar=polar)
         # TODO
 
     @classmethod
-    def _no_simplify_sub(cls, first, second) -> Scalar:
-        return cls(first._real - second._real)
+    def _no_simplify_sub(cls, first, second, polar=False) -> Scalar:
+        return cls(first._real - second._real, polar=polar)
         # TODO
 
     @classmethod
-    def _no_simplify_pow(cls, first, second) -> dict:
-        return cls(first._real**second._real)
+    def _no_simplify_pow(cls, first, number, polar=True) -> dict:
+        if polar is None:
+            polar = first.polar
+        return cls(first._real**number, polar=polar)
         # TODO
 
     # binary special
@@ -386,55 +388,82 @@ class Scalar(Coeff):
     def __mul__(self, other):
         if not isinstance(other, Scalar):
             other = self.__class__(other)
-
-        print(self.unpack())
-        print(other.unpack())
-        return self._no_simplify_mul(self, other).simplify()
+        polar = self.polar or other.polar
+        return self._no_simplify_mul(self, other, polar=polar).simplify()
 
     def __div__(self, other):
         if not isinstance(other, Scalar):
             other = self.__class__(other)
-        return self._no_simplify_div(self, other).simplify()
+        polar = self.polar or other.polar
+        return self._no_simplify_div(self, other, polar=polar).simplify()
 
     def __truediv__(self, other):
         if not isinstance(other, Scalar):
             other = self.__class__(other)
-        return self._no_simplify_div(self, other).simplify()
+        polar = self.polar or other.polar
+        return self._no_simplify_div(self, other, polar=polar).simplify()
 
     def __add__(self, other):
         if not isinstance(other, Scalar):
             other = self.__class__(other)
-        return self._no_simplify_add(self, other).simplify()
+        polar = self.polar and other.polar
+        return self._no_simplify_add(self, other, polar=polar).simplify()
 
     def __sub__(self, other):
         if not isinstance(other, Scalar):
             other = self.__class__(other)
-        return self._no_simplify_sub(self, other).simplify()
+        polar = self.polar and other.polar
+        return self._no_simplify_sub(self, other, polar=polar).simplify()
 
-    def __pow__(self, exponent):
-        return self._no_simplify_pow(self, exponent).simplify()
+    def __pow__(self, other):
+        if not isinstance(other, Scalar):
+            other = self.__class__(other)
+        assert other.is_numerical
+        assert other.is_real
+        polar = self.polar
+        return self._no_simplify_pow(self, other, polar=polar).simplify()
 
     # right side binary special
     # -------------------------
 
     # the __rx__ routines are called if the left operator has not routine x
     def __rmul__(self, other):
-        return self._no_simplify_mul(self.__class__(other), self).simplify()
+        polar = self.polar or other.polar
+        return self._no_simplify_mul(
+            self.__class__(other), self, polar=polar
+        ).simplify()
 
     def __rdiv__(self, other):
-        return self._no_simplify_div(self.__class__(other), self).simplify()
+        polar = self.polar or other.polar
+        return self._no_simplify_div(
+            self.__class__(other), self, polar=polar
+        ).simplify()
 
     def __rtruediv__(self, other):
-        return self._no_simplify_div(self.__class__(other), self).simplify()
+        polar = self.polar or other.polar
+        return self._no_simplify_div(
+            self.__class__(other), self, polar=polar
+        ).simplify()
 
     def __radd__(self, other):
-        return self._no_simplify_add(self.__class__(other), self).simplify()
+        polar = self.polar and other.polar
+        return self._no_simplify_add(
+            self.__class__(other), self, polar=polar
+        ).simplify()
 
     def __rsub__(self, other):
-        return self._no_simplify_sub(self.__class__(other), self).simplify()
+        polar = self.polar and other.polar
+        return self._no_simplify_sub(
+            self.__class__(other), self, polar=polar
+        ).simplify()
 
-    def __rpow__(self, exponent):
-        return self._no_simplify_pow(self, exponent).simplify()
+    def __rpow__(self, other):
+        assert self.is_numerical
+        assert self.is_real
+        polar = self.polar
+        return self._no_simplify_pow(
+            self.__class__(other), self, polar=polar
+        ).simplify()
 
     # non-binary special routines
     # ---------------------------
