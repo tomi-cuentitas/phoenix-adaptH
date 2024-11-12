@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   08/11/2024
-# Last Update: 12/11/2024, 19:15
-# Version:     0.0.877
+# Last Update: 12/11/2024, 19:21
+# Version:     0.0.905
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -114,7 +114,7 @@ class Scalar(Coeff):
     @autoconvert
     def __init__(
         self,
-        real: float = 1.0,
+        real: float = 0.0,
         imag: float = 0.0,
         rnom: int = 1,
         rden: int | None = None,
@@ -324,35 +324,6 @@ class Scalar(Coeff):
         self._ppol = value
         self.simplify()
 
-    def to_components(self, real=True, imag=True):
-        """generate a tuple to represent the scalar as real and imag"""
-        if self._symb:
-            raise ValueError("All symbol components must be substituted.")
-        # TODO
-        self.simplify()
-        zreal = None
-        zimag = None
-        return zreal, zimag
-
-    def to_polar(self, magnitude=True, phase=True):
-        """generate a tuple to represent the scalar as a polar"""
-        if self._symb:
-            raise ValueError("All symbol components must be substituted.")
-        # TODO
-        self.simplify()
-        magn = None
-        phas = None
-        return magn, phas
-
-    def to_python(self):
-        """generate the most tidy python numerical from the scalar"""
-        if self._symb:
-            raise ValueError("All symbol components must be substituted.")
-        real, imag = self.to_components(real=True, imag=True)
-        if abs(imag) > ZEROTOL:
-            return real + 1j * imag
-        return real
-
     @property
     def is_numerical(self):
         """check if the scalar is purely numerical, i.e. no symbols left"""
@@ -381,8 +352,8 @@ class Scalar(Coeff):
             "symb": self._symb,
         }
 
-    # binary special
-    # --------------
+    # binary aux
+    # ----------
 
     @classmethod
     def _no_simplify_mul(cls, first, second) -> Scalar:
@@ -408,6 +379,9 @@ class Scalar(Coeff):
     def _no_simplify_pow(cls, first, second) -> dict:
         return cls(first._real**second._real)
         # TODO
+
+    # binary special
+    # --------------
 
     def __mul__(self, other):
         if not isinstance(other, Scalar):
@@ -482,14 +456,50 @@ class Scalar(Coeff):
     def __float__(self) -> float:
         if not self.is_real:
             raise ValueError("Scalar is not a real number")
-        return self.real
+        return float(self.real)
 
     def __complex__(self) -> complex:
-        # TODO
         return self.real + 1j * self.imag
 
     # component access
     # ----------------
+
+    def to_components(self, real=True, imag=True):
+        """generate a tuple to represent the scalar as real and imag"""
+        if self._symb:
+            raise ValueError("All symbol components must be substituted.")
+        # TODO
+        self.simplify()
+        zreal = None
+        zimag = None
+        if real:
+            pass
+        if imag:
+            pass
+        return zreal, zimag
+
+    def to_polar(self, magnitude=True, phase=True):
+        """generate a tuple to represent the scalar as a polar"""
+        if self._symb:
+            raise ValueError("All symbol components must be substituted.")
+        # TODO
+        self.simplify()
+        magn = None
+        phas = None
+        if magnitude:
+            pass
+        if phase:
+            pass
+        return magn, phas
+
+    def to_python(self):
+        """generate the most tidy python numerical from the scalar"""
+        if self._symb:
+            raise ValueError("All symbol components must be substituted.")
+        real, imag = self.to_components(real=True, imag=True)
+        if abs(imag) > ZEROTOL:
+            return real + 1j * imag
+        return real
 
     @property
     def real(self):
@@ -507,7 +517,7 @@ class Scalar(Coeff):
         return self.to_components(real=False, imag=True)[1]
 
     @property
-    def magn(self):
+    def magnitude(self):
         """
         interpret as a complex number and return the magnitude of the polar
         representation of that number.
@@ -813,9 +823,6 @@ class MatrixBasis(Basis):
 
 
 if __name__ == "__main__":
-    a = Scalar(4)
-    print(a._real)
-    print(a._imag)
-
-    b = Scalar(a) * 2.0
+    a = Scalar(4.0)
+    b = a * 2.0 + 4.0
     print(b.unpack())
