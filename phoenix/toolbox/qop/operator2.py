@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   08/11/2024
-# Last Update: 12/11/2024, 18:22
-# Version:     0.0.739
+# Last Update: 12/11/2024, 19:15
+# Version:     0.0.877
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,13 +16,16 @@ However, their instances could have a __call__ routine to create subops from
 creation parameters
 """
 
-from typing import Self, Any
+from __future__ import annotations
+
+from typing import Self
 import math
 import cmath
 
 PI = 3.141592653589793
 TWOPI = 2 * PI
 HALFPI = PI / 2
+ZEROTOL = 1e-12
 
 
 def _reduce_fraction(nom: int, den: int | None):
@@ -32,6 +35,8 @@ def _reduce_fraction(nom: int, den: int | None):
         den = -den
         nom = -nom
     gcd = math.gcd(nom, den)
+    if den == gcd:
+        return nom // gcd, None
     return nom // gcd, den // gcd
 
 
@@ -40,8 +45,6 @@ class Coeff:
 
     This class is not supposed to be instantiated
     """
-
-    _ZTOL = 1e-12
 
     def mul_queue(self, *vals, **_kwargs) -> Self:
         """append the value to the scalar queue to be multiplied"""
@@ -62,25 +65,30 @@ class Coeff:
         )
 
 
-def _dismantle_python_intrinsic(number):
-    if isinstance(number, int):
-        return {"rnom": number}
-    elif isinstance(number, float):
-        return {"real": number, "imag": None}
-    elif isinstance(number, complex):
-        return {"real": number.real, "imag": number.imag}
-
-
 def autoconvert(func):
+    """
+    A wrapper to handle a proper copy mechanism if the first argument
+    of the init routine is a Scalar object itself.
+    If a 'first' arg is given, it is unpacked. If it is None, go on as usual.
+    In any case, the actual wrapped __init__ will not get a 'first' arg at any
+    point.
+    """
+
     def wrapper(self, first=None, /, **kwargs):
-        if first is not None:
-            if isinstance(first, Scalar):
-                return func(self, **first.unpack())
-            else:
-                num = complex(first)
-                return func(self, real=num.real, imag=num.imag, **kwargs)
-        else:
-            return func(self, **kwargs)
+        if first is None:
+            return func(self, **kwargs)  # ignore
+
+        # ok, so first is not None
+        if isinstance(first, Scalar):
+            return func(self, **first.unpack())
+
+        # ok, so not a scalar
+        if isinstance(first, int):
+            return func(self, rnom=first, **kwargs)
+        if isinstance(first, float):
+            return func(self, real=first, **kwargs)
+        num = complex(first)
+        return func(self, real=num.real, imag=num.imag, **kwargs)
 
     return wrapper
 
@@ -106,7 +114,7 @@ class Scalar(Coeff):
     @autoconvert
     def __init__(
         self,
-        real: float = 0.0,
+        real: float = 1.0,
         imag: float = 0.0,
         rnom: int = 1,
         rden: int | None = None,
@@ -117,7 +125,8 @@ class Scalar(Coeff):
         jpow: int = 0,
         nega: bool = False,
         symb: list[tuple[str, int | float]] | None = None,
-        polar=True,
+        polar=False,
+        simplify=True,
     ):
         self._nega = nega
         self._real = real
@@ -139,7 +148,14 @@ class Scalar(Coeff):
                     symb_dict[symbol] = 0
                 symb_dict[symbol] += exponent
         self._symb = symb_dict
-        self.simplify()
+        if simplify:
+            self.simplify()
+
+    def to_decimal(self) -> Self:
+        """rearrange all fraction content to decimals"""
+        # TODO
+        raise NotImplementedError("conversion to decimal not yet implemented")
+        # return self
 
     def simplify(
         self, floats=True, polar=True, symbol=True, fracs=True
@@ -153,7 +169,6 @@ class Scalar(Coeff):
             self._fracs_simplify()
         if symbol:
             self._symbol_simplify()
-        self._phase_collect()
         self._rearrange()
         return self
 
@@ -188,34 +203,28 @@ class Scalar(Coeff):
         """simplify the symbol part"""
         return self
 
-    def _phase_collect(self) -> Self:
-        """redistribute phase information"""
-        # make leading real part positive
-        if self._real < 0:
-            self._real *= -1
-            self._imag *= -1
-            self._nega = not self._nega
-        if self._nega:
-            self._jpow += 2
-            self._nega = False
-        self._jpow %= 4
-        if self.polar:
-            self._phas += self._jpow * HALFPI
-            self._jpow = 0
-        else:
-            self._phas
-
-        # mod 2pi
-        self._phas %= TWOPI
-        # exclude extra minus signs
-        return self
-
     def _rearrange(self) -> Self:
         """rearrange the decimal contributions between polar and non polar"""
+        # make leading real part positive
+        if self.polar:
+            # polar case catches global js and minus-sign
+            if self._nega:
+                self._jpow += 2
+                self._nega = False
+            # put j power into the exponent
+            self._phas += (self._jpow % 4) * HALFPI
+            self._jpow = 0
+        else:
+            self._jpow %= 4
+            # TODO:
+            # dissolve j to variables
+
+        self._phas %= TWOPI  # mod 2pi
         return self
 
-    def conjugate(self):
+    def conjugate(self) -> Scalar:
         """return a new scalar object that is the conjugate"""
+        # TODO
         raise NotImplementedError("operation not yet implemented")
 
     def mul_queue(self, *vals, simplify=True, **_kwargs) -> Self:
@@ -252,13 +261,11 @@ class Scalar(Coeff):
         for val in vals:
             if isinstance(val, int):
                 if self._rden is None:
-                    self._rden = val
-                else:
-                    self._rden *= val
+                    self._rden = 1
+                self._rden *= val
                 if self._iden is None:
-                    self._iden = val
-                else:
-                    self._iden *= val
+                    self._iden = 1
+                self._iden *= val
             elif isinstance(val, float):
                 if self.polar:
                     self._magn /= val
@@ -315,15 +322,48 @@ class Scalar(Coeff):
         if not isinstance(value, bool):
             raise ValueError("polar priority must be a boolean")
         self._ppol = value
-        self._rearrange()
+        self.simplify()
 
-    def to_polar(self):
-        """check if the scalar is polar"""
-        raise NotImplementedError("yet to be implemented")
+    def to_components(self, real=True, imag=True):
+        """generate a tuple to represent the scalar as real and imag"""
+        if self._symb:
+            raise ValueError("All symbol components must be substituted.")
+        # TODO
+        self.simplify()
+        zreal = None
+        zimag = None
+        return zreal, zimag
 
-    def to_components(self):
-        """check if the scalar is composed from real and imag"""
-        raise NotImplementedError("yet to be implemented")
+    def to_polar(self, magnitude=True, phase=True):
+        """generate a tuple to represent the scalar as a polar"""
+        if self._symb:
+            raise ValueError("All symbol components must be substituted.")
+        # TODO
+        self.simplify()
+        magn = None
+        phas = None
+        return magn, phas
+
+    def to_python(self):
+        """generate the most tidy python numerical from the scalar"""
+        if self._symb:
+            raise ValueError("All symbol components must be substituted.")
+        real, imag = self.to_components(real=True, imag=True)
+        if abs(imag) > ZEROTOL:
+            return real + 1j * imag
+        return real
+
+    @property
+    def is_numerical(self):
+        """check if the scalar is purely numerical, i.e. no symbols left"""
+        if self._symb:
+            return False
+        return True
+
+    @property
+    def is_real(self):
+        """check if the number is real. Symbols are assumed to be real"""
+        return abs(self.imag) < ZEROTOL
 
     def unpack(self):
         """unpack the generating values for the scalar"""
@@ -344,69 +384,108 @@ class Scalar(Coeff):
     # binary special
     # --------------
 
+    @classmethod
+    def _no_simplify_mul(cls, first, second) -> Scalar:
+        return cls(first._real * second._real)
+        # TODO
+
+    @classmethod
+    def _no_simplify_div(cls, first, second) -> Scalar:
+        return cls(first._real / second._real)
+        # TODO
+
+    @classmethod
+    def _no_simplify_add(cls, first, second) -> Scalar:
+        return cls(first._real + second._real)
+        # TODO
+
+    @classmethod
+    def _no_simplify_sub(cls, first, second) -> Scalar:
+        return cls(first._real - second._real)
+        # TODO
+
+    @classmethod
+    def _no_simplify_pow(cls, first, second) -> dict:
+        return cls(first._real**second._real)
+        # TODO
+
     def __mul__(self, other):
-        raise NotImplementedError("operation '__mul__' not implemented")
+        if not isinstance(other, Scalar):
+            other = self.__class__(other)
+
+        print(self.unpack())
+        print(other.unpack())
+        return self._no_simplify_mul(self, other).simplify()
 
     def __div__(self, other):
-        raise NotImplementedError("operation '__div__' not implemented")
+        if not isinstance(other, Scalar):
+            other = self.__class__(other)
+        return self._no_simplify_div(self, other).simplify()
 
     def __truediv__(self, other):
-        raise NotImplementedError("operation '__truediv__' not implemented")
+        if not isinstance(other, Scalar):
+            other = self.__class__(other)
+        return self._no_simplify_div(self, other).simplify()
 
     def __add__(self, other):
-        raise NotImplementedError("operation '__add__' not implemented")
+        if not isinstance(other, Scalar):
+            other = self.__class__(other)
+        return self._no_simplify_add(self, other).simplify()
 
     def __sub__(self, other):
-        raise NotImplementedError("operation '__sub__' not implemented")
+        if not isinstance(other, Scalar):
+            other = self.__class__(other)
+        return self._no_simplify_sub(self, other).simplify()
 
     def __pow__(self, exponent):
-        raise NotImplementedError("operation '__pow__' not implemented")
+        return self._no_simplify_pow(self, exponent).simplify()
 
     # right side binary special
     # -------------------------
 
     # the __rx__ routines are called if the left operator has not routine x
     def __rmul__(self, other):
-        raise NotImplementedError("operation '__rmul__' not implemented")
+        return self._no_simplify_mul(self.__class__(other), self).simplify()
 
     def __rdiv__(self, other):
-        raise NotImplementedError("operation '__rdiv__' not implemented")
+        return self._no_simplify_div(self.__class__(other), self).simplify()
 
     def __rtruediv__(self, other):
-        raise NotImplementedError("operation '__rtruediv__' not implemented")
+        return self._no_simplify_div(self.__class__(other), self).simplify()
 
     def __radd__(self, other):
-        raise NotImplementedError("operation '__radd__' not implemented")
+        return self._no_simplify_add(self.__class__(other), self).simplify()
 
     def __rsub__(self, other):
-        raise NotImplementedError("operation '__rsub__' not implemented")
+        return self._no_simplify_sub(self.__class__(other), self).simplify()
 
     def __rpow__(self, exponent):
-        raise NotImplementedError("operation '__rpow__' not implemented")
+        return self._no_simplify_pow(self, exponent).simplify()
 
     # non-binary special routines
     # ---------------------------
 
-    def __neg__(self):
-        raise NotImplementedError("operation '__neg__' not implemented")
+    def __neg__(self) -> Scalar:
+        return self.__class__(self).flip_sign().simplify()
 
-    def __abs__(self):
-        raise NotImplementedError("operation '__abs__' not implemented")
+    def __abs__(self) -> float:
+        return math.sqrt(self.real**2 + self.imag**2)
 
     # type casts
     # ----------
 
-    def __int__(self):
-        if abs(self.imag) > Scalar._ZTOL:
+    def __int__(self) -> int:
+        if not self.is_real:
             raise ValueError("Scalar is not a real number")
         return int(self.real)
 
-    def __float__(self):
-        if abs(self.imag) > Scalar._ZTOL:
+    def __float__(self) -> float:
+        if not self.is_real:
             raise ValueError("Scalar is not a real number")
         return self.real
 
-    def __complex__(self):
+    def __complex__(self) -> complex:
+        # TODO
         return self.real + 1j * self.imag
 
     # component access
@@ -417,7 +496,7 @@ class Scalar(Coeff):
         """
         interpret as a complex number and return the real part of that number.
         """
-        raise NotImplementedError("Cannot access 'real' property")
+        return self.to_components(real=True, imag=False)[0]
 
     @property
     def imag(self):
@@ -425,7 +504,7 @@ class Scalar(Coeff):
         interpret as a complex number and return the imaginary part of that
         number.
         """
-        raise NotImplementedError("Cannot access 'imag' property")
+        return self.to_components(real=False, imag=True)[1]
 
     @property
     def magn(self):
@@ -433,7 +512,7 @@ class Scalar(Coeff):
         interpret as a complex number and return the magnitude of the polar
         representation of that number.
         """
-        raise NotImplementedError("Cannot access 'magn' property")
+        return self.to_polar(magnitude=True, phase=False)[0]
 
     @property
     def phase(self):
@@ -441,7 +520,7 @@ class Scalar(Coeff):
         interpret as a complex number and return the phase of the polar
         representation of that number.
         """
-        raise NotImplementedError("Cannot access 'phas' property")
+        return self.to_polar(magnitude=False, phase=True)[1]
 
 
 '''
@@ -734,10 +813,9 @@ class MatrixBasis(Basis):
 
 
 if __name__ == "__main__":
-    a = Scalar(1)
+    a = Scalar(4)
     print(a._real)
     print(a._imag)
 
-    b = Scalar(a)
-    print(b._real)
-    print(b._imag)
+    b = Scalar(a) * 2.0
+    print(b.unpack())
