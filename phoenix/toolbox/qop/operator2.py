@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   08/11/2024
-# Last Update: 12/11/2024, 19:29
-# Version:     0.0.930
+# Last Update: 13/11/2024, 15:22
+# Version:     0.0.969
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,6 +28,125 @@ HALFPI = PI / 2
 ZEROTOL = 1e-12
 
 
+class ScalarWrapper:
+    def __init__(self, value):
+        if isinstance(value, ScalarWrapper):
+            value = value.value
+        self._value = value
+
+    @property
+    def value(self):
+        return self._value
+
+    def conjugate(self) -> ScalarWrapper:
+        return ScalarWrapper(self._value.conjugate)
+
+    def mul_queue(self, *vals, **_kwargs) -> Self:
+        for val in vals:
+            if isinstance(val, ScalarWrapper):
+                self._value *= val.value
+            else:
+                self._value *= val
+        return self
+
+    def div_queue(self, *vals, **_kwargs) -> Self:
+        for val in vals:
+            if isinstance(val, ScalarWrapper):
+                self._value /= val.value
+            else:
+                self._value /= val
+        return self
+
+    def jshift(self, num: int, /) -> Self:
+        self._value *= 1j ** (num & 3)
+        if abs(complex(self._value).imag) < ZEROTOL:
+            self._value = float(self._value)
+        return self
+
+    def flip_sign(self, num: int = 1) -> Self:
+        if num & 1:
+            self._value *= -1
+        return self
+
+    @property
+    def real(self):
+        return complex(self._value).real
+
+    @property
+    def imag(self):
+        return complex(self._value).imag
+
+    @classmethod
+    def identity(cls):
+        return ScalarWrapper(1)
+
+    @classmethod
+    def zero(cls):
+        return ScalarWrapper(0)
+
+    @property
+    def is_real(self):
+        return abs(self.imag) < ZEROTOL
+
+    def __mul__(self, other) -> ScalarWrapper:
+        if isinstance(other, ScalarWrapper):
+            return ScalarWrapper(self._value * other.value)
+        return ScalarWrapper(self._value * other)
+
+    def __add__(self, other) -> ScalarWrapper:
+        if isinstance(other, ScalarWrapper):
+            return ScalarWrapper(self._value + other.value)
+        return ScalarWrapper(self._value + other)
+
+    def __sub__(self, other) -> ScalarWrapper:
+        if isinstance(other, ScalarWrapper):
+            return ScalarWrapper(self._value - other.value)
+        return ScalarWrapper(self._value - other)
+
+    def __truediv__(self, other) -> ScalarWrapper:
+        if isinstance(other, ScalarWrapper):
+            return ScalarWrapper(self._value / other.value)
+        return ScalarWrapper(self._value / other)
+
+    def __div__(self, other) -> ScalarWrapper:
+        if isinstance(other, ScalarWrapper):
+            return ScalarWrapper(self._value // other.value)
+        return ScalarWrapper(other // self._value)
+
+    def __rmul__(self, other) -> ScalarWrapper:
+        return ScalarWrapper(other * self._value)
+
+    def __radd__(self, other) -> ScalarWrapper:
+        return ScalarWrapper(other + self._value)
+
+    def __rsub__(self, other) -> ScalarWrapper:
+        return ScalarWrapper(other - self._value)
+
+    def __rtruediv__(self, other) -> ScalarWrapper:
+        return ScalarWrapper(other / self._value)
+
+    def __rdiv__(self, other) -> ScalarWrapper:
+        return ScalarWrapper(other // self._value)
+
+    def __int__(self) -> int:
+        return int(self._value)
+
+    def __float__(self) -> float:
+        return float(self._value)
+
+    def __complex__(self) -> complex:
+        return complex(self._value)
+
+    def __str__(self):
+        return str(self._value)
+
+    def __repr__(self):
+        return str(self._value)
+
+
+r'''
+
+
 def _reduce_fraction(nom: int, den: int | None):
     if den is None:
         return (nom, None)
@@ -38,32 +157,6 @@ def _reduce_fraction(nom: int, den: int | None):
     if den == gcd:
         return nom // gcd, None
     return nom // gcd, den // gcd
-
-
-class Coeff:
-    """The coefficient base class.
-
-    This class is not supposed to be instantiated
-    """
-
-    def mul_queue(self, *vals, **_kwargs) -> Self:
-        """append the value to the scalar queue to be multiplied"""
-        raise NotImplementedError(
-            "operation 'mul_queue' must be implemented by the subclass"
-        )
-
-    def div_queue(self, *vals, **_kwargs) -> Self:
-        """append the value to the scalar queue to be divided"""
-        raise NotImplementedError(
-            "operation 'div_queue' must be implemented by the subclass"
-        )
-
-    def jshift(self, num: int, /) -> Self:
-        """apply num multiplications with 1j"""
-        raise NotImplementedError(
-            "operation 'imshift' must be implemented by the subclass"
-        )
-
 
 def autoconvert(func):
     """
@@ -79,7 +172,7 @@ def autoconvert(func):
             return func(self, **kwargs)  # ignore
 
         # ok, so first is not None
-        if isinstance(first, Scalar):
+        if isinstance(first, GeneralScalar):
             return func(self, **first.unpack())
 
         # ok, so not a scalar
@@ -93,7 +186,12 @@ def autoconvert(func):
     return wrapper
 
 
-class Scalar(Coeff):
+I might check this out in the future,
+but it seems more interesting to make a composite type that covers fractions,
+components, polars and symbolics as entries, or simply derive an individual
+type for that. purpose
+
+class GeneralScalar(Coeff):
     r"""
     A general scalar type as subtype of a coefficient.
 
@@ -562,8 +660,6 @@ class Scalar(Coeff):
         return self.to_polar(magnitude=False, phase=True)[1]
 
 
-'''
-
     include this to consider subtypes
     =================================
 
@@ -801,7 +897,7 @@ class Summand:
     Summand class
     """
 
-    _DEFAULT_COEFF = Scalar  # default class to create scalars from
+    _DEFAULT_COEFF = ScalarWrapper  # default class to create scalars from
 
     def __init__(self, bases, elems, scalar=None):
         self._elems = elems
@@ -852,6 +948,8 @@ class MatrixBasis(Basis):
 
 
 if __name__ == "__main__":
-    a = Scalar(4.0)
+    a = ScalarWrapper(4.0)
     b = a * 2.0 + 4.0
-    print(b.unpack())
+    c = ScalarWrapper(b)
+    print(b.value)
+    print((2 / c))
