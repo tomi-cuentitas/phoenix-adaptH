@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 14/11/2024, 16:47
-# Version:     0.0.436
+# Last Update: 14/11/2024, 19:39
+# Version:     0.0.463
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,7 +15,7 @@
 
 from __future__ import annotations
 from typing import Self
-import math
+
 
 ZEROTOL = 1e-13
 
@@ -43,8 +43,8 @@ def autoconvert(func):
         if second is not None:
             if not isinstance(second, cls):
                 second = cls(second)
-            return func(cls, first.eval(), second.eval())
-        return func(cls, first.eval())
+            return func(cls, first, second)
+        return func(cls, first)
 
     return wrapper
 
@@ -53,14 +53,13 @@ class _Scalar:
     """Scalar parent class to make sure all that is needed is defined"""
 
     def __init__(self, *_args, **_kwargs):
-        self._mul_queue = []
-        self._div_queue = []
-        self._cmplx_rot = 0
-        self._flag_eval = False
+        pass
 
     def copy(self) -> _Scalar:
         """return a copy of the current scalar"""
-        return self.__class__.zero().copy_from(self)
+        raise NotImplementedError(
+            "'to_python_scalar' must be defined by subclass."
+        )
 
     def to_python_scalar(self) -> int | float | complex:
         """generate a python scalar from the object"""
@@ -68,77 +67,10 @@ class _Scalar:
             "'to_python_scalar' must be defined by subclass."
         )
 
-    def copy_from(self, other) -> Self:
-        """copy the values from another instance"""
-        raise NotImplementedError("'copy_from' must be implemented in subclass")
-
     def to_complex_components(self) -> tuple[float, float]:
         """split into complex components"""
         c_rep = complex(self.to_python_scalar())
         return c_rep.real, c_rep.imag
-
-    def flag_eval(self):
-        """flag for reevaluation"""
-        self._flag_eval = True
-
-    def enqueue_jpow(self, num=1, /) -> Self:
-        """apply a multiplication with j or a power of it"""
-        self._cmplx_rot += num
-        self.flag_eval()
-        return self
-
-    def enqueue_mul(self, value, /) -> Self:
-        """enqueue a value for multiplication"""
-        self._mul_queue.append(value)
-        self.flag_eval()
-        return self
-
-    def enqueue_div(self, value, /) -> Self:
-        """enqueue a value for division"""
-        self._div_queue.append(value)
-        self.flag_eval()
-        return self
-
-    def eval(self) -> Self:
-        """apply eval if necessary"""
-        if self._flag_eval:
-            self._flag_eval = False
-            try:
-                self._eval()
-            except Exception as e:
-                self._flag_eval = True
-                raise e
-        assert not self._flag_eval
-        return self
-
-    def _eval(self) -> Self:
-        self._apply_mul_queue()
-        self._apply_div_queue()
-        self._apply_cmplx_rot()
-        return self
-
-    def _apply_mul_queue(self) -> Self:
-        val = self
-        for mul in self._mul_queue:
-            val *= mul
-        self.copy_from(val)
-        self._mul_queue = []
-        return self
-
-    def _apply_div_queue(self) -> Self:
-        val = self
-        for div in self._div_queue:
-            val /= div
-        self.copy_from(val)
-        self._div_queue = []
-        return self
-
-    def _apply_cmplx_rot(self) -> Self:
-        # apply rotation with j
-        val = self * (1j) ** (self._cmplx_rot & 3)
-        self.copy_from(val)
-        self._cmplx_rot = 0
-        return self
 
     def to_str(self, conv_int=True):
         """
@@ -153,13 +85,11 @@ class _Scalar:
             if abs(val.real) < ZEROTOL:
                 if abs(imag) < ZEROTOL:
                     return "0"
-                else:
-                    return f"{imag}j"
-            else:
-                if abs(val.imag) < ZEROTOL:
-                    return f"{real}"
-                else:
-                    return f"({real} + {imag}j)"
+                return f"{imag}j"
+            # |real| > 0:
+            if abs(val.imag) < ZEROTOL:
+                return f"{real}"
+            return f"({real} + {imag}j)"
         return str(try_int(val, conv=conv_int))
 
     # class handler for arithmetics
@@ -222,6 +152,12 @@ class _Scalar:
     def __rtruediv__(self, other):
         return self.__class__._div(other, self)
 
+    def __pow__(self, other):
+        return self.__class__._pow(self, other)
+
+    def __rpow__(self, other):
+        return self.__class__._pow(other, self)
+
     def __abs__(self):
         return self.__class__._abs(self)
 
@@ -250,78 +186,44 @@ class _Scalar:
                 ret *= val
             else:
                 ret *= cls(val)
-        assert not isinstance(ret._val, _Scalar)
         return ret
 
     @property
     def value(self):
         """value property"""
-        return self.eval().to_python_scalar()
+        return self.to_python_scalar()
 
     @property
     def real(self):
         """value property"""
-        real, _ = self.eval().to_complex_components()
+        real, _ = self.to_complex_components()
         return real
 
     @property
     def imag(self):
         """value property"""
-        _, imag = self.eval().to_complex_components()
+        _, imag = self.to_complex_components()
         return imag
 
 
 class ScalarWrapper(_Scalar):
     """Simple wrapper around the python scalar types"""
 
+    _IDENTIFIER = "PYWRAPPER"
+
     def __init__(self, value, /):
         super().__init__()
         if isinstance(value, _Scalar):
-            value = value.eval().to_python_scalar()
+            value = value.to_python_scalar()
         self._val = value
 
     def to_python_scalar(self):
         """generate a python scalar from the value"""
-        self.eval()
         assert not isinstance(self._val, _Scalar)
         return self._val
 
-    def copy_from(self, other) -> Self:
-        self._val = other.value
-        return self
-
-    def _apply_mul_queue(self) -> Self:
-        if self._mul_queue:
-            nom = 1
-            for val in self._mul_queue:
-                if isinstance(val, _Scalar):
-                    nom *= val.value
-                else:
-                    nom *= val
-            self._val *= nom
-        return self
-
-    def _apply_div_queue(self) -> Self:
-        if self._div_queue:
-            den = 1
-            for val in self._div_queue:
-                if isinstance(val, _Scalar):
-                    den *= val.value
-                else:
-                    den *= val
-            self._val /= den
-        return self
-
-    def _apply_cmplx_rot(self) -> Self:
-        # apply rotation with j
-        self._cmplx_rot &= 3
-        if self._cmplx_rot:
-            self._val *= (1j) ** self._cmplx_rot
-            self._cmplx_rot = 0
-            if isinstance(self._val, complex):
-                if abs(self._val.imag) < ZEROTOL:
-                    self._val = self._val.real
-        return self
+    def copy(self) -> _Scalar:
+        return self.__class__(self.value)
 
 
 class Scalar(ScalarWrapper):
@@ -341,9 +243,110 @@ if __name__ == "__main__":
 
     a *= 2.1257981
     print(a)
-    a.jpow(2)
-    print(a)
-    a.jpow(1)
-    print(a)
-    a.jpow(1)
-    print(a)
+
+
+'''
+    DUMP SCALAR WRAPPER
+
+        # def _apply_mul_queue(self) -> Self:
+        #     if self._mul_queue:
+        #         nom = 1
+        #         for val in self._mul_queue:
+        #             if isinstance(val, _Scalar):
+        #                 nom *= val.value
+        #             else:
+        #                 nom *= val
+        #         self._val *= nom
+        #     return self
+
+        # def _apply_div_queue(self) -> Self:
+        #     if self._div_queue:
+        #         den = 1
+        #         for val in self._div_queue:
+        #             if isinstance(val, _Scalar):
+        #                 den *= val.value
+        #             else:
+        #                 den *= val
+        #         self._val /= den
+        #     return self
+
+        # def _apply_cmplx_rot(self) -> Self:
+        #     # apply rotation with j
+        #     self._cmplx_rot &= 3
+        #     if self._cmplx_rot:
+        #         self._val *= (1j) ** self._cmplx_rot
+        #         self._cmplx_rot = 0
+        #         if isinstance(self._val, complex):
+        #             if abs(self._val.imag) < ZEROTOL:
+        #                 self._val = self._val.real
+        #     return self
+
+
+    DUMP SCALAR
+
+        # def __init__(self, *_args, **_kwargs):
+        #     self._flag_eval = False
+
+        # def flag_eval(self):
+        #     """flag for reevaluation"""
+        #     self._flag_eval = True
+
+        # def enqueue_jpow(self, num=1, /) -> Self:
+        #     """apply a multiplication with j or a power of it"""
+        #     self._cmplx_rot += num
+        #     self.flag_eval()
+        #     return self
+
+        # def enqueue_mul(self, value, /) -> Self:
+        #     """enqueue a value for multiplication"""
+        #     self._mul_queue.append(value)
+        #     self.flag_eval()
+        #     return self
+
+        # def enqueue_div(self, value, /) -> Self:
+        #     """enqueue a value for division"""
+        #     self._div_queue.append(value)
+        #     self.flag_eval()
+        #     return self
+
+        # def eval(self) -> Self:
+        #     """apply eval if necessary"""
+        #     if self._flag_eval:
+        #         try:
+        #             self._eval()
+        #             self._flag_eval = False
+        #         except Exception as e:
+        #             self._flag_eval = True
+        #             raise e
+        #     assert not self._flag_eval
+        #     return self
+
+        # def _eval(self) -> Self:
+        #     self._apply_mul_queue()
+        #     self._apply_div_queue()
+        #     self._apply_cmplx_rot()
+        #     return self
+
+        # def _apply_mul_queue(self) -> Self:
+        #     val = self
+        #     for mul in self._mul_queue:
+        #         val *= mul
+        #     self.copy_from(val)
+        #     self._mul_queue = []
+        #     return self
+
+        # def _apply_div_queue(self) -> Self:
+        #     val = self
+        #     for div in self._div_queue:
+        #         val /= div
+        #     self.copy_from(val)
+        #     self._div_queue = []
+        #     return self
+
+        # def _apply_cmplx_rot(self) -> Self:
+        #     # apply rotation with j
+        #     val = self * (1j) ** (self._cmplx_rot & 3)
+        #     self.copy_from(val)
+        #     self._cmplx_rot = 0
+        #     return self
+    '''

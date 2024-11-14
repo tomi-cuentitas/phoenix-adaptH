@@ -5,36 +5,70 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 14/11/2024, 16:57
-# Version:     0.0.179
+# Last Update: 14/11/2024, 22:34
+# Version:     0.0.271
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
+from __future__ import annotations
+
 from phoenix.toolbox.qop.scalar import Scalar
 from phoenix.toolbox.qop.operator import Operator
 from phoenix.toolbox.qop.summand import Summand
+
+from weakref import WeakValueDictionary
 
 
 class Basis:
     """A general basis"""
 
-    _count = -1  # count instances for autonaming
+    _count = 0  # count instances for autonaming
     _IDENT = "B"
+    _bases: WeakValueDictionary[str, Basis] = WeakValueDictionary()
 
-    def __init__(self, identifier=None):
-        self.__class__._count += 1
-        if identifier is None:
-            identifier = f"{self.__class__._IDENT}{self.__class__._count}"
+    def __init__(self, name=None):
+        self._idx = self.__class__._count
+        Basis._count += 1
+        if name is None:
+            name = f"{self._IDENT}.{self._idx}"
+        self._name = name
+        identifier = f"B{self._idx}:{self._IDENT}"
+        if identifier in Basis._bases:
+            raise ValueError(
+                f"Basis with identifier '{identifier}' already exists"
+            )
+        Basis._bases[identifier] = self
         self._ident = identifier
+
+    def __del__(self):
+        if self.identifier in Basis._bases:
+            del Basis._bases[self.identifier]
+
+    @property
+    def index(self):
+        """access read-only index attribute"""
+        return self._idx
+
+    def __gt__(self, other):
+        return self.index > other.index
 
     def _summands_from_components(self, component):
         yield Summand((self,), (component,))
 
-    def op(self, component):
+    def _check_valid_gen(self, component):
+        """check if the component is valid in the basis"""
+        if component is None:
+            return False
+        return True
+
+    def op(self, component, check_valid=True):
         """generate an operator from the generating expression"""
+        if check_valid:
+            if not self._check_valid_gen(component):
+                raise ValueError("Invalid component for generating term")
         return Operator(*self._summands_from_components(component))
 
     def identity(self):
@@ -42,7 +76,7 @@ class Basis:
         return self.op(0)
 
     @classmethod
-    def _mul(cls, gen1, gen2, scal):
+    def _mul(cls, gen1, gen2):
         """perform a multiplication of two generating expressions"""
         raise NotImplementedError("'_mul' must be implemented by subclass")
 
@@ -52,14 +86,16 @@ class Basis:
         return self._ident
 
     def __str__(self):
-        return self.identifier
+        return f"<{self._name}>"
 
     def __repr__(self):
-        return self.identifier
+        return f"<{self._name}>"
 
 
 class PauliBasis(Basis):
     """A basis for spin 1/2"""
+
+    _IDENT = "PAULI"
 
     # (target index, phase exponent (j))
     _MUL_TABLE = [
@@ -71,20 +107,26 @@ class PauliBasis(Basis):
     _INDEXLOOKUP = {
         "0": 0,
         "O": 0,
+        "o": 0,
+        "I": 0,
+        "x": 1,
         "X": 1,
+        "y": 2,
         "Y": 2,
+        "z": 3,
         "Z": 3,
     }
     _SYMBOLLOOKUP = ["O", "X", "Y", "Z"]
 
+    def _check_valid_gen(self, component):
+        return component in self._INDEXLOOKUP
+
     @classmethod
-    def _mul(cls, gen1, gen2, scal):
-        print("asd", gen1, gen2)
+    def _mul(cls, gen1, gen2):
         indx1 = cls._INDEXLOOKUP[gen1[0].upper()]
         indx2 = cls._INDEXLOOKUP[gen2[0].upper()]
         target, jpow = cls._MUL_TABLE[indx1][indx2]
-        scal.enqueue_jpow(jpow)
-        return cls._SYMBOLLOOKUP[target]
+        yield Scalar(1j) ** jpow, cls._SYMBOLLOOKUP[target]
 
 
 a = PauliBasis()
@@ -96,13 +138,20 @@ print(next(a.op("x").summands).comps)
 
 foo = a.op("y")
 bar = a.op("x")
-myscal = Scalar(1)
+
 print("asd")
 print(
-    PauliBasis._mul(
-        list(foo.summands)[0].comps[0],
-        list(bar.summands)[0].comps[0],
-        myscal,
+    list(
+        PauliBasis._mul(
+            list(foo.summands)[0].comps[0],
+            list(bar.summands)[0].comps[0],
+        )
     )
 )
-print(myscal.value)
+
+print(a)
+print(dict(Basis._bases))
+del foo
+del bar
+del a
+print(dict(Basis._bases))
