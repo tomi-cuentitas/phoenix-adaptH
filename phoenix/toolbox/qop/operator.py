@@ -4,200 +4,30 @@
 # File:        operator.py
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
-# Generated:   07/11/2024
-# Last Update: 07/11/2024, 16:33
-# Version:     0.0.170
+# Generated:   14/11/2024
+# Last Update: 14/11/2024, 14:58
+# Version:     0.0.8
 #
 #################################################end#of#autoheader#do#not#modify
 
-IDEA: 
-=====
-
-    - the scalar part in the summand derives from a basis as well
-    - a possible name is 'Complex' and it takes two input args
-    - its neutral element of multiplication is Complex(1, 0)
-    - it has a to-polar routine and a subclass 'PComplex'
-    - sorting the bases puts it always first
-    - deriving a new spin basis should mean a subclass, so the isinstance check
-      is sufficient to check for two elements being in the right basis
-      This way, a basis can be seen as an element generator
-    - a Basis.get(identifier) method can hide away this complexity.
-
-PROBABLY BEST TO START OVER
 
 """
 
-import numpy as np
-
-
-def _scalar_mul(coeffs1, coeffs2, polar):
-    """
-    perform the multiplication of scalars and return a polar result if polar
-    flag is set
-    """
-    creal1, cimag1, cmagn1, cphas1, polar1 = coeffs1
-    creal2, cimag2, cmagn2, cphas2, polar2 = coeffs2
-    if __debug__:
-        if polar1:
-            assert creal1 is None
-            assert cimag1 is None
-        else:
-            assert cmagn1 is None
-            assert cphas1 is None
-        if polar2:
-            assert creal2 is None
-            assert cimag2 is None
-        else:
-            assert cmagn2 is None
-            assert cphas2 is None
-
-
-class Basis:
-    """A basis that an operator's summands can be expressed in"""
-
-    # a flag to indicate whether addition requires the elements to be identical
-    # (e.g. Pauli indices) or if they are instead stackable (such as matrices)
-    _STACKABLE_ELEMS = False
-
-    def __init__(self, identifier=None):
-        self._identifier = identifier
-
-    def __lt__(self, other):
-        return True
-
-    def __eq__(self, other):
-        return False
-
-    def _to_numpy(self, *_args, **_kwargs):
-        """
-        Generate a numpy representation from the part of the summand that is
-        symbolically represented by args. This can encode a base index or else.
-        The handling is specific to the type of basis.
-        """
-        return np.ones((1, 1))
-
-    def _multiply(self, args1, args2):
-        """
-        Returns the results of multiplication of operators created from args1
-        and args2. Returns the args-equivalent, not an operator or summand!
-        """
-        return tuple(*args1, *args2)
-
-    def op(self, *args):
-        """create an operator from args in this specific subspace."""
-        return Operator(*self._summands(*args))
-
-    def _summands(self, *args):
-        """
-        A generator that creates summands from args within this specific
-        subspace
-        """
-        yield Summand((self,), (args,))
-
-
-class Complex(Basis):
-    """
-    A subclass for complex numbers. This way, everything scalar is
-    automatically accumulated
-    """
-
-
-class PComplex(Complex):
-    """
-    A subclass for complex numbers in polar representation
-    """
-
-
-class Summand:
-    """A summand that an operator is composed from"""
-
-    def __init__(self, *elements):
-        self._elems = elements
-
-    def to_numpy(self, bases=None, **kwargs):
-        """export the summand to a numpy array"""
-
-    def _multiply(self, other):
-        """returns a summand as the result of multiplication"""
+from __future__ import annotations
 
 
 class Operator:
-    """Composed from summands"""
+    """
+    Operator base class representing a general operator as sum of summands"""
 
-    def __init__(self, *summands, **kwargs):
-        self._summands = list(summands)
-        self._bases = []
+    def __init__(self, *summands):
+        self._summands = summands
 
-    def to_numpy(self, bases=None, **kwargs):
-        """export the summand to a numpy array"""
-
-
-"""dump place
-
-self._polar = polar
-        if polar:
-            if magnitude is None:
-                assert real is not None
-                magnitude = np.abs(real + 1j * imag)
-                phase = np.atan2(imag, real)
-            self._cmagn = magnitude
-            self._cphas = phase
-        else:
-            if real is None:
-                assert magnitude is not None
-                real = magnitude * np.cos(phase)
-                imag = magnitude * np.sin(phase)
-            self._creal = real
-            self._cimag = imag
-
+    def __len__(self):
+        return len(self._summands)
 
     @property
-    def polar(self):
-        return self._polar
-
-    @polar.setter
-    def polar(self, polar):
-        if not isinstance(polar, bool):
-            raise ValueError("polar attribute must be boolean")
-        if polar is not self._polar:
-            if polar:
-                self._cmagn = (self._creal**2 + self._cimag**2) ** 0.5
-                self._cphas = np.atan2(self._cimag, self._creal)
-                self._creal = None
-                self._cimag = None
-                self._polar = True
-            else:
-                self._creal = self._cmagn * np.cos(self._cphas)
-                self._cimag = self._cmagn * np.sin(self._cphas)
-                self._cmagn = None
-                self._cphas = None
-                self._polar = False
-
-    @property
-    def real(self):
-        if self.polar:
-            return self._cmagn * np.cos(self._cphas)
-        return self._creal
-
-    @property
-    def imag(self):
-        if self.polar:
-            return self._cmagn * np.sin(self._cphas)
-        return self._cimag
-
-    @property
-    def magnitude(self):
-        if self.polar:
-            return self._cmagn
-        return (self._creal**2 + self._cimag**2) ** 0.5
-
-    @property
-    def phase(self):
-        if self.polar:
-            return self._cphas
-        return np.atan2(self._cimag, self._creal)
-
-    def _coeffs(self):
-        return self._creal, self._cimag, self._cmagn, self._cphas, self._polar
-
-"""
+    def summands(self):
+        """safe access to summands"""
+        for summand in self._summands:
+            yield summand.copy()
