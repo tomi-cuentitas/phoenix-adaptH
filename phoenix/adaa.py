@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/10/2024, 15:28
-# Version:     0.0.1768
+# Last Update: 21/11/2024, 09:55
+# Version:     0.0.1806
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -78,7 +78,7 @@ class ADAA:
     KEYMAP: KeyMap = None
     FIXED_SIZE = None
 
-    def __init__(self, size: int | None = None):
+    def __init__(self, size: int | None = None, init_zeros=True):
         self._data_r = None
         self._data_i = None
         self._size = 0
@@ -86,17 +86,21 @@ class ADAA:
             if not size:
                 raise ValueError("Size must be given or fixed.")
         if self.FIXED_SIZE:
-            if size is not None:
+            if size is None:
+                size = self.FIXED_SIZE
+            else:
                 if size != self.FIXED_SIZE:
                     raise ValueError(f"Size is fixed ({self.FIXED_SIZE})")
-            size = self.FIXED_SIZE
         if self.KEYMAP:
-            if size is not None:
+            if size is None:
+                size = self.KEYMAP.size
+            else:
                 if size != self.KEYMAP.size:
                     raise ValueError(f"Size is fixed by keymap {self.KEYMAP}")
-            size = self.KEYMAP.size
         assert size is not None
         self.reinit(size)
+        if init_zeros:
+            self.to_zero()  # should probably be forced anyways.
 
     @property
     def real(self):
@@ -141,12 +145,8 @@ class ADAA:
         """Import data from numpy array."""
         size = len(arr)
         obj = cls(size)
-        cls.BACKEND.coeff_from_numpy(
-            obj.real, arr.real, size=size, dtype="f64"
-        )
-        cls.BACKEND.coeff_from_numpy(
-            obj.imag, arr.imag, size=size, dtype="f64"
-        )
+        cls.BACKEND.coeff_from_numpy(obj.real, arr.real, size=size, dtype="f64")
+        cls.BACKEND.coeff_from_numpy(obj.imag, arr.imag, size=size, dtype="f64")
         return obj
 
     def to_numpy(self) -> np.ndarray:
@@ -306,10 +306,63 @@ class ADAA:
 
     @classmethod
     def ones(cls, size=None):
-        """return an array made from ones"""
+        """return an ADAA made from ones"""
         if size is None:
             size = cls.FIXED_SIZE
         return cls.from_numpy(np.ones(size))
+
+    @classmethod
+    def mul(cls, first, other, target=None, **_kwargs):
+        """multiplication slot routine"""
+        if isinstance(other, ADAA):
+            raise ValueError(
+                "Multiplication by other operator is not supported"
+            )
+        if target is None:
+            target = cls(first.size)
+        cls.basic_linop(target, op_a=None, sc_b=other, op_c=first)
+        return target
+
+    @classmethod
+    def div(cls, first, other, target=None, **_kwargs):
+        """division slot routine"""
+        if isinstance(other, ADAA):
+            raise ValueError("Division by other operator is not supported")
+        if target is None:
+            target = cls(first.size)
+        cls.basic_linop(target, op_a=None, sc_b=1.0 / other, op_c=first)
+        return target
+
+    @classmethod
+    def add(cls, first, other, target=None, **_kwargs):
+        """addition slot routine"""
+        if isinstance(other, ADAA):
+            assert first.size == other.size
+            assert first.identifier == other.identifier
+        else:
+            raise ValueError("Addition only supports ADAAs")
+        if target is None:
+            target = cls(first.size)
+        cls.basic_linop(target, op_a=first, sc_b=1, op_c=other)
+        return target
+
+    @classmethod
+    def sub(cls, first, other, target=None, **_kwargs):
+        """subtraction slot routine"""
+        if isinstance(other, ADAA):
+            assert first.size == other.size
+            assert first.identifier == other.identifier
+        else:
+            raise ValueError("Subtraction only supports ADAAs")
+        if target is None:
+            target = cls(first.size)
+        cls.basic_linop(target, op_a=first, sc_b=-1, op_c=other)
+        return target
+
+    @classmethod
+    def neg(cls, first, target=None, **kwargs):
+        """negation slot routine"""
+        return cls.mul(first, -1, target=target, **kwargs)
 
     ###########################################################################
     #
@@ -317,53 +370,37 @@ class ADAA:
     # =====
 
     def __add__(self, other):
-        if isinstance(other, self.__class__):
-            assert self.size == other.size
-            assert self.identifier == other.identifier
-            result = self.__class__(size=self.size)
-            self.basic_linop(result, op_a=self, sc_b=1, op_c=other)
-            return result
-        raise ValueError(
-            "Subtraction between operator and non-operator is not supported"
-        )
+        return self.__class__.add(self, other)
+
+    def __radd__(self, other):
+        return self.__class__.add(other, self)
 
     def __sub__(self, other):
-        if isinstance(other, self.__class__):
-            assert self.size == other.size
-            assert self.identifier == other.identifier
-            result = self.__class__(size=self.size)
-            self.basic_linop(result, op_a=self, sc_b=-1, op_c=other)
-            return result
-        raise ValueError(
-            "Subtraction between operator and non-operator is not supported"
-        )
+        return self.__class__.sub(self, other)
+
+    def __rsub__(self, other):
+        return self.__class__.sub(other, self)
 
     def __mul__(self, other):
-        if isinstance(other, ADAA):
-            raise ValueError(
-                "Multiplication with other operator is not supported"
-            )
-        result = self.__class__(size=self.size)
-        self.basic_linop(result, op_a=None, sc_b=other, op_c=self)
-        return result
-
-    def __truediv__(self, other):
-        if isinstance(other, ADAA):
-            raise ValueError("Dividing through operator is not supported")
-        result = self.__class__(size=self.size)
-        inv_other = 1.0 / other
-        self.basic_linop(result, op_a=None, sc_b=inv_other, op_c=self)
-        return result
+        return self.__class__.mul(self, other)
 
     def __rmul__(self, other):
-        # assume commutative, because if the other operator is an ADAA as well,
-        # why else should rmul be called?
-        return self.__mul__(other)
+        return self.__class__.mul(other, self)
+
+    def __truediv__(self, other):
+        return self.__class__.div(self, other)
+
+    def __rtruediv__(self, other):
+        return self.__class__.div(other, self)
+
+    def __div__(self, other):
+        return self.__class__.div(self, other)
+
+    def __rdiv__(self, other):
+        return self.__class__.div(other, self)
 
     def __neg__(self):
-        result = self.__class__(size=self.size)
-        self.basic_linop(result, op_a=None, sc_b=-1, op_c=self)
-        return result
+        return self.__class__.neg(self)
 
     def __len__(self):
         return self.size
@@ -372,9 +409,7 @@ class ADAA:
         return self.size > 0
 
     def __eq__(self, other):
-        return self.__class__.allclose(
-            self, other
-        )  # , rtol=1e-08, atol=1e-12)
+        return self.__class__.allclose(self, other)  # , rtol=1e-08, atol=1e-12)
 
     def __del__(self):
         self.free_memory()
