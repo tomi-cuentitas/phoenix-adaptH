@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 21/11/2024, 09:28
-# Version:     0.0.32
+# Last Update: 26/11/2024, 18:11
+# Version:     0.0.34
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,14 +23,14 @@ class Summand:
     Summand class
     """
 
-    def __init__(self, bases: tuple, comps: tuple, prefx=None):
+    def __init__(self, bases: tuple, comps: tuple, coeff=None):
         self._comps = comps
         self._bases = bases
-        if prefx is None:
-            prefx = Scalar.one()
-        elif not isinstance(prefx, Scalar):
-            prefx = Scalar(prefx)
-        self._prefx = prefx
+        if coeff is None:
+            coeff = Scalar.identity()
+        elif not isinstance(coeff, Scalar):
+            coeff = Scalar(coeff)
+        self._coeff = coeff
 
     @property
     def comps(self):
@@ -45,13 +45,13 @@ class Summand:
     @property
     def coeff(self):
         """access read-only attribute coefficient/prefix"""
-        return self._prefx
+        return self._coeff
 
     @property
     def prefix(self):
         """access read-only attribute prefix"""
-        return self._prefx
+        return self._coeff
 
     def copy(self):
         """copy a summand"""
-        return Summand(self._bases, self._comps, self._prefx)
+        return Summand(self._bases, self._comps, self._coeff)

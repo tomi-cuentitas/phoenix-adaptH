@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 26/11/2024, 14:16
-# Version:     0.0.504
+# Last Update: 26/11/2024, 18:11
+# Version:     0.0.506
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -77,19 +77,19 @@ class _Summable:
         return str(self.value)
 
     @classmethod
-    def one(cls):
-        """a scalar one"""
+    def identity(cls):
+        """identity, neutral element of multiplication"""
         return cls(1)
 
     @classmethod
     def zero(cls):
-        """a scalar zero"""
+        """zero, neutral element of addition"""
         return cls(0)
 
     @classmethod
     def from_product(cls, *factors):
         """generate from a product"""
-        ret = cls.one()
+        ret = cls.identity()
         for val in factors:
             if isinstance(val, _Summable):
                 ret *= val
