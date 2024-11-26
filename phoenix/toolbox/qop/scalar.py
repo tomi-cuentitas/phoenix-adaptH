@@ -4,62 +4,41 @@
 # File:        scalar.py
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
-# Generated:   14/11/2024
-# Last Update: 14/11/2024, 19:39
-# Version:     0.0.463
+# Generated:   21/11/2024
+# Last Update: 21/11/2024, 13:56
+# Version:     0.0.5
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from __future__ import annotations
-from typing import Self
+from phoenix.toolbox.qop.modifier import Modifier, ZEROTOL
 
 
-ZEROTOL = 1e-13
+class _Scalar(Modifier):
+    """Scalar special case of a modifier"""
 
+    @classmethod
+    def from_product(cls, *values):
+        """generate from a product"""
+        ret = cls.identity()
+        for val in values:
+            if isinstance(val, Modifier):
+                ret *= val
+            else:
+                ret *= cls(val)
+        return ret
 
-def try_int(val, conv=True):
-    """attempt to convert floats to ints that are very close to an int value"""
-    if conv:
-        if val > 0:
-            if abs(val - (val_int := int(val + ZEROTOL))) < ZEROTOL:
-                return int(val_int + ZEROTOL)
-        else:
-            if abs(val - (val_int := int(val - ZEROTOL))) < ZEROTOL:
-                return int(val_int - ZEROTOL)
-    return val
+    @classmethod
+    def identity(cls):
+        """generate the neutral element of multiplication"""
+        return cls(1)
 
-
-def autoconvert(func):
-    """
-    Convert the args of a two-input function into instances of cls
-    """
-
-    def wrapper(cls, first, second=None):
-        if not isinstance(first, cls):
-            first = cls(first)
-        if second is not None:
-            if not isinstance(second, cls):
-                second = cls(second)
-            return func(cls, first, second)
-        return func(cls, first)
-
-    return wrapper
-
-
-class _Scalar:
-    """Scalar parent class to make sure all that is needed is defined"""
-
-    def __init__(self, *_args, **_kwargs):
-        pass
-
-    def copy(self) -> _Scalar:
-        """return a copy of the current scalar"""
-        raise NotImplementedError(
-            "'to_python_scalar' must be defined by subclass."
-        )
+    @classmethod
+    def zero(cls):
+        """generate the neutral element of addition"""
+        return cls(0)
 
     def to_python_scalar(self) -> int | float | complex:
         """generate a python scalar from the object"""
@@ -97,27 +76,27 @@ class _Scalar:
 
     @classmethod
     @autoconvert
-    def _add(cls, first, second) -> _Scalar:
+    def _add(cls, first, second) -> Modifier:
         return cls(first.to_python_scalar() + second.to_python_scalar())
 
     @classmethod
     @autoconvert
-    def _sub(cls, first, second) -> _Scalar:
+    def _sub(cls, first, second) -> Modifier:
         return cls(first.to_python_scalar() - second.to_python_scalar())
 
     @classmethod
     @autoconvert
-    def _mul(cls, first, second) -> _Scalar:
+    def _mul(cls, first, second) -> Modifier:
         return cls(first.to_python_scalar() * second.to_python_scalar())
 
     @classmethod
     @autoconvert
-    def _div(cls, first, second) -> _Scalar:
+    def _div(cls, first, second) -> Modifier:
         return cls(first.to_python_scalar() / second.to_python_scalar())
 
     @classmethod
     @autoconvert
-    def _pow(cls, first, second) -> _Scalar:
+    def _pow(cls, first, second) -> Modifier:
         return cls(first.to_python_scalar() ** second.to_python_scalar())
 
     @classmethod
@@ -125,85 +104,10 @@ class _Scalar:
     def _abs(cls, scal) -> float:
         return abs(scal.to_python_scalar())
 
-    # forward dunder methods into class handlers
-    # ------------------------------------------
-
-    def __add__(self, other):
-        return self.__class__._add(self, other)
-
-    def __radd__(self, other):
-        return self.__class__._add(other, self)
-
-    def __sub__(self, other):
-        return self.__class__._sub(self, other)
-
-    def __rsub__(self, other):
-        return self.__class__._sub(other, self)
-
-    def __mul__(self, other):
-        return self.__class__._mul(self, other)
-
-    def __rmul__(self, other):
-        return self.__class__._mul(other, self)
-
-    def __truediv__(self, other):
-        return self.__class__._div(self, other)
-
-    def __rtruediv__(self, other):
-        return self.__class__._div(other, self)
-
-    def __pow__(self, other):
-        return self.__class__._pow(self, other)
-
-    def __rpow__(self, other):
-        return self.__class__._pow(other, self)
-
-    def __abs__(self):
-        return self.__class__._abs(self)
-
-    def __str__(self):
-        return f"S[{self.to_str()}]"
-
-    def __repr__(self):
-        return self.to_str()
-
-    @classmethod
-    def one(cls):
-        """a scalar one"""
-        return cls(1)
-
-    @classmethod
-    def zero(cls):
-        """a scalar zero"""
-        return cls(0)
-
-    @classmethod
-    def from_product(cls, *values):
-        """generate from a product"""
-        ret = cls.one()
-        for val in values:
-            if isinstance(val, _Scalar):
-                ret *= val
-            else:
-                ret *= cls(val)
-        return ret
-
     @property
     def value(self):
         """value property"""
         return self.to_python_scalar()
-
-    @property
-    def real(self):
-        """value property"""
-        real, _ = self.to_complex_components()
-        return real
-
-    @property
-    def imag(self):
-        """value property"""
-        _, imag = self.to_complex_components()
-        return imag
 
 
 class ScalarWrapper(_Scalar):
