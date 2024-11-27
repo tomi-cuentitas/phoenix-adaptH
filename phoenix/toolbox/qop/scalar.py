@@ -4,9 +4,9 @@
 # File:        scalar.py
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
-# Generated:   21/11/2024
-# Last Update: 21/11/2024, 13:56
-# Version:     0.0.5
+# Generated:   14/11/2024
+# Last Update: 26/11/2024, 18:11
+# Version:     0.0.506
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -30,33 +30,199 @@ class _Scalar(Modifier):
                 ret *= cls(val)
         return ret
 
+def try_int(val, conv=True):
+    """attempt to convert floats to ints that are very close to an int value"""
+    if conv:
+        if val > 0:
+            if abs(val - (val_int := int(val + ZEROTOL))) < ZEROTOL:
+                return int(val_int + ZEROTOL)
+        else:
+            if abs(val - (val_int := int(val - ZEROTOL))) < ZEROTOL:
+                return int(val_int - ZEROTOL)
+    return val
+
+
+def autoconvert(func):
+    """
+    Convert the args of a two-input function into instances of cls
+    """
+
+    def wrapper(cls, first, second=None):
+        if not isinstance(first, cls):
+            first = cls(first)
+        if second is not None:
+            if not isinstance(second, cls):
+                second = cls(second)
+            return func(cls, first, second)
+        return func(cls, first)
+
+    return wrapper
+
+
+class _Summable:
+    """
+    _Summable is the base class for anything that can serve as a coefficient.
+    Typically there will be scalar values, but matrices are also summable.
+    """
+
+    def __init__(self, value, **_kwargs):
+        """place holder"""
+        assert not isinstance(value, _Summable)
+        self._val = value
+
+    def copy(self) -> _Summable:
+        """return a copy of the current scalar"""
+        return self.__class__(self._val)
+
+    def to_complex_components(self) -> tuple:
+        """split into complex components"""
+        raise NotImplementedError(
+            "'to_complex_components' must be defined by subclass."
+        )
+
+    def to_str(self, **_kwargs):
+        """
+        Default string conversion.
+        """
+        return str(self.value)
+
     @classmethod
     def identity(cls):
-        """generate the neutral element of multiplication"""
+        """identity, neutral element of multiplication"""
         return cls(1)
 
     @classmethod
     def zero(cls):
-        """generate the neutral element of addition"""
+        """zero, neutral element of addition"""
         return cls(0)
+
+    @classmethod
+    def from_product(cls, *factors):
+        """generate from a product"""
+        ret = cls.identity()
+        for val in factors:
+            if isinstance(val, _Summable):
+                ret *= val
+            else:
+                ret *= cls(val)
+        return ret
+
+    @property
+    def value(self):
+        """value property"""
+        return self._val * 1
+
+    @property
+    def real(self):
+        """value property"""
+        real, _ = self.to_complex_components()
+        return real
+
+    @property
+    def imag(self):
+        """value property"""
+        _, imag = self.to_complex_components()
+        return imag
+
+    # class handler for arithmetics
+    # -----------------------------
+
+    @classmethod
+    @autoconvert
+    def _add(cls, first, second) -> _Summable:
+        return cls(first.value + second.value)
+
+    @classmethod
+    @autoconvert
+    def _sub(cls, first, second) -> _Summable:
+        return cls(first.value - second.value)
+
+    @classmethod
+    @autoconvert
+    def _mul(cls, first, second) -> _Summable:
+        return cls(first.value * second.value)
+
+    @classmethod
+    @autoconvert
+    def _div(cls, first, second) -> _Summable:
+        return cls(first.value / second.value)
+
+    @classmethod
+    @autoconvert
+    def _pow(cls, first, second) -> _Summable:
+        return cls(first.value**second.value)
+
+    @classmethod
+    @autoconvert
+    def _abs(cls, first) -> float:
+        return abs(first.value)
+
+    # forward dunder methods into class handlers
+    # ------------------------------------------
+
+    def __add__(self, other):
+        return self.__class__._add(self, other)
+
+    def __radd__(self, other):
+        return self.__class__._add(other, self)
+
+    def __sub__(self, other):
+        return self.__class__._sub(self, other)
+
+    def __rsub__(self, other):
+        return self.__class__._sub(other, self)
+
+    def __mul__(self, other):
+        return self.__class__._mul(self, other)
+
+    def __rmul__(self, other):
+        return self.__class__._mul(other, self)
+
+    def __truediv__(self, other):
+        return self.__class__._div(self, other)
+
+    def __rtruediv__(self, other):
+        return self.__class__._div(other, self)
+
+    def __pow__(self, other):
+        return self.__class__._pow(self, other)
+
+    def __rpow__(self, other):
+        return self.__class__._pow(other, self)
+
+    def __abs__(self):
+        return self.__class__._abs(self)
+
+    def __str__(self):
+        return f"S[{self.to_str()}]"
+
+    def __repr__(self):
+        return self.to_str()
+
+
+class _Scalar(_Summable):
+    """Scalar parent class to make sure all that is needed is defined"""
+
+    def __init__(self, value, *_args, **kwargs):
+        assert not isinstance(value, _Scalar)
+        super().__init__(value, **kwargs)
 
     def to_python_scalar(self) -> int | float | complex:
         """generate a python scalar from the object"""
-        raise NotImplementedError(
-            "'to_python_scalar' must be defined by subclass."
-        )
+        return self._val * 1
 
     def to_complex_components(self) -> tuple[float, float]:
         """split into complex components"""
         c_rep = complex(self.to_python_scalar())
         return c_rep.real, c_rep.imag
 
-    def to_str(self, conv_int=True):
+    def to_str(self, **kwargs):
         """
         Default string conversion.
         The conv_int flag decides whether floats that are closer to int values
         than ZEROTOL should be converted into actual integer.
         """
+        conv_int = kwargs.get("conv_int", True)
         val = self.value
         if isinstance(val, complex):
             real = try_int(val.real, conv=conv_int)
@@ -71,44 +237,6 @@ class _Scalar(Modifier):
             return f"({real} + {imag}j)"
         return str(try_int(val, conv=conv_int))
 
-    # class handler for arithmetics
-    # -----------------------------
-
-    @classmethod
-    @autoconvert
-    def _add(cls, first, second) -> Modifier:
-        return cls(first.to_python_scalar() + second.to_python_scalar())
-
-    @classmethod
-    @autoconvert
-    def _sub(cls, first, second) -> Modifier:
-        return cls(first.to_python_scalar() - second.to_python_scalar())
-
-    @classmethod
-    @autoconvert
-    def _mul(cls, first, second) -> Modifier:
-        return cls(first.to_python_scalar() * second.to_python_scalar())
-
-    @classmethod
-    @autoconvert
-    def _div(cls, first, second) -> Modifier:
-        return cls(first.to_python_scalar() / second.to_python_scalar())
-
-    @classmethod
-    @autoconvert
-    def _pow(cls, first, second) -> Modifier:
-        return cls(first.to_python_scalar() ** second.to_python_scalar())
-
-    @classmethod
-    @autoconvert
-    def _abs(cls, scal) -> float:
-        return abs(scal.to_python_scalar())
-
-    @property
-    def value(self):
-        """value property"""
-        return self.to_python_scalar()
-
 
 class ScalarWrapper(_Scalar):
     """Simple wrapper around the python scalar types"""
@@ -116,10 +244,9 @@ class ScalarWrapper(_Scalar):
     _IDENTIFIER = "PYWRAPPER"
 
     def __init__(self, value, /):
-        super().__init__()
         if isinstance(value, _Scalar):
             value = value.to_python_scalar()
-        self._val = value
+        super().__init__(value)
 
     def to_python_scalar(self):
         """generate a python scalar from the value"""

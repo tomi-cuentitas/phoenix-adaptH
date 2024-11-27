@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 21/11/2024, 13:57
-# Version:     0.0.279
+# Last Update: 26/11/2024, 13:09
+# Version:     0.0.277
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,11 +15,11 @@
 
 from __future__ import annotations
 
+from weakref import WeakValueDictionary
+
 from phoenix.toolbox.qop.scalar import Scalar
 from phoenix.toolbox.qop.operator import Operator
 from phoenix.toolbox.qop.summand import Summand
-
-from weakref import WeakValueDictionary
 
 
 class Basis:
@@ -44,6 +44,7 @@ class Basis:
         self._ident = identifier
 
     def __del__(self):
+        # print("__del__ called")
         if self.identifier in Basis._bases:
             del Basis._bases[self.identifier]
 
@@ -151,7 +152,12 @@ print(
 
 print(a)
 print(dict(Basis._bases))
-del foo
-del bar
+# print("del a")
 del a
+# print("del bar")
+del bar
+# print("del foo")
+del foo
+# print("enought del")
 print(dict(Basis._bases))
+# print("ok bye")

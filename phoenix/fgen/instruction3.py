@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 24/10/2024, 14:54
-# Version:     0.0.593
+# Last Update: 26/11/2024, 13:42
+# Version:     0.0.615
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,10 +16,19 @@
 __doc__ = """
 Instruction module description
 
+Important note: we distinguish the ftype and the itype of an instruction
+instance. While the ftype is the functional type of the instruction instance
+such as a specific kind of instruction, a group or else, the itype refers to
+how it is applied on data.
+
+Example: An InstructionGroup is an Instruction that has ftype 'group' but itype
+can be 'instruction.someinstruction', which defines the greatest common
+denominator of instruction types within the group, i.e. how it is to be applied
+to data.
 """
 
 
-from phoenix._aux import segment_overlap  # , mro_latest_common_parent
+from phoenix._aux import segment_overlap, mro_latest_common_parent
 
 
 class Instruction:
@@ -32,24 +41,28 @@ class Instruction:
         if len(instruction_list) == 0:
             return None
         segments_list = [instr.itype.split(".") for instr in instruction_list]
+        latest_parent_itype = ".".join(segment_overlap(*segments_list))
+
         # pylint: disable=pointless-string-statement
-        # TODO: maybe implement this later:
-        """  
-        alternative_segment_list = list(
-            [
-                list(
-                    filter(
-                        lambda x: issubclass(x, Instruction),
-                        instr.__class__.__mro__,
-                    )
-                )[::-1]
-                for instr in instruction_list
-            ]
-        )
-        print(mro_latest_common_parent(*alternative_segment_list))
-        """
+        # TODO: maybe implement this later as alternative to segment_list:
+        if __debug__:
+            # use __mro__ to find latest common parent
+            alternative_segment_list = list(
+                [
+                    list(
+                        filter(
+                            lambda x: issubclass(x, Instruction),
+                            instr.__class__.__mro__,
+                        )
+                    )[::-1]
+                    for instr in instruction_list
+                ]
+            )
+            latest_parent = mro_latest_common_parent(*alternative_segment_list)
+            assert latest_parent._ftype == latest_parent_itype
+
         # pylint: enable=pointless-string-statement
-        return ".".join(segment_overlap(*segments_list))
+        return latest_parent_itype
 
     def __len__(self):
         return 1
@@ -85,7 +98,7 @@ class Instruction:
     @property
     def ftype(self):
         """property for class level ftype attribute"""
-        return self._ftype
+        return self.__class__._ftype
 
     @property
     def sort_key(self):
@@ -216,6 +229,14 @@ class GenericInstruction(Instruction, ftype="generic"):
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
+
+
+class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
+    """Base class for polynomial instructions"""
+
+    def __init__(self, *coeffs):
+        params = {f"C{num}": val for num, val in enumerate(coeffs)}
+        super().__init__(**params, itype=self.ftype)
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -417,3 +438,8 @@ if __name__ == "__main__":
     # print(SpecificInstruction.__mro__[::-1])
     # print(MoreSpecificInstruction.__mro__[::-1])
     # print(OtherSpecificInstruction.__mro__[::-1])
+
+    print(test.ftype, test.itype)
+
+    polytest = PolynomialInstruction(1, 2, 3)
+    print(polytest.to_dict())
