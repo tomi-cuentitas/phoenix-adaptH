@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/10/2024, 14:54
-# Version:     0.0.6
+# Last Update: 28/11/2024, 16:44
+# Version:     0.0.14
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,6 +20,20 @@ Subroutine module description
 
 """
 
+from phoenix.fgen.library import LibraryManager
+
+
+class PythonLibraryManager(LibraryManager):
+    """
+    The object managing a library that can be loaded to python.
+    This is NOT the library itself!
+    """
+
 
 class Subroutine:
-    """Subroutine class description"""
+    """
+    Subroutine class.
+
+    The subroutine is the python object that can be used in scripts.
+    The subroutine itself must be compiled against a backend.
+    """

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 14/11/2024, 14:58
-# Version:     0.0.8
+# Last Update: 27/11/2024, 10:39
+# Version:     0.0.10
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,6 +14,7 @@
 """
 
 from __future__ import annotations
+from phoenix.toolbox.qop.summand import Summand
 
 
 class Operator:
@@ -21,6 +22,8 @@ class Operator:
     Operator base class representing a general operator as sum of summands"""
 
     def __init__(self, *summands):
+        for summand in summands:
+            assert isinstance(summand, Summand)
         self._summands = summands
 
     def __len__(self):

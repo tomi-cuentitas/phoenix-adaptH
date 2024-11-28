@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 23/10/2024, 09:22
-# Version:     0.0.2960
+# Last Update: 27/11/2024, 11:47
+# Version:     0.0.2964
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -852,12 +852,14 @@ class KeyMap(Domain):
                     raise KeyError(
                         f"Tagged key {kseg.label} not from keymap {current_obj}"
                     )
+            if kseg not in current_obj._key2pos:
+                raise KeyError(f"Cannot find key in domain '{current_obj}'")
             current_pos += current_obj._key2pos[kseg]
             current_obj = current_obj._key2dom[kseg]
 
         return current_pos, current_obj
 
-    def whats_at(self, offset: int, _collect=None):
+    def at(self, offset: int, _collect=None):
         """
         Find what is at a certain position.
 
@@ -871,7 +873,7 @@ class KeyMap(Domain):
             return _collect, self  # RETURN
         key = self._pos2key[offset]
         domain, offset = self._pos2dom[offset]
-        return domain.whats_at(offset, Key(_collect, key))
+        return domain.at(offset, Key(_collect, key))
 
 
 ###############################################################################

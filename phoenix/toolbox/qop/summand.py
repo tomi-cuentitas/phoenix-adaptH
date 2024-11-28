@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 26/11/2024, 18:11
-# Version:     0.0.34
+# Last Update: 27/11/2024, 11:08
+# Version:     0.0.96
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,7 +15,9 @@
 
 from __future__ import annotations
 
+import warnings
 from phoenix.toolbox.qop.scalar import Scalar
+from phoenix.toolbox.qop.modifier import _Modifier
 
 
 class Summand:
@@ -23,22 +25,23 @@ class Summand:
     Summand class
     """
 
-    def __init__(self, bases: tuple, comps: tuple, coeff=None):
-        self._comps = comps
-        self._bases = bases
-        if coeff is None:
-            coeff = Scalar.identity()
-        elif not isinstance(coeff, Scalar):
-            coeff = Scalar(coeff)
-        self._coeff = coeff
+    CLS_MODIFIER = Scalar
+
     def __init__(self, bases: tuple, comps: tuple, modif=None):
         self._comps = comps
         self._bases = bases
-        if modif is None:
-            modif = Scalar.identity()
-        elif not isinstance(modif, Scalar):
-            modif = Scalar(modif)
+        modif = self.__class__.CLS_MODIFIER.to_modifier(modif)
         self._modif = modif
+
+    @classmethod
+    def set_modifier(cls, modif_class, /):
+        """set the modifier of the class"""
+        if not isinstance(modif_class, type):
+            raise TypeError("modifier class must be of type class")
+        if not issubclass(modif_class, _Modifier):
+            raise TypeError("modifier class must be subclass of '_Modifier'")
+        warnings.warn("Modifier class has changed!")
+        cls.CLS_MODIFIER = modif_class
 
     @property
     def comps(self):
@@ -53,17 +56,11 @@ class Summand:
     @property
     def coeff(self):
         """access read-only attribute coefficient/prefix"""
-        return self._coeff
+        return self._modif
 
     @property
     def prefix(self):
         """access read-only attribute prefix"""
-        return self._coeff
-
-    def copy(self):
-        """copy a summand"""
-        return Summand(self._bases, self._comps, self._coeff)
-        """access read-only attribute coefficient/modifier"""
         return self._modif
 
     @property
@@ -74,3 +71,8 @@ class Summand:
     def copy(self):
         """copy a summand"""
         return Summand(self._bases, self._comps, self._modif)
+
+
+print("foo")
+Summand.set_modifier(Scalar)
+print("bar")

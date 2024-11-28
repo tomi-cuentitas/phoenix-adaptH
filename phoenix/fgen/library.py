@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/10/2024, 14:54
-# Version:     0.0.6
+# Last Update: 28/11/2024, 16:45
+# Version:     0.0.14
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,9 +16,24 @@
 __doc__ = """
 Library module description
 
-
+I thought about library objects but now I rephrase my thoughts into
+LibraryManagers. Python Libraries can have their own library manager but the
+actual libraries are not represented by it.
 """
 
 
-class Library:
-    """Library class description"""
+class LibraryManager:
+    """
+    Library manager class description.
+
+    Used to create, manage, adapt and compile libraries.
+    """
+
+    def __init__(self):
+        self._routines = []
+
+    def append(self, routine):
+        """append a routine to the library"""
+
+    def compile(self):
+        """compile the library"""

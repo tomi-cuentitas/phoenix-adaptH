@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 26/11/2024, 13:42
-# Version:     0.0.615
+# Last Update: 27/11/2024, 13:09
+# Version:     0.0.616
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -210,9 +210,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return {
-                key: self.get(key, defaults.get(key, None)) for key in keys
-            }
+            return {key: self.get(key, defaults.get(key, None)) for key in keys}
         return {
             key: self.get(key, defaults.get(key, None)) for key in self.keys()
         }
@@ -223,9 +221,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(
-                self.get(key, defaults.get(key, None)) for key in keys
-            )
+            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -441,5 +437,5 @@ if __name__ == "__main__":
 
     print(test.ftype, test.itype)
 
-    polytest = PolynomialInstruction(1, 2, 3)
+    polytest = PolynomialInstruction(0, 1, 2, 3)
     print(polytest.to_dict())

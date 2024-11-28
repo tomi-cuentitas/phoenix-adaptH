@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/10/2024
-# Last Update: 24/10/2024, 09:50
-# Version:     0.0.53
+# Last Update: 27/11/2024, 11:46
+# Version:     0.0.55
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -148,7 +148,7 @@ print("D", kma.find("test", "x"))
 
 print("\nwhats at...:")
 for num in range(len(kma)):
-    print(num, kma.whats_at(num))
+    print(num, kma.at(num))
 
 print("\nkeys, recursive=True:")
 for num, key in enumerate(kma.keys(recursive=True)):

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/11/2024
-# Last Update: 21/11/2024, 13:56
-# Version:     0.1.8
+# Last Update: 27/11/2024, 11:03
+# Version:     0.1.33
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,22 +14,9 @@
 """
 
 from __future__ import annotations
-from typing import Self
 
 
 ZEROTOL = 1e-13
-
-
-def try_int(val, conv=True):
-    """attempt to convert floats to ints that are very close to an int value"""
-    if conv:
-        if val > 0:
-            if abs(val - (val_int := int(val + ZEROTOL))) < ZEROTOL:
-                return int(val_int + ZEROTOL)
-        else:
-            if abs(val - (val_int := int(val - ZEROTOL))) < ZEROTOL:
-                return int(val_int - ZEROTOL)
-    return val
 
 
 def autoconvert(func):
@@ -49,62 +36,113 @@ def autoconvert(func):
     return wrapper
 
 
-class Modifier:
+class _Modifier:
     """Modifier parent class to make sure all that is needed is defined"""
 
-    def __init__(self, *_args, **_kwargs):
-        pass
+    def __init__(self, value, **_kwargs):
+        assert not isinstance(value, _Modifier)
+        self._val = value
 
-    def copy(self) -> Modifier:
+    @classmethod
+    def to_modifier(cls, value, default=None) -> _Modifier:
+        """guarantee that the value has the right modifier."""
+        if value is None:
+            if default is None:
+                return cls.identity()
+            assert isinstance(default, _Modifier)
+            value = default.copy()
+        if isinstance(value, cls):
+            return value
+        if isinstance(value, _Modifier):
+            raise TypeError("Wrong modifier type")
+        return cls(value)
+
+    def copy(self) -> _Modifier:
         """return a copy of the current scalar"""
-        raise NotImplementedError("'copy' must be defined by subclass.")
+        return self.__class__(self._val)
+
+    def to_complex_components(self) -> tuple:
+        """split into complex components"""
+        raise NotImplementedError(
+            "'to_complex_components' must be defined by subclass."
+        )
+
+    def to_str(self, **_kwargs):
+        """
+        Default string conversion.
+        """
+        return str(self.value)
+
+    @classmethod
+    def identity(cls):
+        """identity, neutral element of multiplication"""
+        return cls(1)
+
+    @classmethod
+    def zero(cls):
+        """zero, neutral element of addition"""
+        return cls(0)
+
+    @classmethod
+    def from_product(cls, *factors):
+        """generate from a product"""
+        ret = cls.identity()
+        for val in factors:
+            if isinstance(val, _Modifier):
+                ret *= val
+            else:
+                ret *= cls(val)
+        return ret
+
+    @property
+    def value(self):
+        """value property"""
+        return self._val * 1
+
+    @property
+    def real(self):
+        """value property"""
+        real, _ = self.to_complex_components()
+        return real
+
+    @property
+    def imag(self):
+        """value property"""
+        _, imag = self.to_complex_components()
+        return imag
 
     # class handler for arithmetics
     # -----------------------------
 
     @classmethod
-    def _add(cls, first, second) -> Modifier:
-        raise NotImplementedError(
-            "Routine '_add' must be implemented by subclass."
-        )
+    @autoconvert
+    def _add(cls, first, second) -> _Modifier:
+        return cls(first.value + second.value)
 
     @classmethod
-    def _sub(cls, first, second) -> Modifier:
-        raise NotImplementedError(
-            "Routine '_sub' must be implemented by subclass."
-        )
+    @autoconvert
+    def _sub(cls, first, second) -> _Modifier:
+        return cls(first.value - second.value)
 
     @classmethod
-    def _mul(cls, first, second) -> Modifier:
-        raise NotImplementedError(
-            "Routine '_mul' must be implemented by subclass."
-        )
+    @autoconvert
+    def _mul(cls, first, second) -> _Modifier:
+        return cls(first.value * second.value)
 
     @classmethod
-    def _div(cls, first, second) -> Modifier:
-        raise NotImplementedError(
-            "Routine '_div' must be implemented by subclass."
-        )
+    @autoconvert
+    def _div(cls, first, second) -> _Modifier:
+        return cls(first.value / second.value)
 
     @classmethod
-    def _pow(cls, first, second) -> Modifier:
-        raise NotImplementedError(
-            "Routine '_pow' must be implemented by subclass."
-        )
+    @autoconvert
+    def _pow(cls, first, second) -> _Modifier:
+        return cls(first.value**second.value)
 
     @classmethod
-    def _abs(cls, scal) -> float:
-        raise NotImplementedError(
-            "Routine '_abs' must be implemented by subclass."
-        )
-
-    def to_str(self, **_kwargs) -> str:
-        """
-        Default string conversion.
-        """
-        raise NotImplementedError(
-            "Routine 'to_str' must be implemented by subclass."
-        )
+    @autoconvert
+    def _abs(cls, first) -> float:
+        return abs(first.value)
 
     # forward dunder methods into class handlers
     # ------------------------------------------
@@ -148,33 +186,12 @@ class Modifier:
     def __repr__(self):
         return self.to_str()
 
-    @classmethod
-    def identity(cls):
-        """generate the neutral element of multiplication"""
-        return cls(1)
 
-    @classmethod
-    def zero(cls):
-        """generate the neutral element of addition"""
-        return cls(0)
+"""
+Note:
+=====
 
-    @classmethod
-    def from_product(cls, *values):
-        """generate from a product"""
-        raise NotImplementedError("Subclass must implement this method.")
-
-    def to_complex_components(self) -> tuple:
-        """split into complex components"""
-        raise NotImplementedError("Subclass must implement this method.")
-
-    @property
-    def real(self):
-        """value property"""
-        real, _ = self.to_complex_components()
-        return real
-
-    @property
-    def imag(self):
-        """value property"""
-        _, imag = self.to_complex_components()
-        return imag
+Modifier inherits to _Scalar, an abstract base class for scalars.
+Modifier can also inherit to any other summable like matrices or other
+individual datatypes
+"""
