@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 28/11/2024, 16:45
-# Version:     0.0.14
+# Last Update: 29/11/2024, 16:58
+# Version:     0.0.18
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,9 +16,10 @@
 __doc__ = """
 Library module description
 
-I thought about library objects but now I rephrase my thoughts into
-LibraryManagers. Python Libraries can have their own library manager but the
-actual libraries are not represented by it.
+I thought about library objects but now I rephrase my thoughts into the idead
+of LibraryManagers. Python Libraries can have their own library manager but the
+actual libraries are not represented by it, that's why 'Library' would be 
+misleading.
 """
 
 
@@ -37,3 +38,10 @@ class LibraryManager:
 
     def compile(self):
         """compile the library"""
+
+
+class PythonLibraryManager(LibraryManager):
+    """
+    The object managing a library that then can be loaded to python.
+    This is NOT the library itself!
+    """

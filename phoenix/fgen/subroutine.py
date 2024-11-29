@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 28/11/2024, 16:44
-# Version:     0.0.14
+# Last Update: 29/11/2024, 17:11
+# Version:     0.0.41
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,20 +20,49 @@ Subroutine module description
 
 """
 
-from phoenix.fgen.library import LibraryManager
-
-
-class PythonLibraryManager(LibraryManager):
-    """
-    The object managing a library that can be loaded to python.
-    This is NOT the library itself!
-    """
-
 
 class Subroutine:
     """
     Subroutine class.
 
     The subroutine is the python object that can be used in scripts.
-    The subroutine itself must be compiled against a backend.
+    The subroutine is callable and calls the backend stuff.
     """
+
+    def __init__(self, name, **_kwargs):
+        self._name = name
+        self._is_prep = False
+
+    @property
+    def is_prep(self):
+        """access read-only attribute 'is_prep'"""
+        return self._is_prep
+
+    def name(self):
+        """access read-only attribute 'name'"""
+        return self._name
+
+    def _call(self, *args):
+        """actually call the subroutine"""
+        assert self.is_prep
+        return args
+
+    def _prepare(self, **_kwargs):
+        """actually prepare the subroutine"""
+        self._is_prep = True
+        return True
+
+    def prepare(self, **kwargs):
+        """attempt to prepare the subroutine"""
+        if not self.is_prep:
+            self._prepare(**kwargs)
+        return self
+
+    def call(self, *args, **kwargs):
+        """attempt to call the subroutine"""
+        if not self.is_prep:
+            self._prepare(**kwargs)
+        return self._call(*args)
+
+    def __call__(self, *args, **kwargs):
+        return self.call(args, **kwargs)

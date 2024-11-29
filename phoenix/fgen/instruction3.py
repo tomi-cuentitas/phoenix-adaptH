@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 27/11/2024, 13:09
-# Version:     0.0.616
+# Last Update: 29/11/2024, 17:22
+# Version:     0.0.622
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -210,7 +210,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return {key: self.get(key, defaults.get(key, None)) for key in keys}
+            return {
+                key: self.get(key, defaults.get(key, None)) for key in keys
+            }
         return {
             key: self.get(key, defaults.get(key, None)) for key in self.keys()
         }
@@ -221,18 +223,12 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
-
-
-class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
-    """Base class for polynomial instructions"""
-
-    def __init__(self, *coeffs):
-        params = {f"C{num}": val for num, val in enumerate(coeffs)}
-        super().__init__(**params, itype=self.ftype)
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -351,6 +347,23 @@ class InstructionGroup(Instruction, ftype="group"):
         if group:
             collect.append(InstructionGroup(group, itype=self._itype))
         return InstructionGroup(collect, itype=self._itype)
+
+
+class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
+    """Base class for polynomial instructions"""
+
+    def __init__(self, key_tgt, key_src, *coeffs):
+        params = {f"C{num}": val for num, val in enumerate(coeffs)}
+        params["deg"] = len(coeffs)
+        params["key_tgt"] = key_tgt
+        params["key_src"] = key_src
+        super().__init__(**params, itype=self.ftype)
+
+
+class LinearOperationInstruction(PolynomialInstruction, ftype="linear"):
+    """Ax + b type instruction"""
+
+    def __init__(self, a, )
 
 
 if __name__ == "__main__":

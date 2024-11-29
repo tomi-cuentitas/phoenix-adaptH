@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 24/10/2024, 15:28
-# Version:     0.0.6
+# Last Update: 29/11/2024, 09:44
+# Version:     0.0.7
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -30,7 +30,11 @@ class DContainer:
         }
 
     def __init_subclass__(cls, **layers):
-        cls._LAYERS = layers
+        cls._LAYERS = {
+            key: layer
+            for key, layer in layers.items()
+            if issubclass(layer, ADAA)
+        }
         return cls
 
     def __getitem__(self, key: int | str):
