@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 29/11/2024, 16:58
-# Version:     0.0.18
+# Last Update: 02/12/2024, 19:46
+# Version:     0.0.79
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -31,13 +31,14 @@ class LibraryManager:
     """
 
     def __init__(self):
-        self._routines = []
+        self._libroutines = []
 
     def append(self, routine):
         """append a routine to the library"""
+        # create a libroutine from the routine
 
-    def compile(self):
-        """compile the library"""
+    def create(self):
+        """create the library"""
 
 
 class PythonLibraryManager(LibraryManager):
@@ -45,3 +46,82 @@ class PythonLibraryManager(LibraryManager):
     The object managing a library that then can be loaded to python.
     This is NOT the library itself!
     """
+
+
+class LibRoutine:
+    """
+    LibRoutine collects and manages all information for a routine in a library.
+
+    # include a backend signature here. The backend can be set from the ADAAs
+    backend when the libroutine is created from the routines.
+    """
+
+
+"""
+NAMING SCHEME
+=============
+
+backends/lib/backend_[backend_specifier]_[implementation].[ending]
+e.g.: backend_f90_base.f90, backend_cuda_poly.cu, ...
+
+
+some first function types
+-------------------------
+
+linear: one instruction: one scale for one x_i
+linear -> y_j = a x_i
+
+lookup: one instruction: one specific x_i
+lookup -> y_j = x_i
+
+permutation: one instruction: a pair of i and j, where i is mapped to j
+permtn -> (j <- i) permutation
+
+
+later to be implemted
+---------------------
+
+multinomial: one instruction <-> combined powers of multiple x_i
+mlnoml -> y_j = a_1 x_i,1 ** n_1,1 * x_i,2 ** n_1,2 * ... + 
+
+polynomial: one instruction <-> powers of one x_i
+plnoml -> y_j = a_1 x_i ** n_1 + ...
+
+monomial: one instruction <-> one power of one x_i
+monoml -> y_j = a x_i ** n
+
+linear plus a constant: one instruction: one scaled x_i and one offset b
+conlin -> y_j = a x_i + b
+
+
+"""
+
+
+# import subprocess
+# import os
+
+
+# module_name = "backend_f90_base"
+
+# try:
+#     subprocess.Popen(
+#         [
+#             "f2py",
+#             "-c",
+#             "-m",
+#             module_name,
+#             "../src/backend_f90_base.f90",
+#         ],
+#         cwd="./backends/lib",
+#     )
+#     print(f"Module '{module_name}' compiled successfully!")
+# except subprocess.CalledProcessError as e:
+#     print("Compilation failed!")
+#     print(e.stderr)
+
+# from phoenix.fgen.backends.lib.backend_f90_base import backend_f90_base
+
+# print(dir(backend_f90_base))
+
+# print(backend_f90_base.foo())
+# print(backend_f90_base.xxx)
