@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/10/2024, 14:54
-# Version:     0.0.60
+# Last Update: 03/12/2024, 15:27
+# Version:     0.0.67
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -22,6 +22,7 @@ Routine module description
 
 import pickle
 from phoenix.fgen.tomography import Tomography
+from phoenix.fgen.instruction3 import InstructionGroup
 
 # pylint: disable=too-many-arguments
 
@@ -39,6 +40,8 @@ class Routine:
         instruction_group=None,
     ):
         self._identifier = identifier
+        if instruction_group is None:
+            instruction_group = InstructionGroup([])
         self.instruction_group = instruction_group
 
         self.in_vars = in_vars

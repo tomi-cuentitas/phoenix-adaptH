@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 24/10/2024, 15:35
-# Version:     0.0.20
+# Last Update: 03/12/2024, 11:10
+# Version:     0.0.21
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,6 +19,7 @@ from phoenix.coeffbackend_derived import NumPyCoeffBackend
 from phoenix.coeffbackend_derived import FortranCoeffBackend
 from phoenix.coeffbackend_derived import CuPyCoeffBackend
 from phoenix.coeffbackend_derived import OpenClCoeffBackend
+from phoenix.coeffbackend_derived import PyCudaCoeffBackend
 
 
 class RawPyADAA(ADAA, backend=RawPyCoeffBackend(), identifier="RAWPYTHON"):
@@ -38,4 +39,8 @@ class CupyADAA(ADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
 
 
 class OpenClADAA(ADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"):
+    """OpenCL based data layer"""
+
+
+class PyCudaADAA(ADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"):
     """OpenCL based data layer"""

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 29/10/2024, 16:09
-# Version:     0.0.39
+# Last Update: 03/12/2024, 11:10
+# Version:     0.0.42
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -480,6 +480,61 @@ class OpenClCoeffBackend(CoeffBackend):
             warnings.warn("Failed to create OpenCL buffer: {}".format(str(e)))
             return (None, None)
         return floats
+
+    def coeff_from_numpy(
+        self,
+        coeff_like: Any,
+        nparray: np.ndarray,
+        size: int,
+        dtype: str,
+    ) -> None:
+        raise NotImplementedError()
+
+    def coeff_to_numpy(
+        self, coeff_like: Any, size: int, dtype: str
+    ) -> np.ndarray:
+        raise NotImplementedError()
+
+    def coeff_linop(
+        self,
+        arr_r: Any,
+        /,
+        scal_a: float | None,
+        arr_x: Any,
+        scal_b: float | None,
+        arr_y: Any,
+        *,
+        size: int,
+        dtype: str,
+        inplace: bool = False,
+    ):
+        raise NotImplementedError()
+
+
+class PyCudaCoeffBackend(CoeffBackend):
+    """implement the backend for 'PyCuda'"""
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(self, *args, **kwargs)
+        # self._cl_cntxt = cl.create_some_context()
+        # self._cl_queue = cl.CommandQueue(self._cl_cntxt)
+
+        # self._cl_mflag = cl.mem_flags
+
+    def coeff_new_array(self, size: int, dtype: str):
+        raise NotImplementedError()
+        # try:
+        #     read_write = self._cl_mflag.READ_WRITE
+
+        #     floats = cl.Buffer(
+        #         self._cl_cntxt,
+        #         read_write,
+        #         size=8 * size,  # size in bytes
+        #     )
+        # except cl.Error as e:
+        #     warnings.warn("Failed to create OpenCL buffer: {}".format(str(e)))
+        #     return (None, None)
+        # return floats
 
     def coeff_from_numpy(
         self,

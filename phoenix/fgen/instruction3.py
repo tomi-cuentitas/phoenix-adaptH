@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 29/11/2024, 17:22
-# Version:     0.0.622
+# Last Update: 03/12/2024, 15:05
+# Version:     0.0.629
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -29,6 +29,20 @@ to data.
 
 
 from phoenix._aux import segment_overlap, mro_latest_common_parent
+
+
+class _PartialFormatDict(dict):
+    """allows partial formatting of strings"""
+
+    def __setitem__(self, key, value):
+        if not isinstance(key, str):
+            raise ValueError("Key must be a string")
+        return super().__setitem__(key, value)
+
+    def __getitem__(self, key):
+        if key in self:
+            return super().__getitem__(key)
+        return "{" + key + "}"
 
 
 class Instruction:
@@ -210,12 +224,19 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return {
-                key: self.get(key, defaults.get(key, None)) for key in keys
-            }
-        return {
-            key: self.get(key, defaults.get(key, None)) for key in self.keys()
-        }
+            pfd = _PartialFormatDict()
+            pfd.update(
+                {key: self.get(key, defaults.get(key, None)) for key in keys}
+            )
+        else:
+            pfd = _PartialFormatDict()
+            pfd.update(
+                {
+                    key: self.get(key, defaults.get(key, None))
+                    for key in self.keys()
+                }
+            )
+        return pfd
 
     def to_tuple(self, *keys, defaults: dict | None = None):
         """get a data tuple from keys in the order the keys are requested"""
@@ -363,7 +384,7 @@ class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
 class LinearOperationInstruction(PolynomialInstruction, ftype="linear"):
     """Ax + b type instruction"""
 
-    def __init__(self, a, )
+    # def __init__(self, a, )
 
 
 if __name__ == "__main__":

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 02/12/2024, 19:46
-# Version:     0.0.79
+# Last Update: 03/12/2024, 16:20
+# Version:     0.0.145
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,11 +16,36 @@
 __doc__ = """
 Library module description
 
-I thought about library objects but now I rephrase my thoughts into the idead
-of LibraryManagers. Python Libraries can have their own library manager but the
-actual libraries are not represented by it, that's why 'Library' would be 
+I thought about library objects but now I prefer the idea of LibraryManagers.
+Python Libraries can have their own library manager but the actual libraries
+(the imported stuff) are not represented by it, that's why 'Library' would be 
 misleading.
 """
+
+
+class LibRoutine:
+    """
+    LibRoutine collects and manages all information for a routine in a library.
+
+    # include a backend signature here. The backend can be set from the ADAAs
+    backend when the libroutine is created from the routines.
+    """
+
+    def __init__(self, routine):
+        self.routine = routine
+
+    def create_source_lines(self, **kwargs):
+        """create the source code lines"""
+        yield ""
+
+    def get_instructions(self):
+        """iterate through all instructions"""
+        for instruction in (
+            self.routine.instruction_group.sorted(lambda x: x["targ_indx"])
+            .flatten()
+            .instructions
+        ):
+            yield instruction
 
 
 class LibraryManager:
@@ -30,30 +55,40 @@ class LibraryManager:
     Used to create, manage, adapt and compile libraries.
     """
 
-    def __init__(self):
+    def __init__(self, libname):
+        self._libname = libname
         self._libroutines = []
+
+    @property
+    def name(self):
+        return self._libname
+
+    def valid_name(self, name, convert=True):
+        """
+        check if a chosen name for a library is valid.
+        returns a valid name.
+        If the input name is invalid and convert is true, attempt to convert an
+        invalid name to a valid one if possible and  issue a warning.
+        Raise an Exception if the conversion is impossible or convert is false.
+        """
+        return name
 
     def append(self, routine):
         """append a routine to the library"""
-        # create a libroutine from the routine
+        self._libroutines.append(routine)
 
     def create(self):
         """create the library"""
+
+    def create_source_lines(self, **kwargs):
+        """create the source code lines"""
+        yield ""
 
 
 class PythonLibraryManager(LibraryManager):
     """
     The object managing a library that then can be loaded to python.
     This is NOT the library itself!
-    """
-
-
-class LibRoutine:
-    """
-    LibRoutine collects and manages all information for a routine in a library.
-
-    # include a backend signature here. The backend can be set from the ADAAs
-    backend when the libroutine is created from the routines.
     """
 
 
@@ -65,33 +100,45 @@ backends/lib/backend_[backend_specifier]_[implementation].[ending]
 e.g.: backend_f90_base.f90, backend_cuda_poly.cu, ...
 
 
-some first function types
+first to be implemented
 -------------------------
 
 linear: one instruction: one scale for one x_i
-linear -> y_j = a x_i
+y_j <- a * x_i
 
-lookup: one instruction: one specific x_i
-lookup -> y_j = x_i
-
-permutation: one instruction: a pair of i and j, where i is mapped to j
-permtn -> (j <- i) permutation
+multilinear: one instruction: one scale for one x_i
+z_l <- a * x_i * y_j
 
 
 later to be implemted
 ---------------------
 
+special function: sin, cos, exp, log, snh, csh
+sfun_sin y_j <- a_i * [sin, cos, ...](b_i * x_i) + c_i
+
+bivariate multinomial: one instruction <-> combined powers of multiple x_i
+z_l <- a_1 x_i,1 ** n_1,1 * x_i,2 ** n_1,2 * ... y_i,1 ** m_1,1 * ... + 
+
 multinomial: one instruction <-> combined powers of multiple x_i
-mlnoml -> y_j = a_1 x_i,1 ** n_1,1 * x_i,2 ** n_1,2 * ... + 
+y_j <- a_1 x_i,1 ** n_1,1 * x_i,2 ** n_1,2 * ... + 
 
 polynomial: one instruction <-> powers of one x_i
-plnoml -> y_j = a_1 x_i ** n_1 + ...
+y_j <- a_1 x_i ** n_1 + ...
 
 monomial: one instruction <-> one power of one x_i
-monoml -> y_j = a x_i ** n
+y_j <- a x_i ** n
 
-linear plus a constant: one instruction: one scaled x_i and one offset b
-conlin -> y_j = a x_i + b
+affine (linear plus a constant): one instruction: one scaled x_i and one offset b
+y_j <- a x_i + b
+
+lookup: one instruction: one specific x_i
+y_j <- x_i
+
+mask: one instruction: one specific x_i
+y_i <- x_i with extras
+
+permutation: one instruction: a pair of i and j, where i is mapped to j
+y_j <- x_i with extras
 
 
 """
