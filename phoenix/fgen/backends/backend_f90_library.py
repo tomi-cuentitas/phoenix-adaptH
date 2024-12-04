@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 03/12/2024, 16:29
-# Version:     0.0.81
+# Last Update: 04/12/2024, 13:30
+# Version:     0.0.92
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,41 +25,46 @@ DEFAULT_OPTIONS = {
 }
 
 LIBRARY_HEAD = """
-MODULE {lib_name}
+MODULE {mod_name}_mod
+"""
 
+LIBRARY_MODUSE = """
+{tab}USE {lib_name}"""
+
+LIBRARY_CONTAINS = """
 {tab}IMPLICIT NONE
 
 CONTAINS
 """
 
 LIBRARY_FOOT = """
-END MODULE {lib_name}
+END MODULE {mod_name}_mod
 """
 
 
 class LibraryManagerF90(PythonLibraryManager):
     """A PythonLibraryManager for f90 type backend routines"""
 
-    def append(self, routine):
-        super().append(LibRoutineF90_Linear_Base(routine))
-        super().append(LibRoutineF90_Linear_Offs(routine))
-
     def create_source_lines(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)
-        options.update({"lib_name": self.name})
+        options.update({"mod_name": self.name})
         options.update(kwargs)
 
         for line in LIBRARY_HEAD.split("\n"):
             yield line.format(**options)
 
-        for routine in self._libroutines:
-            for line in routine.create_source_lines(**options):
+        for libroutine_name, libroutine in self._libroutines.items():
+            for line in libroutine.create_source_lines(**options):
                 if line:
                     yield "{tab}".format_map(options) + line
             yield " "
 
         for line in LIBRARY_FOOT.split("\n"):
             yield line.format(**options)
+
+    def to_libroutines(self, routine):
+        yield LibRoutineF90_Linear_Base(routine)
+        yield LibRoutineF90_Linear_Offs(routine)
 
 
 if __name__ == "__main__":

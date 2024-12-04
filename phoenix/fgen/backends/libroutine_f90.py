@@ -5,19 +5,23 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 03/12/2024, 16:28
-# Version:     0.0.18
+# Last Update: 04/12/2024, 13:30
+# Version:     0.0.23
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.fgen.library import LibRoutine
+from phoenix.fgen.library import LibRoutine, MakefileManager
 
 DEFAULT_OPTIONS = {
     "tab": "  ",
 }
+
+
+class MakefileManagerF90(MakefileManager):
+    """Fortran implementation of the makefile manager"""
 
 
 class LibRoutineF90(LibRoutine):
@@ -29,10 +33,11 @@ class LibRoutineF90(LibRoutine):
     code_head = ""
     code_foot = ""
     code_line = ""
+    suffix = "gen"
 
     def create_source_lines(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)
-        options.update({"sr_name": self.routine.identifier})
+        options.update({"sr_name": self.routine.name})
         options.update(kwargs)
 
         for line in self.code_head.split("\n"):

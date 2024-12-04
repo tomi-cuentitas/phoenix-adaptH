@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/12/2024, 15:27
-# Version:     0.0.67
+# Last Update: 04/12/2024, 13:19
+# Version:     0.0.69
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,14 +32,14 @@ class Routine:
 
     def __init__(
         self,
-        identifier: str,
+        name: str,
         *,
         itype,
         out_var,
         in_vars,
         instruction_group=None,
     ):
-        self._identifier = identifier
+        self._name = name
         if instruction_group is None:
             instruction_group = InstructionGroup([])
         self.instruction_group = instruction_group
@@ -68,7 +68,7 @@ class Routine:
     def checksum(self):
         """a checksum to make sure, that the naming is safe"""
         test_tuple = (
-            self._identifier,
+            self._name,
             self.itype,
             len(self.in_vars),
             self.out_var.get_size(),
@@ -78,7 +78,7 @@ class Routine:
 
     def from_file(self):
         """get from file"""
-        filename = f"routine_{self._identifier}_data.pckl"
+        filename = f"routine_{self._name}_data.pckl"
         try:
             with open(filename, "rb") as f:
                 checksum, instgrp = pickle.load(f)
@@ -93,7 +93,7 @@ class Routine:
 
     def to_file(self):
         """write to file"""
-        filename = f"routine_{self._identifier}_data.pckl"
+        filename = f"routine_{self._name}_data.pckl"
         with open(filename, "wb") as f:
             pickle.dump((self.checksum(), self.instruction_group), f)
 
@@ -104,15 +104,15 @@ class Routine:
     def from_function(
         function,  # generating function
         tomography: Tomography,
-        identifier=None,  # identifier
+        name=None,  # name
         parallel=0,  # use multiple cores for generation if > 0
         verbose=False,
         **kwargs,  # catch other arguments if any
     ):
         """generate instructions from function tomography"""
 
-        if identifier is None:
-            identifier = function.__name__
+        if name is None:
+            name = function.__name__
 
         # change here: tomography will return an instruction group directly
         instruction_group = tomography.apply(
@@ -121,7 +121,7 @@ class Routine:
             verbose=verbose,
         )
         return Routine(
-            identifier=identifier,
+            name=name,
             itype=tomography.itype,
             out_var=tomography.out_var,
             in_vars=tomography.in_vars,
@@ -129,8 +129,8 @@ class Routine:
         )
 
     @property
-    def identifier(self):
-        """make the identifier read-only, to conserve association to
+    def name(self):
+        """make the name read-only, to conserve association to
         instructions and filenames
         """
-        return self._identifier
+        return self._name

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/12/2024, 16:20
-# Version:     0.0.145
+# Last Update: 04/12/2024, 13:32
+# Version:     0.0.227
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,6 +23,29 @@ misleading.
 """
 
 
+class MakefileManager:
+    """manages creation, execution and design of makefiles"""
+
+    def __init__(self, name):
+        self.name = name
+        self._filename = f"Makefile_{name}"
+        self._is_created = False
+
+    def set_filename(self, filename):
+        """set the makefile's filename"""
+        self._filename = filename
+        self._is_created = False
+
+    def create_file(self):
+        """create the file"""
+        self._is_created = True
+
+    def execute_file(self):
+        """execute the makefile"""
+        if not self._is_created:
+            self.create_file()
+
+
 class LibRoutine:
     """
     LibRoutine collects and manages all information for a routine in a library.
@@ -31,8 +54,22 @@ class LibRoutine:
     backend when the libroutine is created from the routines.
     """
 
-    def __init__(self, routine):
+    suffix = ""
+
+    def __init__(self, routine, dependencies=None):
         self.routine = routine
+        self._name = routine.name + (f"_{self.suffix}" if self.suffix else "")
+        self._dependencies = {}
+        if dependencies is not None:
+            if isinstance(dependencies, dict):
+                self._dependencies.update(dependencies)
+            else:
+                raise ValueError("dependencies must be a dict")
+
+    @property
+    def name(self):
+        """read-only access to attribute name"""
+        return self._name
 
     def create_source_lines(self, **kwargs):
         """create the source code lines"""
@@ -47,6 +84,9 @@ class LibRoutine:
         ):
             yield instruction
 
+    def get_dependencies(self):
+        yield from self._dependencies.items()
+
 
 class LibraryManager:
     """
@@ -55,13 +95,20 @@ class LibraryManager:
     Used to create, manage, adapt and compile libraries.
     """
 
-    def __init__(self, libname):
-        self._libname = libname
-        self._libroutines = []
+    def __init__(self, name):
+        self._libname = name
+        self._libroutines = {}
+        self._dependencies = {}
 
     @property
     def name(self):
+        """read-only access to property name"""
         return self._libname
+
+    @property
+    def libroutines(self):
+        """generator-access to libroutines"""
+        yield from self._libroutines.values()
 
     def valid_name(self, name, convert=True):
         """
@@ -75,7 +122,21 @@ class LibraryManager:
 
     def append(self, routine):
         """append a routine to the library"""
-        self._libroutines.append(routine)
+        for libroutine in self.to_libroutines(routine):
+            if libroutine.name in self._libroutines:
+                raise KeyError(
+                    f"Routine '{libroutine.name}' already exists in library"
+                )
+            self._libroutines[routine.name] = libroutine
+            for name, dep in libroutine.get_dependencies():
+                if name not in self._dependencies:
+                    self._dependencies[name] = dep
+
+    def to_libroutines(self, routine):
+        """create a libroutine from the routine"""
+        raise NotImplementedError(
+            "'to_libroutine' must be implemented by subclasses"
+        )
 
     def create(self):
         """create the library"""
@@ -108,6 +169,9 @@ y_j <- a * x_i
 
 multilinear: one instruction: one scale for one x_i
 z_l <- a * x_i * y_j
+
+subroutinecall: call another subroutine
+name(*params)
 
 
 later to be implemted

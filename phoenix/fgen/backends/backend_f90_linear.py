@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 03/12/2024, 16:30
-# Version:     0.0.175
+# Last Update: 04/12/2024, 13:17
+# Version:     0.0.186
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -36,8 +36,43 @@ SR_LINEAR_BASE_LINE = """
 {tab}targ_r({targ_indx}) = targ_r({targ_indx}) + src1_r({src1_indx}) * {alph_r} - src1_i({src1_indx}) * {alph_i}
 {tab}targ_i({targ_indx}) = targ_i({targ_indx}) + src1_r({src1_indx}) * {alph_i} + src1_i({src1_indx}) * {alph_r}"""
 
+
+###############################################################################
+
+
 SR_LINEAR_OFFS_HEAD = """
-SUBROUTINE {sr_name}_offs(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_off, src1_off)
+SUBROUTINE {sr_name}_offs(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)
+{tab}!
+{tab}double precision, intent(inout) :: targ_r
+{tab}double precision, intent(inout) :: targ_i
+{tab}integer, intent(in)             :: targ_n
+{tab}!
+{tab}double precision, intent(in)    :: src1_r
+{tab}double precision, intent(in)    :: src1_i
+{tab}integer, intent(in)             :: src1_n
+{tab}!
+{tab}integer, intent(in)             :: targ_offs
+{tab}integer, intent(in)             :: src1_offs
+{tab}!
+{tab}integer                         : targ_indx_shft
+{tab}integer                         : src1_indx_shft
+"""
+
+SR_LINEAR_OFFS_FOOT = """
+END SUBROUTINE {sr_name}_offs
+"""
+
+SR_LINEAR_OFFS_LINE = """
+{tab}targ_shft = {targ_indx} + targ_offs
+{tab}src1_shft = {src1_indx} + src1_offs
+{tab}targ_r(targ_shft) = targ_r(targ_shft) + src1_r(src1_shft) * {alph_r} - src1_i(src1_shft) * {alph_i}
+{tab}targ_i(targ_shft) = targ_i(targ_shft) + src1_r(src1_shft) * {alph_i} + src1_i(src1_shft) * {alph_r}"""
+
+
+###############################################################################
+
+SR_LINEAR_LIST_HEAD = """
+SUBROUTINE {sr_name}_list(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_idxs, src1_idxs, alph_rs, alph_is, inst_n, targ_offs, src1_offs, offs_n)
 {tab}!
 {tab}double precision, intent(inout) :: targ_r
 {tab}double precision, intent(inout) :: targ_i
@@ -49,20 +84,22 @@ SUBROUTINE {sr_name}_offs(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_o
 {tab}!
 {tab}integer, intent(in)             :: targ_off
 {tab}integer, intent(in)             :: src1_off
+{tab}integer, intent(in)             :: targ_off
+{tab}integer, intent(in)             :: src1_off
 {tab}!
 {tab}integer                         : targ_indx_shft
 {tab}integer                         : src1_indx_shft
+
+{tab}do
 """
 
-SR_LINEAR_OFFS_FOOT = """
-END SUBROUTINE {sr_name}_offs
+SR_LINEAR_LIST_FOOT = """
+END SUBROUTINE {sr_name}_list
 """
 
-SR_LINEAR_OFFS_LINE = """
-{tab}targ_shft = {targ_indx} + targ_off
-{tab}src1_shft = {src1_indx} + src1_off
-{tab}targ_r(targ_shft) = targ_r(targ_shft) + src1_r(src1_shft) * {alph_r} - src1_i(src1_shft) * {alph_i}
-{tab}targ_i(targ_shft) = targ_i(targ_shft) + src1_r(src1_shft) * {alph_i} + src1_i(src1_shft) * {alph_r}"""
+SR_LINEAR_LIST_LINE = """"""
+
+###############################################################################
 
 
 class LibRoutineF90_Linear_Base(LibRoutineF90):
@@ -71,6 +108,7 @@ class LibRoutineF90_Linear_Base(LibRoutineF90):
     code_head = SR_LINEAR_BASE_HEAD
     code_foot = SR_LINEAR_BASE_FOOT
     code_line = SR_LINEAR_BASE_LINE
+    suffix = "base"
 
 
 class LibRoutineF90_Linear_Offs(LibRoutineF90):
@@ -79,6 +117,7 @@ class LibRoutineF90_Linear_Offs(LibRoutineF90):
     code_head = SR_LINEAR_OFFS_HEAD
     code_foot = SR_LINEAR_OFFS_FOOT
     code_line = SR_LINEAR_OFFS_LINE
+    suffix = "offs"
 
 
 if __name__ == "__main__":
