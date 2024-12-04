@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 04/12/2024, 13:30
-# Version:     0.0.92
+# Last Update: 04/12/2024, 17:43
+# Version:     0.0.186
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,8 +15,9 @@
 
 from phoenix.fgen.library import PythonLibraryManager
 from phoenix.fgen.backends.backend_f90_linear import (
-    LibRoutineF90_Linear_Base,
-    LibRoutineF90_Linear_Offs,
+    LibRoutineF90LinearBase,
+    LibRoutineF90LinearOffs,
+    LibRoutineF90LinearList,
 )
 
 
@@ -25,21 +26,39 @@ DEFAULT_OPTIONS = {
 }
 
 LIBRARY_HEAD = """
-MODULE {mod_name}_mod
+MODULE {library_name}_mod
 """
 
 LIBRARY_MODUSE = """
-{tab}USE {lib_name}"""
+{tab}USE {dep_name}"""
+
+LIBRARY_IMPLICITNONE = """
+{tab}IMPLICIT NONE
+"""
+
+LIBRARY_ARRAY_START = "{tab}{dtype}, parameter :: {arrname}({size}) = (/ &"
+LIBRARY_ARRAY_DLINE = "{tab}{tab}{dlist}, &"
+LIBRARY_ARRAY_LLINE = "{tab}{tab}{dlist}  &"
+LIBRARY_ARRAY_CLOSE = "{tab}{tab}/)"
+LIBRARY_ARRAY_MAXLN = 16
 
 LIBRARY_CONTAINS = """
-{tab}IMPLICIT NONE
-
 CONTAINS
 """
 
-LIBRARY_FOOT = """
-END MODULE {mod_name}_mod
+LIBROUTINE_SEP = """
+{tab}!##############################################################################
+
 """
+
+LIBRARY_FOOT = """
+END MODULE {library_name}_mod"""
+
+
+def subgroup_array(array, gsize):
+    if array:
+        yield array[:gsize]
+        yield from subgroup_array(array[gsize:], gsize)
 
 
 class LibraryManagerF90(PythonLibraryManager):
@@ -47,24 +66,68 @@ class LibraryManagerF90(PythonLibraryManager):
 
     def create_source_lines(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)
-        options.update({"mod_name": self.name})
+        options.update(self.get_meta())
         options.update(kwargs)
 
         for line in LIBRARY_HEAD.split("\n"):
             yield line.format(**options)
 
-        for libroutine_name, libroutine in self._libroutines.items():
+        for _, dep in self.dependencies:
+            yield LIBRARY_MODUSE.format(dep_name=dep.name, **options)
+
+        for line in LIBRARY_IMPLICITNONE.split("\n"):
+            yield line.format(**options)
+
+        for pname, (dtype, values) in self._constant_arrays.items():
+            value_groups = list(subgroup_array(values, LIBRARY_ARRAY_MAXLN))
+            yield LIBRARY_ARRAY_START.format(
+                dtype=dtype, arrname=pname, size=len(values), **options
+            )
+            for chunk in value_groups[:-1]:
+                dlist = ", ".join(map(str, chunk))
+                yield LIBRARY_ARRAY_DLINE.format(dlist=dlist, **options)
+            chunk = value_groups[-1]
+            dlist = ", ".join(map(str, chunk))
+            yield LIBRARY_ARRAY_LLINE.format(dlist=dlist, **options)
+            yield LIBRARY_ARRAY_CLOSE.format(**options)
+
+        for line in LIBRARY_CONTAINS.split("\n"):
+            yield line.format(**options)
+
+        for _, libroutine in self._libroutines.items():
+            for line in LIBROUTINE_SEP.split("\n"):
+                yield line.format(**options)
+
             for line in libroutine.create_source_lines(**options):
                 if line:
                     yield "{tab}".format_map(options) + line
             yield " "
 
+        for line in LIBROUTINE_SEP.split("\n"):
+            yield line.format(**options)
+
         for line in LIBRARY_FOOT.split("\n"):
             yield line.format(**options)
 
-    def to_libroutines(self, routine):
-        yield LibRoutineF90_Linear_Base(routine)
-        yield LibRoutineF90_Linear_Offs(routine)
+    def to_libroutine(self, routine, implementation="base"):
+        match implementation:
+            case "base":
+                return LibRoutineF90LinearBase(
+                    routine,
+                    library=self,
+                )
+            case "offs":
+                return LibRoutineF90LinearOffs(
+                    routine,
+                    library=self,
+                )
+            case "list":
+                return LibRoutineF90LinearList(
+                    routine,
+                    library=self,
+                )
+            case _:
+                raise ValueError(f"Invalid implementation: {implementation}")
 
 
 if __name__ == "__main__":
@@ -101,7 +164,15 @@ if __name__ == "__main__":
         instruction_group=instruction_group,
     )
     mylib = LibraryManagerF90("mylib")
-    mylib.append(my_routine_1)
-    mylib.append(my_routine_2)
-    for line in mylib.create_source_lines():
-        print(line)
+    mylib.append(my_routine_1, implementation="base")
+    mylib.append(my_routine_2, implementation="base")
+    mylib.append(my_routine_1, implementation="offs")
+    mylib.append(my_routine_2, implementation="offs")
+    mylib.append(my_routine_1, implementation="list")
+    mylib.append(my_routine_2, implementation="list")
+    for cline in mylib.create_source_lines():
+        print(cline)
+    print()
+
+    # print(list(mylib.dependencies))
+    # print(list(mylib.libroutines))

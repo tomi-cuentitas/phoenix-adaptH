@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/12/2024, 13:32
-# Version:     0.0.227
+# Last Update: 04/12/2024, 17:42
+# Version:     0.0.298
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -54,22 +54,34 @@ class LibRoutine:
     backend when the libroutine is created from the routines.
     """
 
-    suffix = ""
+    implementation = "generic"
 
-    def __init__(self, routine, dependencies=None):
-        self.routine = routine
-        self._name = routine.name + (f"_{self.suffix}" if self.suffix else "")
+    def __init__(self, routine, library, dependencies=None):
+        self._identifier = routine.name
+        self._library = library
         self._dependencies = {}
+        self.routine = routine
         if dependencies is not None:
             if isinstance(dependencies, dict):
-                self._dependencies.update(dependencies)
+                for dep in dependencies.values():
+                    self.add_dependency(dep)
             else:
                 raise ValueError("dependencies must be a dict")
 
     @property
+    def library(self):
+        """read-only access to attribute library"""
+        return self._library
+
+    @property
     def name(self):
         """read-only access to attribute name"""
-        return self._name
+        return f"{self.identifier}_{self.implementation}"
+
+    @property
+    def identifier(self):
+        """read-only access to attribute identifier"""
+        return self._identifier
 
     def create_source_lines(self, **kwargs):
         """create the source code lines"""
@@ -84,8 +96,27 @@ class LibRoutine:
         ):
             yield instruction
 
-    def get_dependencies(self):
+    def add_dependency(self, libroutine):
+        """add a dependency to a certain libroutine"""
+        ident_impl = (libroutine.identifier, libroutine.implementation)
+        if ident_impl in self._dependencies:
+            return
+        self._dependencies[ident_impl] = libroutine
+
+    @property
+    def dependencies(self):
+        """get all dependencies"""
         yield from self._dependencies.items()
+
+    def get_meta(self):
+        """return meta information on the library"""
+        return {
+            "subroutine_name": self.name,
+            "num_instructions": len(self.routine.instruction_group),
+            "implementation": self.implementation,
+            "identifier": self.identifier,
+            "library": self.identifier,
+        }
 
 
 class LibraryManager:
@@ -95,10 +126,11 @@ class LibraryManager:
     Used to create, manage, adapt and compile libraries.
     """
 
-    def __init__(self, name):
-        self._libname = name
+    def __init__(self, libname):
+        self._libname = libname
         self._libroutines = {}
         self._dependencies = {}
+        self._constant_arrays = {}
 
     @property
     def name(self):
@@ -108,31 +140,22 @@ class LibraryManager:
     @property
     def libroutines(self):
         """generator-access to libroutines"""
-        yield from self._libroutines.values()
+        yield from self._libroutines.items()
 
-    def valid_name(self, name, convert=True):
-        """
-        check if a chosen name for a library is valid.
-        returns a valid name.
-        If the input name is invalid and convert is true, attempt to convert an
-        invalid name to a valid one if possible and  issue a warning.
-        Raise an Exception if the conversion is impossible or convert is false.
-        """
-        return name
-
-    def append(self, routine):
+    def append(self, routine, implementation="default"):
         """append a routine to the library"""
-        for libroutine in self.to_libroutines(routine):
-            if libroutine.name in self._libroutines:
-                raise KeyError(
-                    f"Routine '{libroutine.name}' already exists in library"
-                )
-            self._libroutines[routine.name] = libroutine
-            for name, dep in libroutine.get_dependencies():
-                if name not in self._dependencies:
-                    self._dependencies[name] = dep
+        libroutine = self.to_libroutine(routine, implementation=implementation)
+        ident_impl = (libroutine.identifier, libroutine.implementation)
+        if ident_impl in self._libroutines:
+            raise KeyError(
+                f"Routine '{libroutine.name}' already exists in library"
+            )
+        self._libroutines[ident_impl] = libroutine
+        for dep_ident_impl, dep in libroutine.dependencies:
+            if dep_ident_impl not in self._dependencies:
+                self._dependencies[dep_ident_impl] = dep
 
-    def to_libroutines(self, routine):
+    def to_libroutine(self, routine, implementation=None):
         """create a libroutine from the routine"""
         raise NotImplementedError(
             "'to_libroutine' must be implemented by subclasses"
@@ -141,9 +164,26 @@ class LibraryManager:
     def create(self):
         """create the library"""
 
-    def create_source_lines(self, **kwargs):
+    def create_source_lines(self, **_kwargs):
         """create the source code lines"""
         yield ""
+
+    @property
+    def dependencies(self):
+        """get all dependencies"""
+        yield from self._dependencies.items()
+
+    def add_constant_array(self, arrname, dtype, values):
+        """append a constant array to the section"""
+        if arrname in self._constant_arrays:
+            raise ValueError(f"Constant array '{arrname}' already exists")
+        self._constant_arrays[arrname] = (dtype, values)
+
+    def get_meta(self):
+        """return meta information on the library"""
+        return {
+            "library_name": self.name,
+        }
 
 
 class PythonLibraryManager(LibraryManager):

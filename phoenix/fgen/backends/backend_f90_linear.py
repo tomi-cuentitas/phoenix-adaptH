@@ -5,31 +5,37 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 04/12/2024, 13:17
-# Version:     0.0.186
+# Last Update: 04/12/2024, 17:50
+# Version:     0.0.247
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.fgen.backends.libroutine_f90 import LibRoutineF90
+from phoenix.fgen.backends.backend_f90_libroutine import LibRoutineF90
 
 
 SR_LINEAR_BASE_HEAD = """
-SUBROUTINE {sr_name}_base(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n)
+SUBROUTINE {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n)
 {tab}!
-{tab}double precision, intent(inout) :: targ_r
-{tab}double precision, intent(inout) :: targ_i
-{tab}integer, intent(in)             :: targ_n
+{tab}double precision, dimension(targ_n), intent(inout) :: targ_r
+{tab}double precision, dimension(targ_n), intent(inout) :: targ_i
+{tab}integer,                             intent(in)    :: targ_n
 {tab}!
-{tab}double precision, intent(in)    :: src1_r
-{tab}double precision, intent(in)    :: src1_i
-{tab}integer, intent(in)             :: src1_n    
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_r
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_i
+{tab}integer,                             intent(in)    :: src1_n
+{tab}!
+{tab}!--------------------------------------------------------------------------------
+{tab}!
 """
 
 SR_LINEAR_BASE_FOOT = """
-END SUBROUTINE {sr_name}_base
+{tab}!
+{tab}!--------------------------------------------------------------------------------
+{tab}!
+END SUBROUTINE {subroutine_name}
 """
 
 SR_LINEAR_BASE_LINE = """
@@ -41,25 +47,31 @@ SR_LINEAR_BASE_LINE = """
 
 
 SR_LINEAR_OFFS_HEAD = """
-SUBROUTINE {sr_name}_offs(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)
+SUBROUTINE {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)
 {tab}!
-{tab}double precision, intent(inout) :: targ_r
-{tab}double precision, intent(inout) :: targ_i
-{tab}integer, intent(in)             :: targ_n
+{tab}double precision, dimension(targ_n), intent(inout) :: targ_r
+{tab}double precision, dimension(targ_n), intent(inout) :: targ_i
+{tab}integer,                             intent(in)    :: targ_n
 {tab}!
-{tab}double precision, intent(in)    :: src1_r
-{tab}double precision, intent(in)    :: src1_i
-{tab}integer, intent(in)             :: src1_n
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_r
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_i
+{tab}integer,                             intent(in)    :: src1_n
 {tab}!
-{tab}integer, intent(in)             :: targ_offs
-{tab}integer, intent(in)             :: src1_offs
+{tab}integer,                             intent(in)    :: targ_offs
+{tab}integer,                             intent(in)    :: src1_offs
 {tab}!
-{tab}integer                         : targ_indx_shft
-{tab}integer                         : src1_indx_shft
+{tab}integer :: targ_shft
+{tab}integer :: src1_shft
+{tab}!
+{tab}!--------------------------------------------------------------------------------
+{tab}!
 """
 
 SR_LINEAR_OFFS_FOOT = """
-END SUBROUTINE {sr_name}_offs
+{tab}!
+{tab}!--------------------------------------------------------------------------------
+{tab}!
+END SUBROUTINE {subroutine_name}
 """
 
 SR_LINEAR_OFFS_LINE = """
@@ -72,29 +84,43 @@ SR_LINEAR_OFFS_LINE = """
 ###############################################################################
 
 SR_LINEAR_LIST_HEAD = """
-SUBROUTINE {sr_name}_list(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_idxs, src1_idxs, alph_rs, alph_is, inst_n, targ_offs, src1_offs, offs_n)
+SUBROUTINE {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)
 {tab}!
-{tab}double precision, intent(inout) :: targ_r
-{tab}double precision, intent(inout) :: targ_i
-{tab}integer, intent(in)             :: targ_n
+{tab}double precision, dimension(targ_n), intent(inout) :: targ_r
+{tab}double precision, dimension(targ_n), intent(inout) :: targ_i
+{tab}integer,                             intent(in)    :: targ_n
 {tab}!
-{tab}double precision, intent(in)    :: src1_r
-{tab}double precision, intent(in)    :: src1_i
-{tab}integer, intent(in)             :: src1_n
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_r
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_i
+{tab}integer,                             intent(in)    :: src1_n
 {tab}!
-{tab}integer, intent(in)             :: targ_off
-{tab}integer, intent(in)             :: src1_off
-{tab}integer, intent(in)             :: targ_off
-{tab}integer, intent(in)             :: src1_off
+{tab}integer,                             intent(in)    :: targ_offs
+{tab}integer,                             intent(in)    :: src1_offs
 {tab}!
-{tab}integer                         : targ_indx_shft
-{tab}integer                         : src1_indx_shft
-
-{tab}do
+{tab}integer          :: kk
+{tab}integer          :: targ_shft
+{tab}integer          :: src1_shft
+{tab}double precision :: alph_r
+{tab}double precision :: alph_i
+{tab}!
+{tab}!--------------------------------------------------------------------------------
+{tab}!
+{tab}do kk=1, {num_instructions}
+{tab}{tab}targ_shft = {subroutine_name}_targ_indx(kk) + targ_offs
+{tab}{tab}src1_shft = {subroutine_name}_src1_indx(kk) + src1_offs
+{tab}{tab}alph_r = {subroutine_name}_alph_r(kk)
+{tab}{tab}alph_i = {subroutine_name}_alph_i(kk)
+{tab}{tab}targ_r(targ_shft) = targ_r(targ_shft) + src1_r(src1_shft) * alph_r - src1_i(src1_shft) * alph_i
+{tab}{tab}targ_i(targ_shft) = targ_i(targ_shft) + src1_r(src1_shft) * alph_i + src1_i(src1_shft) * alph_r
+{tab}end do
 """
 
+
 SR_LINEAR_LIST_FOOT = """
-END SUBROUTINE {sr_name}_list
+{tab}!
+{tab}!--------------------------------------------------------------------------------
+{tab}!
+END SUBROUTINE {subroutine_name}
 """
 
 SR_LINEAR_LIST_LINE = """"""
@@ -102,51 +128,47 @@ SR_LINEAR_LIST_LINE = """"""
 ###############################################################################
 
 
-class LibRoutineF90_Linear_Base(LibRoutineF90):
+class LibRoutineF90LinearBase(LibRoutineF90):
     """Linear version of the F90 routine"""
 
     code_head = SR_LINEAR_BASE_HEAD
     code_foot = SR_LINEAR_BASE_FOOT
     code_line = SR_LINEAR_BASE_LINE
-    suffix = "base"
+    implementation = "base"
 
 
-class LibRoutineF90_Linear_Offs(LibRoutineF90):
+class LibRoutineF90LinearOffs(LibRoutineF90):
     """Linear version of the F90 routine"""
 
     code_head = SR_LINEAR_OFFS_HEAD
     code_foot = SR_LINEAR_OFFS_FOOT
     code_line = SR_LINEAR_OFFS_LINE
-    suffix = "offs"
+    implementation = "offs"
 
 
-if __name__ == "__main__":
-    from phoenix.fgen.routine import Routine
-    from phoenix.fgen.instruction3 import InstructionGroup, GenericInstruction
+class LibRoutineF90LinearList(LibRoutineF90):
+    """Linear version of the F90 routine"""
 
-    instruction_group = (
-        InstructionGroup(
-            [
-                GenericInstruction(
-                    src1_indx=num + 1,
-                    targ_indx=10 - num,
-                    alph_r=1.0,
-                    alph_i=0.0,
-                )
-                for num in range(10)
-            ]
+    code_head = SR_LINEAR_LIST_HEAD
+    code_foot = SR_LINEAR_LIST_FOOT
+    code_line = SR_LINEAR_LIST_LINE
+    implementation = "list"
+
+    def __init__(self, routine, library, dependencies=None):
+        super().__init__(routine, library, dependencies=None)
+        src1_indx = [instr["src1_indx"] for instr in self.get_instructions()]
+        targ_indx = [instr["src1_indx"] for instr in self.get_instructions()]
+        _alph_r = [instr["alph_r"] for instr in self.get_instructions()]
+        _alph_i = [instr["alph_i"] for instr in self.get_instructions()]
+        self.library.add_constant_array(
+            f"{self.name}_src1_indx", "integer", src1_indx
         )
-        # .sorted(lambda x: x["targ_indx"])
-        # .flatten()
-    )
-
-    for sline in LibRoutineF90_Linear_Base(
-        Routine(
-            "myroutine",
-            itype=None,
-            out_var=None,
-            in_vars=[None],
-            instruction_group=instruction_group,
+        self.library.add_constant_array(
+            f"{self.name}_targ_indx", "integer", targ_indx
         )
-    ).create_source_lines(tab=""):
-        print(sline)
+        self.library.add_constant_array(
+            f"{self.name}_alph_r", "double precision", _alph_r
+        )
+        self.library.add_constant_array(
+            f"{self.name}_alph_i", "double precision", _alph_i
+        )

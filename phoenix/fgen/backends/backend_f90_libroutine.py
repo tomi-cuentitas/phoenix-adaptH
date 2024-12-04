@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 04/12/2024, 13:30
-# Version:     0.0.23
+# Last Update: 04/12/2024, 17:38
+# Version:     0.0.33
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,11 +33,24 @@ class LibRoutineF90(LibRoutine):
     code_head = ""
     code_foot = ""
     code_line = ""
-    suffix = "gen"
+    implementation = "generic"
+
+    def get_meta(self):
+        """return meta information on the library"""
+        meta = super().get_meta()
+        more_meta = {
+            # "subroutine_name": self.name,
+            # "num_instructions": len(self.routine.instruction_group),
+            # "implementation": self.implementation,
+            # "identifier": self.identifier,
+            # "library": self.identifier,
+        }
+        meta.update(more_meta)
+        return meta
 
     def create_source_lines(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)
-        options.update({"sr_name": self.routine.name})
+        options.update(self.get_meta())
         options.update(kwargs)
 
         for line in self.code_head.split("\n"):
