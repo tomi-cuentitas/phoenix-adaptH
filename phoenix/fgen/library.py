@@ -5,13 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/12/2024, 17:42
-# Version:     0.0.298
+# Last Update: 06/12/2024, 15:48
+# Version:     0.0.369
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+import warnings
 
 __doc__ = """
 Library module description
@@ -56,11 +58,14 @@ class LibRoutine:
 
     implementation = "generic"
 
-    def __init__(self, routine, library, dependencies=None):
+    def __init__(self, routine, library=None, dependencies=None):
         self._identifier = routine.name
-        self._library = library
-        self._dependencies = {}
-        self.routine = routine
+        self._library = library  # the library the libroutine is attached to
+        self.routine = routine  # the generating routine
+        self._dependencies = {}  # (identifier, implementation): libroutine
+        #                          (key to be replaced by a hash)
+        self._constant_arrays = {}  # arrname: (dtype, values)
+
         if dependencies is not None:
             if isinstance(dependencies, dict):
                 for dep in dependencies.values():
@@ -68,10 +73,31 @@ class LibRoutine:
             else:
                 raise ValueError("dependencies must be a dict")
 
+    def add_constant_array(self, arrname, dtype, values):
+        """append a constant array to the section"""
+        if arrname in self._constant_arrays:
+            raise KeyError(f"Constant array '{arrname}' already exists")
+        self._constant_arrays[arrname] = (dtype, values)
+
+    def get_constant_arrays(self):
+        """get the arrays"""
+        yield from self._constant_arrays.items()
+
     @property
     def library(self):
         """read-only access to attribute library"""
+        if self._library is None:
+            self._library = self.to_standalone_library()
         return self._library
+
+    def to_standalone_library(self):
+        """
+        Generates a standalone library that only contains this one routine.
+        Returns the LibraryManager
+        """
+        raise NotImplementedError(
+            "'to_standalone_library' must be implemented in subclass"
+        )
 
     @property
     def name(self):
@@ -128,9 +154,15 @@ class LibraryManager:
 
     def __init__(self, libname):
         self._libname = libname
+        self._libbasepath = f"lib_{libname}/"
         self._libroutines = {}
         self._dependencies = {}
-        self._constant_arrays = {}
+        self._meta = {
+            "module_name": f"{self.name}_mod",
+            "library_name": f"{self.name}",
+        }
+        self._ready = False
+        self._created = False
 
     @property
     def name(self):
@@ -142,18 +174,27 @@ class LibraryManager:
         """generator-access to libroutines"""
         yield from self._libroutines.items()
 
-    def append(self, routine, implementation="default"):
+    def append(
+        self, routine, implementation="default", exception_existing=False
+    ):
         """append a routine to the library"""
         libroutine = self.to_libroutine(routine, implementation=implementation)
         ident_impl = (libroutine.identifier, libroutine.implementation)
         if ident_impl in self._libroutines:
-            raise KeyError(
-                f"Routine '{libroutine.name}' already exists in library"
-            )
+            if exception_existing:
+                raise KeyError(
+                    f"Routine '{libroutine.name}' already exists in library"
+                )
+            else:
+                warnings.warn(
+                    f"Routine '{libroutine.name}' already exists in library"
+                )
+            return
         self._libroutines[ident_impl] = libroutine
-        for dep_ident_impl, dep in libroutine.dependencies:
-            if dep_ident_impl not in self._dependencies:
-                self._dependencies[dep_ident_impl] = dep
+
+    def __getitem__(self, key):
+        identififer, implementation = key
+        return self._libroutines.get((identififer, implementation))
 
     def to_libroutine(self, routine, implementation=None):
         """create a libroutine from the routine"""
@@ -161,8 +202,20 @@ class LibraryManager:
             "'to_libroutine' must be implemented by subclasses"
         )
 
+    def compile(self):
+        """compile the library"""
+        if not self._created:
+            self.create()
+        # compile dependencies, then compile self.
+        # finally:
+        self._ready = True
+
     def create(self):
-        """create the library"""
+        """create the library, i.e. write to file(s)"""
+        # create dependencies,
+        # then create self.
+        # finally:
+        self._created = True
 
     def create_source_lines(self, **_kwargs):
         """create the source code lines"""
@@ -173,24 +226,20 @@ class LibraryManager:
         """get all dependencies"""
         yield from self._dependencies.items()
 
-    def add_constant_array(self, arrname, dtype, values):
-        """append a constant array to the section"""
-        if arrname in self._constant_arrays:
-            raise ValueError(f"Constant array '{arrname}' already exists")
-        self._constant_arrays[arrname] = (dtype, values)
-
-    def get_meta(self):
+    def get_meta(self, key=None):
         """return meta information on the library"""
-        return {
-            "library_name": self.name,
-        }
+        if key is None:
+            return dict(self._meta)
+        return self._meta.get(key)
 
-
-class PythonLibraryManager(LibraryManager):
-    """
-    The object managing a library that then can be loaded to python.
-    This is NOT the library itself!
-    """
+    def _update_dependencies(self):
+        self._dependencies = {}
+        for _, libroutine in self._libroutines.items():
+            for _, dep in libroutine.dependencies:
+                if dep.library.name not in self._dependencies:
+                    self._dependencies[dep.library.name] = (dep.library, [dep])
+                else:
+                    self._dependencies[dep.library.name][1].append(dep)
 
 
 """

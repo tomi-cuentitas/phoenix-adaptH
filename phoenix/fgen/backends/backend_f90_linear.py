@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 04/12/2024, 17:50
-# Version:     0.0.247
+# Last Update: 06/12/2024, 12:56
+# Version:     0.0.249
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -160,15 +160,11 @@ class LibRoutineF90LinearList(LibRoutineF90):
         targ_indx = [instr["src1_indx"] for instr in self.get_instructions()]
         _alph_r = [instr["alph_r"] for instr in self.get_instructions()]
         _alph_i = [instr["alph_i"] for instr in self.get_instructions()]
-        self.library.add_constant_array(
-            f"{self.name}_src1_indx", "integer", src1_indx
-        )
-        self.library.add_constant_array(
-            f"{self.name}_targ_indx", "integer", targ_indx
-        )
-        self.library.add_constant_array(
+        self.add_constant_array(f"{self.name}_src1_indx", "integer", src1_indx)
+        self.add_constant_array(f"{self.name}_targ_indx", "integer", targ_indx)
+        self.add_constant_array(
             f"{self.name}_alph_r", "double precision", _alph_r
         )
-        self.library.add_constant_array(
+        self.add_constant_array(
             f"{self.name}_alph_i", "double precision", _alph_i
         )

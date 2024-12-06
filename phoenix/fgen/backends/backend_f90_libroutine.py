@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 04/12/2024, 17:38
-# Version:     0.0.33
+# Last Update: 06/12/2024, 14:13
+# Version:     0.0.39
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,14 +38,7 @@ class LibRoutineF90(LibRoutine):
     def get_meta(self):
         """return meta information on the library"""
         meta = super().get_meta()
-        more_meta = {
-            # "subroutine_name": self.name,
-            # "num_instructions": len(self.routine.instruction_group),
-            # "implementation": self.implementation,
-            # "identifier": self.identifier,
-            # "library": self.identifier,
-        }
-        meta.update(more_meta)
+        # potentially extend the meta by fortran specific stuff
         return meta
 
     def create_source_lines(self, **kwargs):
@@ -58,7 +51,7 @@ class LibRoutineF90(LibRoutine):
 
         for instruction in self.get_instructions():
             for line in self.code_line.split("\n"):
-                yield line.format(**(instruction.to_dict() | options))
+                yield line.format(**(options | instruction.to_dict()))
 
         for line in self.code_foot.split("\n"):
             yield line.format(**options)

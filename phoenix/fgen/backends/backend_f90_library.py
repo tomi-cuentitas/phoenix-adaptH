@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 04/12/2024, 17:43
-# Version:     0.0.186
+# Last Update: 06/12/2024, 15:47
+# Version:     0.0.319
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.fgen.library import PythonLibraryManager
+from phoenix.fgen.library import LibraryManager
 from phoenix.fgen.backends.backend_f90_linear import (
     LibRoutineF90LinearBase,
     LibRoutineF90LinearOffs,
@@ -26,12 +26,16 @@ DEFAULT_OPTIONS = {
 }
 
 LIBRARY_HEAD = """
-MODULE {library_name}_mod
+MODULE {module_name} ! (library {library_name})
 """
 
 LIBRARY_MODUSE = """
-{tab}USE {dep_name}"""
+{tab}USE {import_mod_name} ! (import from {import_lib_name})"""
 
+LIBRARY_MODUSE_COMMENT_FIRST = "{tab}!{tab}provides {str_of_deps}"
+LIBRARY_MODUSE_COMMENT_CONT = "{tab}!{tab}         {str_of_deps},"
+LIBRARY_MODUSE_COMMENT_END = "{tab}!{tab}         {str_of_deps}."
+LIBRARY_MODUSE_COMMENT_MAXLN = 3
 LIBRARY_IMPLICITNONE = """
 {tab}IMPLICIT NONE
 """
@@ -52,16 +56,17 @@ LIBROUTINE_SEP = """
 """
 
 LIBRARY_FOOT = """
-END MODULE {library_name}_mod"""
+END MODULE {module_name}"""
 
 
 def subgroup_array(array, gsize):
+    """subdivide an array into bunches"""
     if array:
         yield array[:gsize]
         yield from subgroup_array(array[gsize:], gsize)
 
 
-class LibraryManagerF90(PythonLibraryManager):
+class LibraryManagerF90(LibraryManager):
     """A PythonLibraryManager for f90 type backend routines"""
 
     def create_source_lines(self, **kwargs):
@@ -69,31 +74,80 @@ class LibraryManagerF90(PythonLibraryManager):
         options.update(self.get_meta())
         options.update(kwargs)
 
+        yield from self._get_library_head_lines(**options)
+        yield from self._get_library_deps_lines(**options)
+        yield from self._get_library_const_lines(**options)
+        yield from self._get_library_routine_lines(**options)
+        yield from self._get_library_foot_lines(**options)
+
+    def _get_library_head_lines(self, **options):
         for line in LIBRARY_HEAD.split("\n"):
             yield line.format(**options)
 
-        for _, dep in self.dependencies:
-            yield LIBRARY_MODUSE.format(dep_name=dep.name, **options)
+    def _get_library_deps_lines(self, **options):
+        self._update_dependencies()
+        for _, (lib, deps) in self._dependencies.items():
+            yield LIBRARY_MODUSE.format(
+                import_mod_name=lib.get_meta("module_name"),
+                import_lib_name=lib.get_meta("library_name"),
+                **options,
+            )
+            # the rest is only comments!
+            bunches_of_deps = list(
+                subgroup_array(
+                    [dep.name for dep in deps],
+                    LIBRARY_MODUSE_COMMENT_MAXLN,
+                )
+            )
 
+            bunch_of_deps = bunches_of_deps[0]
+            str_of_deps = ", ".join(bunch_of_deps) + (
+                "," if len(bunches_of_deps) > 1 else "."
+            )
+            yield LIBRARY_MODUSE_COMMENT_FIRST.format(
+                str_of_deps=str_of_deps, **options
+            )
+            if len(bunches_of_deps) > 2:
+                for bunch_of_deps in bunches_of_deps[1:-1]:
+                    str_of_deps = ", ".join(bunch_of_deps)
+                    yield LIBRARY_MODUSE_COMMENT_CONT.format(
+                        str_of_deps=str_of_deps, **options
+                    )
+            if len(bunches_of_deps) > 1:
+                bunch_of_deps = bunches_of_deps[-1]
+                str_of_deps = ", ".join(bunch_of_deps)
+                yield LIBRARY_MODUSE_COMMENT_END.format(
+                    str_of_deps=str_of_deps, **options
+                )
+                str_of_deps = ", ".join(bunch_of_deps)
+
+    def _get_library_const_lines(self, **options):
         for line in LIBRARY_IMPLICITNONE.split("\n"):
             yield line.format(**options)
 
-        for pname, (dtype, values) in self._constant_arrays.items():
-            value_groups = list(subgroup_array(values, LIBRARY_ARRAY_MAXLN))
-            yield LIBRARY_ARRAY_START.format(
-                dtype=dtype, arrname=pname, size=len(values), **options
-            )
-            for chunk in value_groups[:-1]:
+        for _, libroutine in self._libroutines.items():
+            for pname, (
+                dtype,
+                values,
+            ) in libroutine.get_constant_arrays():
+                value_groups = list(
+                    subgroup_array(values, LIBRARY_ARRAY_MAXLN)
+                )
+                yield LIBRARY_ARRAY_START.format(
+                    dtype=dtype, arrname=pname, size=len(values), **options
+                )
+                for chunk in value_groups[:-1]:
+                    dlist = ", ".join(map(str, chunk))
+                    yield LIBRARY_ARRAY_DLINE.format(dlist=dlist, **options)
+                chunk = value_groups[-1]
                 dlist = ", ".join(map(str, chunk))
-                yield LIBRARY_ARRAY_DLINE.format(dlist=dlist, **options)
-            chunk = value_groups[-1]
-            dlist = ", ".join(map(str, chunk))
-            yield LIBRARY_ARRAY_LLINE.format(dlist=dlist, **options)
-            yield LIBRARY_ARRAY_CLOSE.format(**options)
+                yield LIBRARY_ARRAY_LLINE.format(dlist=dlist, **options)
+                yield LIBRARY_ARRAY_CLOSE.format(**options)
+                yield ""
 
+    def _get_library_routine_lines(self, **options):
         for line in LIBRARY_CONTAINS.split("\n"):
             yield line.format(**options)
-
         for _, libroutine in self._libroutines.items():
             for line in LIBROUTINE_SEP.split("\n"):
                 yield line.format(**options)
@@ -106,6 +160,7 @@ class LibraryManagerF90(PythonLibraryManager):
         for line in LIBROUTINE_SEP.split("\n"):
             yield line.format(**options)
 
+    def _get_library_foot_lines(self, **options):
         for line in LIBRARY_FOOT.split("\n"):
             yield line.format(**options)
 
@@ -128,51 +183,3 @@ class LibraryManagerF90(PythonLibraryManager):
                 )
             case _:
                 raise ValueError(f"Invalid implementation: {implementation}")
-
-
-if __name__ == "__main__":
-    from phoenix.fgen.routine import Routine
-    from phoenix.fgen.instruction3 import InstructionGroup, GenericInstruction
-
-    instruction_group = (
-        InstructionGroup(
-            [
-                GenericInstruction(
-                    src1_indx=num + 1,
-                    targ_indx=10 - num,
-                    alph_r=1.0,
-                    alph_i=0.0,
-                )
-                for num in range(10)
-            ]
-        )
-        .sorted(lambda x: x["targ_indx"])
-        .flatten()
-    )
-    my_routine_1 = Routine(
-        "myroutine",
-        itype=None,
-        out_var=None,
-        in_vars=[None],
-        instruction_group=instruction_group,
-    )
-    my_routine_2 = Routine(
-        "myotherroutine",
-        itype=None,
-        out_var=None,
-        in_vars=[None],
-        instruction_group=instruction_group,
-    )
-    mylib = LibraryManagerF90("mylib")
-    mylib.append(my_routine_1, implementation="base")
-    mylib.append(my_routine_2, implementation="base")
-    mylib.append(my_routine_1, implementation="offs")
-    mylib.append(my_routine_2, implementation="offs")
-    mylib.append(my_routine_1, implementation="list")
-    mylib.append(my_routine_2, implementation="list")
-    for cline in mylib.create_source_lines():
-        print(cline)
-    print()
-
-    # print(list(mylib.dependencies))
-    # print(list(mylib.libroutines))
