@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 03/12/2024, 15:05
-# Version:     0.0.629
+# Last Update: 09/12/2024, 15:45
+# Version:     0.0.630
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -244,9 +244,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(
-                self.get(key, defaults.get(key, None)) for key in keys
-            )
+            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -375,7 +373,7 @@ class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
 
     def __init__(self, key_tgt, key_src, *coeffs):
         params = {f"C{num}": val for num, val in enumerate(coeffs)}
-        params["deg"] = len(coeffs)
+        params["deg"] = len(coeffs) - 1
         params["key_tgt"] = key_tgt
         params["key_src"] = key_src
         super().__init__(**params, itype=self.ftype)

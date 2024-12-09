@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 06/12/2024, 15:48
-# Version:     0.0.369
+# Last Update: 09/12/2024, 16:00
+# Version:     0.0.375
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,29 +23,6 @@ Python Libraries can have their own library manager but the actual libraries
 (the imported stuff) are not represented by it, that's why 'Library' would be 
 misleading.
 """
-
-
-class MakefileManager:
-    """manages creation, execution and design of makefiles"""
-
-    def __init__(self, name):
-        self.name = name
-        self._filename = f"Makefile_{name}"
-        self._is_created = False
-
-    def set_filename(self, filename):
-        """set the makefile's filename"""
-        self._filename = filename
-        self._is_created = False
-
-    def create_file(self):
-        """create the file"""
-        self._is_created = True
-
-    def execute_file(self):
-        """execute the makefile"""
-        if not self._is_created:
-            self.create_file()
 
 
 class LibRoutine:
