@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 10/12/2024, 17:19
-# Version:     0.0.309
+# Last Update: 10/12/2024, 17:26
+# Version:     0.0.310
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -89,7 +89,7 @@ class MakeFileTarget:
         return
         yield
 
-    def get_moresrc(self):
+    def get_scfiles(self):
         """get more source or similar"""
         return
         yield
@@ -117,12 +117,12 @@ class MakeFileTarget:
         libdirs = []
         glblibs = []
         loclibs = []
-        moresrc = []
+        scfiles = []
         obfiles = []
         for dep in self.dependencies:
             glblibs.extend(list(dep.get_glblibs()))
             loclibs.extend(list(dep.get_loclibs()))
-            moresrc.extend(list(dep.get_moresrc()))
+            scfiles.extend(list(dep.get_scfiles()))
             obfiles.extend(list(dep.get_obfiles()))
             incdirs.extend(list(dep.get_incdirs()))
             libdirs.extend(list(dep.get_libdirs()))
@@ -130,8 +130,8 @@ class MakeFileTarget:
         libdirs = self.no_duplicates(libdirs)
         glblibs = self.no_duplicates(glblibs)
         loclibs = self.no_duplicates(loclibs)
-        moresrc = self.no_duplicates(moresrc)
-        return incdirs, libdirs, glblibs, loclibs, moresrc, obfiles
+        scfiles = self.no_duplicates(scfiles)
+        return incdirs, libdirs, glblibs, loclibs, scfiles, obfiles
 
 
 class MFTF2Py(MakeFileTarget):
