@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 09/12/2024, 16:00
-# Version:     0.0.375
+# Last Update: 10/12/2024, 15:53
+# Version:     0.0.384
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -131,15 +131,15 @@ class LibraryManager:
 
     def __init__(self, libname):
         self._libname = libname
-        self._libbasepath = f"lib_{libname}/"
+        self._libbasepath = "."
         self._libroutines = {}
-        self._dependencies = {}
+        # self._dependencies = {}  # tbi: global deps
         self._meta = {
-            "module_name": f"{self.name}_mod",
             "library_name": f"{self.name}",
         }
         self._ready = False
         self._created = False
+        self._source_file_name = f"{self.name}.f90"
 
     @property
     def name(self):
@@ -209,14 +209,15 @@ class LibraryManager:
             return dict(self._meta)
         return self._meta.get(key)
 
-    def _update_dependencies(self):
-        self._dependencies = {}
+    def _collect_dependencies(self):
+        dependencies = {}
         for _, libroutine in self._libroutines.items():
             for _, dep in libroutine.dependencies:
-                if dep.library.name not in self._dependencies:
-                    self._dependencies[dep.library.name] = (dep.library, [dep])
+                if dep.library.name not in dependencies:
+                    dependencies[dep.library.name] = (dep.library, [dep])
                 else:
-                    self._dependencies[dep.library.name][1].append(dep)
+                    dependencies[dep.library.name][1].append(dep)
+        return dependencies
 
 
 """

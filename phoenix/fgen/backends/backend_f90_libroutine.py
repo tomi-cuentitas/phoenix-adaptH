@@ -5,22 +5,23 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 06/12/2024, 14:13
-# Version:     0.0.39
+# Last Update: 10/12/2024, 11:48
+# Version:     0.0.44
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.fgen.library import LibRoutine, MakefileManager
+from phoenix.fgen.library import LibRoutine
+from phoenix.fgen.makefile import MakeFileManager
 
 DEFAULT_OPTIONS = {
     "tab": "  ",
 }
 
 
-class MakefileManagerF90(MakefileManager):
+class MakefileManagerF90(MakeFileManager):
     """Fortran implementation of the makefile manager"""
 
 

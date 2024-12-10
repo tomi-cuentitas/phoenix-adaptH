@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 06/12/2024, 15:47
-# Version:     0.0.319
+# Last Update: 10/12/2024, 14:49
+# Version:     0.0.323
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -69,6 +69,11 @@ def subgroup_array(array, gsize):
 class LibraryManagerF90(LibraryManager):
     """A PythonLibraryManager for f90 type backend routines"""
 
+    def __init__(self, libname):
+        super().__init__(libname)
+        more_meta = {"module_name": f"{self.name}_mod"}
+        self._meta.update(more_meta)
+
     def create_source_lines(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)
         options.update(self.get_meta())
@@ -85,8 +90,8 @@ class LibraryManagerF90(LibraryManager):
             yield line.format(**options)
 
     def _get_library_deps_lines(self, **options):
-        self._update_dependencies()
-        for _, (lib, deps) in self._dependencies.items():
+        dependencies = self._collect_dependencies()
+        for _, (lib, deps) in dependencies.items():
             yield LIBRARY_MODUSE.format(
                 import_mod_name=lib.get_meta("module_name"),
                 import_lib_name=lib.get_meta("library_name"),

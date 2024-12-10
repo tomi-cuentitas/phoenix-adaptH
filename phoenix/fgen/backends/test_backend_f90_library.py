@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 06/12/2024, 15:45
-# Version:     0.0.297
+# Last Update: 10/12/2024, 11:55
+# Version:     0.0.303
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -89,21 +89,11 @@ auxlib.append(my_routine_4, implementation="list")
 auxlib.append(my_routine_5, implementation="list")
 auxlib.append(my_routine_6, implementation="list")
 
-list(mylib.libroutines)[0][1]._dependencies["foo"] = auxlib[
-    "myotherroutine", "base"
-]
-list(mylib.libroutines)[1][1]._dependencies["foo"] = auxlib[
-    "myotherroutine3", "list"
-]
-list(mylib.libroutines)[1][1]._dependencies["bar2"] = auxlib[
-    "myotherroutine4", "list"
-]
-list(mylib.libroutines)[1][1]._dependencies["bar3"] = auxlib[
-    "myotherroutine5", "list"
-]
-list(mylib.libroutines)[1][1]._dependencies["bar4"] = auxlib[
-    "myotherroutine6", "list"
-]
+mylib[("myroutine", "base")].add_dependency(auxlib["myotherroutine", "base"])
+mylib[("myroutine", "base")].add_dependency(auxlib["myotherroutine3", "list"])
+mylib[("myroutine", "base")].add_dependency(auxlib["myotherroutine4", "list"])
+mylib[("myroutine", "base")].add_dependency(auxlib["myotherroutine5", "list"])
+mylib[("myroutine", "base")].add_dependency(auxlib["myotherroutine6", "list"])
 # print(list(mylib.dependencies))
 # print(list(mylib.libroutines))
 
