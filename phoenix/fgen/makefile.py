@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 11/12/2024, 10:33
-# Version:     0.0.322
+# Last Update: 11/12/2024, 14:27
+# Version:     0.0.447
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -22,7 +22,7 @@ class MakeFileManager:
         self.name = name
         self._filename = f"Makefile_{name}"
         self._is_created = False
-        self._targets = []
+        self._targets = {}
 
     def set_filename(self, filename):
         """set the makefile's filename"""
@@ -33,16 +33,108 @@ class MakeFileManager:
         """create the file"""
         self._is_created = True
 
+    def append(self, target):
+        """append, avoid duplicates"""
+        if target.target_name() not in self._targets:
+            self._targets[target.target_name()] = target
+
+    def get_makefile_lines(self):
+        """get the lines that go to the actual makefile"""
+        for target in self.all_targets():
+            yield from self.filter_double_space(
+                target.target_get_makefile_lines()
+            )
+            yield ""
+
     def execute_file(self):
         """execute the makefile"""
         if not self._is_created:
             self.create_file()
+
+    def filter_double_space(self, generatorlike):
+        """filter out double spaces to make the files look nicer"""
+        for tline in generatorlike:
+            nline = ""
+            while True:
+                nline = tline.replace("  ", " ")
+                if nline == tline:
+                    break
+                tline = nline
+            yield nline
+
+    def targets_with_dependencies(self):
+        """get all targets with potential dependencies"""
+        for _, targ in self._targets.items():
+            yield from targ.get_dependencies()
+            yield targ
+
+    def manage_targets(self, iterable):
+        """manage the targets: group them and remove duplicates"""
+        groups = {}
+        for targ in iterable:
+            identifier = targ.get_target_group()
+            if identifier not in groups:
+                groups[identifier] = []
+            groups[identifier].append(targ)
+        for identifier, targets in sorted(groups.items()):
+            yield from MakeFileTarget.no_duplicates(targets)
+
+    def all_targets(self):
+        """get all targets, duplicates only once"""
+        yield from self.manage_targets(self.targets_with_dependencies())
+
+
+class _MFIdentifier:
+    """an identifier to help identifying groups"""
+
+    _known_identifiers = {}
+
+    @classmethod
+    def get(cls, identifier, order=None):
+        """ensure monadic structure"""
+        if identifier in cls._known_identifiers:
+            return cls._known_identifiers[identifier]
+        if order is None:
+            order = len(cls._known_identifiers)
+        new_ident = _MFIdentifier(identifier, order)
+        cls._known_identifiers[identifier] = new_ident
+        return new_ident
+
+    def __init__(self, ident, order):
+        self.ident = ident
+        self.order = order
+
+    def __eq__(self, other):
+        return self.ident == other.ident
+
+    def __gt__(self, other):
+        return self.order > other.order
+
+    def __hash__(self):
+        return hash((self.ident, self.order))
+
+    def __str__(self):
+        return f"[{self.order}]:{self.ident}"
+
+    def __repr__(self):
+        return str(self)
+
+
+MFGID_DFAULT = _MFIdentifier.get("DFAULT", order=999)
+MFGID_SOURCE = _MFIdentifier.get("SOURCE", order=3)
+MFGID_GLBLIB = _MFIdentifier.get("GLBLIB", order=2)
+MFGID_PATTRN = _MFIdentifier.get("PATTRN", order=0)
+MFGID_SHDLIB = _MFIdentifier.get("SHDLIB", order=7)
+MFGID_STCLIB = _MFIdentifier.get("STCLIB", order=9)
+MFGID_OBJECT = _MFIdentifier.get("OBJECT", order=5)
+MFGID_GENERL = _MFIdentifier.get("GENERL", order=20)
 
 
 class MakeFileTarget:
     """manages a target in a makefile"""
 
     TAB = "\t"
+    GROUP_IDENTIFIER = _MFIdentifier.get("DEFAULT", order=5)
 
     def __init__(self, name, dependencies=None):
         self.name = name
@@ -53,6 +145,23 @@ class MakeFileTarget:
             if not isinstance(dep, MakeFileTarget):
                 raise TypeError("dep must be an instance of MakeFileTarget")
         self.dependencies = dependencies
+
+    @classmethod
+    def get_target_group(cls):
+        """get a group identifier"""
+        return cls.GROUP_IDENTIFIER
+
+    def get_dependencies(self):
+        """recursively get all depenendcies"""
+        for dep in self.dependencies:
+            yield from dep.get_dependencies()
+            yield dep
+
+    def __eq__(self, other):
+        return self.target_name() == other.target_name()
+
+    def __gt__(self, other):
+        return self.target_name() > other.target_name()
 
     @staticmethod
     def no_duplicates(listlike):
@@ -105,11 +214,12 @@ class MakeFileTarget:
         depnames = " ".join(dep.target_name() for dep in self.dependencies)
         yield f"{self.target_name()}: {depnames}"
         for line in self.generate():
-            yield f"{self.TAB}" + line
+            if line is not None:
+                yield f"{self.TAB}" + line
 
     def generate(self, *flags):
-        flags = list(flags)
         """get the lines that actually generate the target"""
+        flags = list(flags)
         return
         yield
 
@@ -136,293 +246,13 @@ class MakeFileTarget:
         return incdirs, libdirs, glblibs, loclibs, scfiles, obfiles
 
 
-class MFTF2Py(MakeFileTarget):
-    """Create a .o file made from Fortran source"""
+gen = ["Hello  World", "Hello World", "Hello        WOrld"]
 
-    COMPILER = "f2py3"
-    CFLAGS = ["-O3"]
-
-    CLINE = (
-        "{compiler} -c -m {tgtname} "
-        + "{incdirs} {libdirs} "
-        + "{scfiles} "
-        + "{obfiles} {loclibs} {glblibs} "
-        + "--f90flags='{cflags}' "
-    )
-
-    def target_name(self):
-        return f"extf2py_{self.name}"
-
-    def include_as(self):
-        raise RuntimeError("this target is not supposed to be included")
-
-    def generate(self, *flags):
-        flags = list(flags)
-        # TODO: some flags go to f2py, some go to f90comp
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
-        yield self.CLINE.format(
-            compiler="f2py3",
-            cflags=" ".join(self.CFLAGS + flags),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
-            tgtname=self.target_name(),
-        )
-
-
-class MFTFortran(MakeFileTarget):
-    """anything that has to happen for a fortran target in general"""
-
-    COMPILER = "gfortran"
-    CFLAGS = ["-O3"]
-
-    CLINE = (
-        "{compiler} {cflags} -c "
-        + "{incdirs} {libdirs} "
-        + "{scfiles} "
-        + "{obfiles} {loclibs} {glblibs} "
-        + " -o {tgtname} "
-    )
-
-    def __init__(self, name, dependencies=None):
-        super().__init__(name=name, dependencies=dependencies)
-        # if library is None, the call is a call to linker
-
-    # @classmethod
-    # def from_library(cls, library, style="shared_library"):
-    #     """automatically create a target from a library"""
-    #     match style:
-    #         case "shared_library":
-    #             name = f"{library.name}"
-    #             dependencies = library.get_dependencies()
-    #             return MFTF90SharedLibrary(name, library, dependencies)
-    #         case "object":
-    #             name = f"{library.name}"
-    #             dependencies = library.get_dependencies()
-    #             return MFTF90Object(name, library, dependencies)
-    #         case "static_library":
-    #             name = f"{library.name}"
-    #             dependencies = library.get_dependencies()
-    #             return MFTF90StaticLibrary(name, library, dependencies)
-    #         case _:
-    #             raise ValueError(f"unknown style: {style}")
-
-
-class MFTF90GlobalLibrary(MFTFortran):
-    """Manage a global library (like openmp)"""
-
-    CLINE = ""
-
-    def target_name(self):
-        return None
-
-    def include_as(self):
-        return f"-l{self.name}"
-
-    def get_glblibs(self):
-        yield self.include_as()
-
-    def generate(self, *flags):
-        flags = list(flags)
-        # generate the actual source file, or check if it is there
-        pass
-
-
-class MFTF90PreProcessor(MFTFortran):
-    """Manage a .F90 source file to be processed"""
-
-    CLINE = ""
-
-    def target_name(self):
-        return f"{self.name}.f90"
-
-    def include_as(self):
-        return f"{self.name}.F90"
-
-    def get_scfiles(self):
-        yield self.include_as()
-
-    def generate(self, *flags):
-        flags = list(flags)
-        # generate the actual source file, or check if it is there
-        pass
-        # TODO: here goes the preprocessor directive
-
-
-class MFTF90Source(MFTFortran):
-    """Manage a .f90 source file"""
-
-    CLINE = ""
-
-    def target_name(self):
-        return f"{self.name}.f90"
-
-    def include_as(self):
-        return f"{self.name}.f90"
-
-    def get_scfiles(self):
-        yield self.include_as()
-
-    def generate(self, *flags):
-        # generate the actual source file, or check if it is there
-        flags = list(flags)
-
-
-class MFTF90Object(MFTFortran):
-    """Create a .o file made from Fortran source"""
-
-    CLINE = (
-        "{compiler} {cflags} -c "
-        + "{incdirs} {libdirs} "
-        + "{scfiles} "
-        + "{obfiles} {loclibs} {glblibs} "
-        + " -o {tgtname} "
-    )
-
-    def target_name(self):
-        return f"{self.name}.o"
-
-    def include_as(self):
-        return f"{self.name}.o"
-
-    def get_obfiles(self):
-        yield self.include_as()
-        for dep in self.dependencies:
-            yield from dep.get_obfiles(dep)
-
-    def generate(self, *flags):
-        flags = list(flags)
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
-        yield self.CLINE.format(
-            compiler=self.COMPILER,
-            cflags=" ".join(self.CFLAGS + flags),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
-            tgtname=self.target_name(),
-        )
-
-
-class MFTF90SharedLibrary(MFTFortran):
-    """Create a .so file made from Fortran source"""
-
-    CLINE = (
-        "{compiler} {cflags} --shared "
-        + "{incdirs} {libdirs} "
-        + "{scfiles} "
-        + "{obfiles} {loclibs} {glblibs} "
-        + " -o {tgtname} "
-    )
-
-    def target_name(self):
-        return f"libs{self.name}.so"
-
-    def include_as(self):
-        return f"-ls{self.name}"
-
-    def get_loclibs(self):
-        yield self.include_as()
-
-    def generate(self, *flags):
-        flags = list(flags)
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
-        yield self.CLINE.format(
-            compiler=self.COMPILER,
-            cflags=" ".join(self.CFLAGS + flags),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
-            tgtname=self.target_name(),
-        )
-
-
-class MFTF90StaticLibrary(MFTFortran):
-    """Create a .a file made from Fortran source"""
-
-    CLINE = "ar rcs " + "{tgtname} " + "{obfiles} "
-
-    def target_name(self):
-        return f"liba{self.name}.a"
-
-    def include_as(self):
-        return f"-la{self.name}"
-
-    def get_loclibs(self):
-        yield self.include_as()
-
-    def generate(self, *flags):
-        flags = list(flags)
-        (
-            _,
-            _,
-            _,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
-        if loclibs or scfiles:
-            warnings.warn(
-                "only object files are considered for a static library"
-            )
-        yield self.CLINE.format(
-            tgtname=self.target_name(),
-            obfiles=" ".join(obfiles),
-        )
-
-
-test1 = MFTF90Object("myname1")
-
-test2 = MFTF90Object("myname2")
-
-
-test31 = MFTF90Object("myname31")
-test32 = MFTF90Object("myname32")
-test33 = MFTF90Object("myname33")
-
-test3 = MFTF90SharedLibrary("myname3", dependencies=[test31, test32, test33])
-
-test123 = MFTF90SharedLibrary("myname", dependencies=[test1, test2, test3])
-
-for tline in test123.target_get_makefile_lines():
-    print(tline)
+mfm = MakeFileManager("test")
+for line in mfm.filter_double_space(gen):
+    print(line)
 
 print()
-
-for tline in test3.target_get_makefile_lines():
-    print(tline)
-
 print()
-
-test123f2py = MFTF2Py("mynamef2py", dependencies=[test1, test2, test3])
-for tline in test123f2py.target_get_makefile_lines():
-    print(tline)
+for line in mfm.get_makefile_lines():
+    print(line)
