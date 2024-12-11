@@ -5,13 +5,14 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 10/12/2024, 17:26
-# Version:     0.0.310
+# Last Update: 11/12/2024, 10:33
+# Version:     0.0.322
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+import warnings
 
 
 class MakeFileManager:
@@ -90,7 +91,7 @@ class MakeFileTarget:
         yield
 
     def get_scfiles(self):
-        """get more source or similar"""
+        """get source"""
         return
         yield
 
@@ -106,7 +107,8 @@ class MakeFileTarget:
         for line in self.generate():
             yield f"{self.TAB}" + line
 
-    def generate(self):
+    def generate(self, *flags):
+        flags = list(flags)
         """get the lines that actually generate the target"""
         return
         yield
@@ -154,7 +156,9 @@ class MFTF2Py(MakeFileTarget):
     def include_as(self):
         raise RuntimeError("this target is not supposed to be included")
 
-    def generate(self):
+    def generate(self, *flags):
+        flags = list(flags)
+        # TODO: some flags go to f2py, some go to f90comp
         (
             incdirs,
             libdirs,
@@ -165,7 +169,7 @@ class MFTF2Py(MakeFileTarget):
         ) = self.resolve_dependencies()
         yield self.CLINE.format(
             compiler="f2py3",
-            cflags=" ".join(self.CFLAGS),
+            cflags=" ".join(self.CFLAGS + flags),
             incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
             libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
             scfiles=" ".join(scfiles),
@@ -187,7 +191,7 @@ class MFTFortran(MakeFileTarget):
         + "{incdirs} {libdirs} "
         + "{scfiles} "
         + "{obfiles} {loclibs} {glblibs} "
-        + " -o {target_name} "
+        + " -o {tgtname} "
     )
 
     def __init__(self, name, dependencies=None):
@@ -214,40 +218,45 @@ class MFTFortran(MakeFileTarget):
     #             raise ValueError(f"unknown style: {style}")
 
 
-class MFTF90Object(MFTFortran):
-    """Create a .o file made from Fortran source"""
+class MFTF90GlobalLibrary(MFTFortran):
+    """Manage a global library (like openmp)"""
+
+    CLINE = ""
 
     def target_name(self):
-        return f"{self.name}.o"
+        return None
 
     def include_as(self):
-        return f"{self.name}.o"
+        return f"-l{self.name}"
 
-    def get_obfiles(self):
+    def get_glblibs(self):
         yield self.include_as()
-        for dep in self.dependencies:
-            yield from dep.get_obfiles(dep)
 
-    def generate(self):
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
-        yield self.CLINE.format(
-            compiler=self.COMPILER,
-            cflags=" ".join(self.CFLAGS),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
-            target_name=self.target_name(),
-        )
+    def generate(self, *flags):
+        flags = list(flags)
+        # generate the actual source file, or check if it is there
+        pass
+
+
+class MFTF90PreProcessor(MFTFortran):
+    """Manage a .F90 source file to be processed"""
+
+    CLINE = ""
+
+    def target_name(self):
+        return f"{self.name}.f90"
+
+    def include_as(self):
+        return f"{self.name}.F90"
+
+    def get_scfiles(self):
+        yield self.include_as()
+
+    def generate(self, *flags):
+        flags = list(flags)
+        # generate the actual source file, or check if it is there
+        pass
+        # TODO: here goes the preprocessor directive
 
 
 class MFTF90Source(MFTFortran):
@@ -264,24 +273,35 @@ class MFTF90Source(MFTFortran):
     def get_scfiles(self):
         yield self.include_as()
 
-    def generate(self):
+    def generate(self, *flags):
         # generate the actual source file, or check if it is there
-        pass
+        flags = list(flags)
 
 
-class MFTF90SharedLibrary(MFTFortran):
-    """Create a .so file made from Fortran source"""
+class MFTF90Object(MFTFortran):
+    """Create a .o file made from Fortran source"""
+
+    CLINE = (
+        "{compiler} {cflags} -c "
+        + "{incdirs} {libdirs} "
+        + "{scfiles} "
+        + "{obfiles} {loclibs} {glblibs} "
+        + " -o {tgtname} "
+    )
 
     def target_name(self):
-        return f"libs{self.name}.so"
+        return f"{self.name}.o"
 
     def include_as(self):
-        return f"-ls{self.name}"
+        return f"{self.name}.o"
 
-    def get_loclibs(self):
+    def get_obfiles(self):
         yield self.include_as()
+        for dep in self.dependencies:
+            yield from dep.get_obfiles(dep)
 
-    def generate(self):
+    def generate(self, *flags):
+        flags = list(flags)
         (
             incdirs,
             libdirs,
@@ -292,19 +312,64 @@ class MFTF90SharedLibrary(MFTFortran):
         ) = self.resolve_dependencies()
         yield self.CLINE.format(
             compiler=self.COMPILER,
-            cflags=" ".join(self.CFLAGS) + " -shared",
+            cflags=" ".join(self.CFLAGS + flags),
             incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
             libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
             scfiles=" ".join(scfiles),
             obfiles=" ".join(obfiles),
             loclibs=" ".join(loclibs),
             glblibs=" ".join(glblibs),
-            target_name=self.target_name(),
+            tgtname=self.target_name(),
+        )
+
+
+class MFTF90SharedLibrary(MFTFortran):
+    """Create a .so file made from Fortran source"""
+
+    CLINE = (
+        "{compiler} {cflags} --shared "
+        + "{incdirs} {libdirs} "
+        + "{scfiles} "
+        + "{obfiles} {loclibs} {glblibs} "
+        + " -o {tgtname} "
+    )
+
+    def target_name(self):
+        return f"libs{self.name}.so"
+
+    def include_as(self):
+        return f"-ls{self.name}"
+
+    def get_loclibs(self):
+        yield self.include_as()
+
+    def generate(self, *flags):
+        flags = list(flags)
+        (
+            incdirs,
+            libdirs,
+            glblibs,
+            loclibs,
+            scfiles,
+            obfiles,
+        ) = self.resolve_dependencies()
+        yield self.CLINE.format(
+            compiler=self.COMPILER,
+            cflags=" ".join(self.CFLAGS + flags),
+            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
+            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
+            scfiles=" ".join(scfiles),
+            obfiles=" ".join(obfiles),
+            loclibs=" ".join(loclibs),
+            glblibs=" ".join(glblibs),
+            tgtname=self.target_name(),
         )
 
 
 class MFTF90StaticLibrary(MFTFortran):
     """Create a .a file made from Fortran source"""
+
+    CLINE = "ar rcs " + "{tgtname} " + "{obfiles} "
 
     def target_name(self):
         return f"liba{self.name}.a"
@@ -314,6 +379,25 @@ class MFTF90StaticLibrary(MFTFortran):
 
     def get_loclibs(self):
         yield self.include_as()
+
+    def generate(self, *flags):
+        flags = list(flags)
+        (
+            _,
+            _,
+            _,
+            loclibs,
+            scfiles,
+            obfiles,
+        ) = self.resolve_dependencies()
+        if loclibs or scfiles:
+            warnings.warn(
+                "only object files are considered for a static library"
+            )
+        yield self.CLINE.format(
+            tgtname=self.target_name(),
+            obfiles=" ".join(obfiles),
+        )
 
 
 test1 = MFTF90Object("myname1")
