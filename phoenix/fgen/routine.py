@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/12/2024, 13:19
-# Version:     0.0.69
+# Last Update: 12/12/2024, 14:09
+# Version:     0.0.108
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,7 +43,7 @@ class Routine:
         if instruction_group is None:
             instruction_group = InstructionGroup([])
         self.instruction_group = instruction_group
-
+        self._dependencies = []
         self.in_vars = in_vars
         self.out_var = out_var
         self._itype = itype
@@ -70,35 +70,30 @@ class Routine:
         test_tuple = (
             self._name,
             self.itype,
-            len(self.in_vars),
             self.out_var.get_size(),
-            *[inp_var.get_size() for inp_var in self.in_vars],
+            tuple(inp_var.get_size() for inp_var in self.in_vars),
+            self.instruction_group.checksum(),
         )
         return test_tuple
 
-    def from_file(self):
+    @classmethod
+    def get_filename(cls, name):
+        """standard way to get a filename. Handle path and naming convention"""
+        return f"routine_{name}_data.pckl"
+
+    @classmethod
+    def from_file(cls, name):
         """get from file"""
-        filename = f"routine_{self._name}_data.pckl"
-        try:
-            with open(filename, "rb") as f:
-                checksum, instgrp = pickle.load(f)
-                if checksum == self.checksum():
-                    self.instruction_group = instgrp
-                    self._ready = True
-                    return self
-                else:
-                    return False
-        except FileNotFoundError:
-            return False
+        filename = cls.get_filename(name)
+        with open(filename, "rb") as f:
+            routine = pickle.load(f)
+        return routine
 
     def to_file(self):
         """write to file"""
-        filename = f"routine_{self._name}_data.pckl"
+        filename = self.get_filename(self.name)
         with open(filename, "wb") as f:
-            pickle.dump((self.checksum(), self.instruction_group), f)
-
-    # create a tomography object as in
-    # tomography = Tomography.new(itype, out_var, in_vars, **kwargs)
+            pickle.dump(self, f)
 
     @staticmethod
     def from_function(
@@ -134,3 +129,14 @@ class Routine:
         instructions and filenames
         """
         return self._name
+
+    def __eq__(self, other):
+        return self.checksum() == other.checksum()
+
+    def add_dependency(self, routine):
+        """add a dependency"""
+        if not isinstance(routine, Routine):
+            raise TypeError("dependency must be of type Routine")
+        if routine.name not in self._dependencies:
+            self._dependencies[routine.name] = routine
+        return self

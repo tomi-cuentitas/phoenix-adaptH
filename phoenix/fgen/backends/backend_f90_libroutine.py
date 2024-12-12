@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 10/12/2024, 11:48
-# Version:     0.0.44
+# Last Update: 12/12/2024, 12:47
+# Version:     0.0.47
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,6 +34,7 @@ class LibRoutineF90(LibRoutine):
     code_head = ""
     code_foot = ""
     code_line = ""
+    code_call = ""
     implementation = "generic"
 
     def get_meta(self):
@@ -41,6 +42,15 @@ class LibRoutineF90(LibRoutine):
         meta = super().get_meta()
         # potentially extend the meta by fortran specific stuff
         return meta
+
+    def call_as(self, **kwargs):
+        """get a string how the function is called in code"""
+        options = dict(DEFAULT_OPTIONS)
+        options.update(self.get_meta())
+        options.update(kwargs)
+
+        for line in self.code_call.split("\n"):
+            yield line.format(**options)
 
     def create_source_lines(self, **kwargs):
         options = dict(DEFAULT_OPTIONS)

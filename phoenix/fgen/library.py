@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 10/12/2024, 15:53
-# Version:     0.0.384
+# Last Update: 12/12/2024, 12:43
+# Version:     0.0.385
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -198,10 +198,10 @@ class LibraryManager:
         """create the source code lines"""
         yield ""
 
-    @property
-    def dependencies(self):
-        """get all dependencies"""
-        yield from self._dependencies.items()
+    # @property
+    # def dependencies(self):
+    #     """get all dependencies"""
+    #     yield from self._dependencies.items()
 
     def get_meta(self, key=None):
         """return meta information on the library"""

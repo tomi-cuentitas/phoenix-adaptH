@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 09/12/2024, 15:45
-# Version:     0.0.630
+# Last Update: 12/12/2024, 16:42
+# Version:     0.0.649
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -31,18 +31,18 @@ to data.
 from phoenix._aux import segment_overlap, mro_latest_common_parent
 
 
-class _PartialFormatDict(dict):
-    """allows partial formatting of strings"""
+# class _PartialFormatDict(dict):
+#     """allows partial formatting of strings"""
 
-    def __setitem__(self, key, value):
-        if not isinstance(key, str):
-            raise ValueError("Key must be a string")
-        return super().__setitem__(key, value)
+#     def __setitem__(self, key, value):
+#         if not isinstance(key, str):
+#             raise ValueError("Key must be a string")
+#         return super().__setitem__(key, value)
 
-    def __getitem__(self, key):
-        if key in self:
-            return super().__getitem__(key)
-        return "{" + key + "}"
+#     def __getitem__(self, key):
+#         if key in self:
+#             return super().__getitem__(key)
+#         return "{" + key + "}"
 
 
 class Instruction:
@@ -89,6 +89,14 @@ class Instruction:
         # print("asd", cls._ftype, ftype, cls.__name__)
         ftype = ftype.replace(".", ":")
         cls._ftype += f".{ftype}"
+
+    def checksum(self):
+        """get a checksum of the instruction"""
+        test_tuple = (
+            self._itype,
+            self._ftype,
+        )
+        return test_tuple
 
     @property
     def instructions(self):
@@ -195,10 +203,17 @@ class GenericInstruction(Instruction, ftype="generic"):
     def __setitem__(self, key, value):
         self.set(key, value)
 
+    def checksum(self):
+        test_tuple = (
+            *super().checksum(),
+            tuple(self.params),
+        )
+        return test_tuple
+
     @property
     def params(self):
         """access values as list"""
-        return list(self.values())
+        return tuple(self.values())
 
     def get(self, *in_args):
         """mimic the get behaviour of dicts"""
@@ -223,13 +238,12 @@ class GenericInstruction(Instruction, ftype="generic"):
         if defaults is None:
             defaults = {}
         # check params first, then check defaults, return None for miss
+        pfd = {}  # _PartialFormatDict
         if keys:
-            pfd = _PartialFormatDict()
             pfd.update(
                 {key: self.get(key, defaults.get(key, None)) for key in keys}
             )
         else:
-            pfd = _PartialFormatDict()
             pfd.update(
                 {
                     key: self.get(key, defaults.get(key, None))
@@ -385,6 +399,19 @@ class LinearOperationInstruction(PolynomialInstruction, ftype="linear"):
     # def __init__(self, a, )
 
 
+class CallMultiOffsetInstruction(GenericInstruction, ftype="call"):
+    """Call other routines with this instruction"""
+
+    # def __init__(self, a, )
+    # remember: routine, offset(s)
+
+
+class CallMultiInstruction(CallMultiOffsetInstruction, ftype="callnooff"):
+    """Call other routines with this instruction"""
+
+    # def __init__(self, a, )
+
+
 if __name__ == "__main__":
     x = GenericInstruction(foo="bar")
     print(x.params)
@@ -457,11 +484,7 @@ if __name__ == "__main__":
     print()
     for ins in foo.unpack(recursive=True):
         print(ins, len(ins), ins.to_dict(), ins.to_tuple())
-        print(
-            "in this test we output 'foo' as {foo} and we like it.".format(
-                **ins
-            )
-        )
+        print("in this test we output 'foo' as {foo}.".format(**ins))
 
     # print(SpecificInstruction.__mro__[::-1])
     # print(MoreSpecificInstruction.__mro__[::-1])

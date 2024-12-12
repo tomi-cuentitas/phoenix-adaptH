@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 06/12/2024, 12:56
-# Version:     0.0.249
+# Last Update: 12/12/2024, 12:50
+# Version:     0.0.252
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,6 +15,9 @@
 
 from phoenix.fgen.backends.backend_f90_libroutine import LibRoutineF90
 
+
+SR_LINEAR_BASE_CALL = """
+call {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n)"""
 
 SR_LINEAR_BASE_HEAD = """
 SUBROUTINE {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n)
@@ -45,6 +48,8 @@ SR_LINEAR_BASE_LINE = """
 
 ###############################################################################
 
+SR_LINEAR_OFFS_CALL = """
+call {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)"""
 
 SR_LINEAR_OFFS_HEAD = """
 SUBROUTINE {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)
@@ -82,6 +87,9 @@ SR_LINEAR_OFFS_LINE = """
 
 
 ###############################################################################
+
+SR_LINEAR_LIST_CALL = """
+call {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)"""
 
 SR_LINEAR_LIST_HEAD = """
 SUBROUTINE {subroutine_name}(targ_r, targ_i, targ_n, src1_r, src1_i, src1_n, targ_offs, src1_offs)
@@ -134,6 +142,7 @@ class LibRoutineF90LinearBase(LibRoutineF90):
     code_head = SR_LINEAR_BASE_HEAD
     code_foot = SR_LINEAR_BASE_FOOT
     code_line = SR_LINEAR_BASE_LINE
+    code_call = SR_LINEAR_BASE_CALL
     implementation = "base"
 
 
@@ -143,6 +152,7 @@ class LibRoutineF90LinearOffs(LibRoutineF90):
     code_head = SR_LINEAR_OFFS_HEAD
     code_foot = SR_LINEAR_OFFS_FOOT
     code_line = SR_LINEAR_OFFS_LINE
+    code_call = SR_LINEAR_OFFS_CALL
     implementation = "offs"
 
 
@@ -152,6 +162,7 @@ class LibRoutineF90LinearList(LibRoutineF90):
     code_head = SR_LINEAR_LIST_HEAD
     code_foot = SR_LINEAR_LIST_FOOT
     code_line = SR_LINEAR_LIST_LINE
+    code_call = SR_LINEAR_LIST_CALL
     implementation = "list"
 
     def __init__(self, routine, library, dependencies=None):

@@ -6,9 +6,10 @@ The **phoenix** library provides modules to simplify and unify the communication
 high-performance computation (HPC) backends implemented in languages such as
 - CUDA (planned),
 - C (planned),
-- FORTRAN (planned),
+- FORTRAN (under development),
 - OpenCL (planned),
 - Cython (planned).
+- PurePython (planned).
 
 The modules included are
 - `keymap`: sparse data can be accessed using identifiers rather than abstract integer indices
@@ -38,34 +39,62 @@ and locally install it by going to the main directory and make a local installat
 `cd phoenix`
 `pip install .`
 
-## Modules
 
-### keymap
+## Roadmap
 
-The keymap module provides a `Region` class that further inherits to `Keymap` and `Key`.
-
-### dtype
+### TESTED
 
 
-#### dtype.dcontainer
+### WRITTEN
 
+- [X] makefile management
+- [X] implement routine base class
+- [X] implement libroutine base class
+- [X] implement library base class
+- [X] instructions A
+    - [X] implement instruction base class
+    - [X] implement backend base class
+    - [X] f90 backend linear
+- [X] keymap module
+- [X] ADAA base
 
-#### dtype.dlayer
+### ACTIVE
 
+- [ ] DOCUMENTATION!
+    - [ ] instruction
+    - [ ] qop
+    - [ ] qproc
+    - [ ] routine
+    - [ ] keymap
+- [ ] reimplement qproc
+- [ ] reimplement qop
+    - [X] qop.modifier
+    - [X] qop.summand
+    - [X] qop.basis
+    - [ ] qop.operator
+    - [ ] qop.algebraic functionality
+- [ ] instructions B
+    - [ ] implement external call instruction
+        - [ ] implement actual instruction
+        - [ ] implement f90 backend
+- [ ] backends
+    - [ ] CUDA
+- [ ] f2py library wrapper
+    - [ ] subroutine class
+    - [ ] generate from routine in python
 
-### fgen
-
-
-#### fgen.instruction
-
-
-#### fgen.tomography
-
-
-#### fgen.routine
-
-
-#### fgen.subroutine
-
-
-#### fgen.library
+### PLANNED
+- [ ] ADAA multi
+- [ ] tomography
+- [ ] extend modifier
+- [ ] int2pauli
+- [ ] standalone
+- [ ] matlab lib
+- [ ] julia lib
+- [ ] C lib
+- [ ] backends
+    - [ ] PurePy
+    - [ ] PyCuda
+    - [ ] OpenCL
+    - [ ] C
+    - [ ] Cython
