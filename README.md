@@ -42,9 +42,6 @@ and locally install it by going to the main directory and make a local installat
 
 ## Roadmap
 
-### TESTED
-
-
 ### WRITTEN
 
 - [X] makefile management
@@ -56,6 +53,9 @@ and locally install it by going to the main directory and make a local installat
     - [X] implement backend base class
     - [X] f90 backend linear
 - [X] keymap module
+- [X] domain base class
+- [X] coeffbackend base class
+- [X] new qop base
 - [X] ADAA base
 
 ### ACTIVE
@@ -66,13 +66,6 @@ and locally install it by going to the main directory and make a local installat
     - [ ] qproc
     - [ ] routine
     - [ ] keymap
-- [ ] reimplement qproc
-- [ ] reimplement qop
-    - [X] qop.modifier
-    - [X] qop.summand
-    - [X] qop.basis
-    - [ ] qop.operator
-    - [ ] qop.algebraic functionality
 - [ ] instructions B
     - [ ] implement external call instruction
         - [ ] implement actual instruction
@@ -82,9 +75,17 @@ and locally install it by going to the main directory and make a local installat
 - [ ] f2py library wrapper
     - [ ] subroutine class
     - [ ] generate from routine in python
+- [ ] reimplement qproc
+- [ ] reimplement qop
+    - [X] qop.modifier
+    - [X] qop.summand
+    - [X] qop.basis
+    - [ ] qop.operator
 
 ### PLANNED
+- [ ] variable precision via cpp
 - [ ] ADAA multi
+- [ ] ADDA container
 - [ ] tomography
 - [ ] extend modifier
 - [ ] int2pauli
