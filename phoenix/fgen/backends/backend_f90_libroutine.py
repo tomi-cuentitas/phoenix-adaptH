@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 12/12/2024, 12:47
-# Version:     0.0.47
+# Last Update: 13/12/2024, 16:09
+# Version:     0.0.66
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,6 +19,89 @@ from phoenix.fgen.makefile import MakeFileManager
 DEFAULT_OPTIONS = {
     "tab": "  ",
 }
+
+
+SR_1IN1OUT_BASE_HEAD = """
+SUBROUTINE {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n)
+{tab}!
+{tab}double precision, dimension(tgt1_n), intent(inout) :: tgt1_r
+{tab}double precision, dimension(tgt1_n), intent(inout) :: tgt1_i
+{tab}integer,                             intent(in)    :: tgt1_n
+{tab}!
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_r
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_i
+{tab}integer,                             intent(in)    :: src1_n
+{tab}!
+"""
+
+SR_1IN1OUT_BASE_FOOT = """
+{tab}!
+END SUBROUTINE {subroutine_name}
+"""
+
+SR_1IN1OUT_BASE_CALL = """
+call {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n)"""
+
+###############################################################################
+
+SR_1IN1OUT_OFFS_HEAD = """
+SUBROUTINE {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n, tgt1_offs, src1_offs)
+{tab}!
+{tab}double precision, dimension(tgt1_n), intent(inout) :: tgt1_r
+{tab}double precision, dimension(tgt1_n), intent(inout) :: tgt1_i
+{tab}integer,                             intent(in)    :: tgt1_n
+{tab}!
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_r
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_i
+{tab}integer,                             intent(in)    :: src1_n
+{tab}!
+{tab}integer,                             intent(in)    :: tgt1_offs
+{tab}integer,                             intent(in)    :: src1_offs
+{tab}!
+{tab}integer :: tgt1_shft
+{tab}integer :: src1_shft
+{tab}!
+"""
+
+SR_1IN1OUT_OFFS_FOOT = """
+
+END SUBROUTINE {subroutine_name}
+"""
+
+SR_1IN1OUT_OFFS_CALL = """
+call {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n, tgt1_offs, src1_offs)"""
+
+###############################################################################
+
+SR_1IN1OUT_LIST_HEAD = """
+SUBROUTINE {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n, tgt1_offs, src1_offs)
+{tab}!
+{tab}double precision, dimension(tgt1_n), intent(inout) :: tgt1_r
+{tab}double precision, dimension(tgt1_n), intent(inout) :: tgt1_i
+{tab}integer,                             intent(in)    :: tgt1_n
+{tab}!
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_r
+{tab}double precision, dimension(src1_n), intent(in)    :: src1_i
+{tab}integer,                             intent(in)    :: src1_n
+{tab}!
+{tab}integer,                             intent(in)    :: tgt1_offs
+{tab}integer,                             intent(in)    :: src1_offs
+{tab}!
+{tab}integer :: kk
+{tab}integer :: tgt1_shft
+{tab}integer :: src1_shft
+{tab}!
+"""
+
+SR_1IN1OUT_LIST_FOOT = """
+{tab}!
+END SUBROUTINE {subroutine_name}
+"""
+
+SR_1IN1OUT_LIST_CALL = """
+call {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n, tgt1_offs, src1_offs)"""
+
+###############################################################################
 
 
 class MakefileManagerF90(MakeFileManager):
@@ -35,6 +118,8 @@ class LibRoutineF90(LibRoutine):
     code_foot = ""
     code_line = ""
     code_call = ""
+    code_prmb = ""
+    code_post = ""
     implementation = "generic"
 
     def get_meta(self):
@@ -60,9 +145,15 @@ class LibRoutineF90(LibRoutine):
         for line in self.code_head.split("\n"):
             yield line.format(**options)
 
+        for line in self.code_prmb.split("\n"):
+            yield line.format(**options)
+
         for instruction in self.get_instructions():
             for line in self.code_line.split("\n"):
                 yield line.format(**(options | instruction.to_dict()))
+
+        for line in self.code_post.split("\n"):
+            yield line.format(**options)
 
         for line in self.code_foot.split("\n"):
             yield line.format(**options)

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 10/12/2024, 11:55
-# Version:     0.0.303
+# Last Update: 13/12/2024, 16:00
+# Version:     0.0.305
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -24,14 +24,14 @@ instruction_group = (
         [
             GenericInstruction(
                 src1_indx=num + 1,
-                targ_indx=10 - num,
+                tgt1_indx=10 - num,
                 alph_r=1.0,
                 alph_i=0.0,
             )
             for num in range(10)
         ]
     )
-    .sorted(lambda x: x["targ_indx"])
+    .sorted(lambda x: x["tgt1_indx"])
     .flatten()
 )
 my_routine_1 = Routine(
