@@ -5,14 +5,14 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 11/12/2024, 12:51
-# Version:     0.0.330
+# Last Update: 13/12/2024, 13:03
+# Version:     0.0.337
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
-import warnings
+
 from phoenix.fgen.makefile import MakeFileTarget
 
 
@@ -39,22 +39,15 @@ class MFTF2Py(MakeFileTarget):
     def generate(self, *flags):
         flags = list(flags)
         # TODO: some flags go to f2py, some go to f90comp
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
+        depinfo = self.resolve_dependencies()
         yield self.CLINE.format(
             compiler="f2py3",
             cflags=" ".join(self.CFLAGS + flags),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
+            incdirs=" ".join(f"-I{ip}" for ip in depinfo.get("incdirs", [])),
+            libdirs=" ".join(f"-L{lp}" for lp in depinfo.get("libdirs", [])),
+            scfiles=" ".join(depinfo.get("scfiles", [])),
+            obfiles=" ".join(depinfo.get("obfiles", [])),
+            loclibs=" ".join(depinfo.get("loclibs", [])),
+            glblibs=" ".join(depinfo.get("glblibs", [])),
             tgtname=self.target_name(),
         )

@@ -5,14 +5,24 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 11/12/2024, 14:27
-# Version:     0.0.447
+# Last Update: 13/12/2024, 14:02
+# Version:     0.0.452
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 import warnings
+
+
+def no_duplicates(listlike):
+    """generate a list without duplicates that conserves order"""
+    ret = []
+    for llike in listlike:
+        if llike in ret:
+            continue
+        ret.append(llike)
+    return ret
 
 
 class MakeFileManager:
@@ -77,7 +87,7 @@ class MakeFileManager:
                 groups[identifier] = []
             groups[identifier].append(targ)
         for identifier, targets in sorted(groups.items()):
-            yield from MakeFileTarget.no_duplicates(targets)
+            yield from no_duplicates(targets)
 
     def all_targets(self):
         """get all targets, duplicates only once"""
@@ -163,16 +173,6 @@ class MakeFileTarget:
     def __gt__(self, other):
         return self.target_name() > other.target_name()
 
-    @staticmethod
-    def no_duplicates(listlike):
-        """generate a list without duplicates that conserves order"""
-        ret = []
-        for llike in listlike:
-            if llike in ret:
-                continue
-            ret.append(llike)
-        return ret
-
     def get_incdirs(self):
         """get the include directory path"""
         yield self.path
@@ -238,12 +238,19 @@ class MakeFileTarget:
             obfiles.extend(list(dep.get_obfiles()))
             incdirs.extend(list(dep.get_incdirs()))
             libdirs.extend(list(dep.get_libdirs()))
-        incdirs = self.no_duplicates(incdirs)
-        libdirs = self.no_duplicates(libdirs)
-        glblibs = self.no_duplicates(glblibs)
-        loclibs = self.no_duplicates(loclibs)
-        scfiles = self.no_duplicates(scfiles)
-        return incdirs, libdirs, glblibs, loclibs, scfiles, obfiles
+        incdirs = no_duplicates(incdirs)
+        libdirs = no_duplicates(libdirs)
+        glblibs = no_duplicates(glblibs)
+        loclibs = no_duplicates(loclibs)
+        scfiles = no_duplicates(scfiles)
+        return {
+            "incdirs": incdirs,
+            "libdirs": libdirs,
+            "glblibs": glblibs,
+            "loclibs": loclibs,
+            "scfiles": scfiles,
+            "obfiles": obfiles,
+        }
 
 
 gen = ["Hello  World", "Hello World", "Hello        WOrld"]

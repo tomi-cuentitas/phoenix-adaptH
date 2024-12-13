@@ -5,15 +5,20 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 11/12/2024, 14:25
-# Version:     0.0.383
+# Last Update: 13/12/2024, 14:01
+# Version:     0.0.397
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
 import warnings
-from phoenix.fgen.makefile import MakeFileTarget, MakeFileManager
+from phoenix.fgen.makefile import (
+    MakeFileTarget,
+    MakeFileManager,
+    no_duplicates,
+)
 
 from phoenix.fgen.makefile import (
     MFGID_DFAULT,
@@ -52,23 +57,16 @@ class MFTF2Py(MakeFileTarget):
     def generate(self, *flags):
         flags = list(flags)
         # TODO: some flags go to f2py, some go to f90comp
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
+        depinfo = self.resolve_dependencies()
         yield self.CLINE.format(
             compiler="f2py3",
-            cflags=" ".join(self.no_duplicates(self.CFLAGS + GCFLAGS + flags)),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
+            cflags=" ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
+            incdirs=" ".join(f"-I{ip}" for ip in depinfo.get("incdirs", [])),
+            libdirs=" ".join(f"-L{lp}" for lp in depinfo.get("libdirs", [])),
+            scfiles=" ".join(depinfo.get("scfiles", [])),
+            obfiles=" ".join(depinfo.get("obfiles", [])),
+            loclibs=" ".join(depinfo.get("loclibs", [])),
+            glblibs=" ".join(depinfo.get("glblibs", [])),
             tgtname=self.target_name(),
         )
 
@@ -151,26 +149,12 @@ class MFTF90PreProcessor(MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
+        depinfo = self.resolve_dependencies()
         content = {
-            "compiler": "f2py3",
-            "cflags": " ".join(
-                self.no_duplicates(self.CFLAGS + GCFLAGS + flags)
-            ),
-            "incdirs": " ".join(f"-I{ipath}" for ipath in incdirs),
-            "libdirs": " ".join(f"-L{lpath}" for lpath in libdirs),
-            "scfiles": " ".join(scfiles),
-            "obfiles": " ".join(obfiles),
-            "loclibs": " ".join(loclibs),
-            "glblibs": " ".join(glblibs),
             "tgtname": self.target_name(),
+            "compiler": self.COMPILER,
+            "cflags": " ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
+            "scfiles": " ".join(depinfo.get("scfiles", [])),
         }
 
         yield "rm -rf {tgtname}".format(**content)
@@ -226,23 +210,16 @@ class MFTF90Object(MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
+        depinfo = self.resolve_dependencies()
         yield self.CLINE.format(
             compiler=self.COMPILER,
-            cflags=" ".join(self.no_duplicates(self.CFLAGS + GCFLAGS + flags)),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
+            cflags=" ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
+            incdirs=" ".join(f"-I{ip}" for ip in depinfo.get("incdirs", [])),
+            libdirs=" ".join(f"-L{lp}" for lp in depinfo.get("libdirs", [])),
+            scfiles=" ".join(depinfo.get("scfiles", [])),
+            obfiles=" ".join(depinfo.get("obfiles", [])),
+            loclibs=" ".join(depinfo.get("loclibs", [])),
+            glblibs=" ".join(depinfo.get("glblibs", [])),
             tgtname=self.target_name(),
         )
 
@@ -271,23 +248,16 @@ class MFTF90SharedLibrary(MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        (
-            incdirs,
-            libdirs,
-            glblibs,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
+        depinfo = self.resolve_dependencies()
         yield self.CLINE.format(
             compiler=self.COMPILER,
-            cflags=" ".join(self.no_duplicates(self.CFLAGS + GCFLAGS + flags)),
-            incdirs=" ".join(f"-I{ipath}" for ipath in incdirs),
-            libdirs=" ".join(f"-L{lpath}" for lpath in libdirs),
-            scfiles=" ".join(scfiles),
-            obfiles=" ".join(obfiles),
-            loclibs=" ".join(loclibs),
-            glblibs=" ".join(glblibs),
+            cflags=" ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
+            incdirs=" ".join(f"-I{ip}" for ip in depinfo.get("incdirs", [])),
+            libdirs=" ".join(f"-L{lp}" for lp in depinfo.get("libdirs", [])),
+            scfiles=" ".join(depinfo.get("scfiles", [])),
+            obfiles=" ".join(depinfo.get("obfiles", [])),
+            loclibs=" ".join(depinfo.get("loclibs", [])),
+            glblibs=" ".join(depinfo.get("glblibs", [])),
             tgtname=self.target_name(),
         )
 
@@ -309,21 +279,16 @@ class MFTF90StaticLibrary(MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        (
-            _,
-            _,
-            _,
-            loclibs,
-            scfiles,
-            obfiles,
-        ) = self.resolve_dependencies()
-        if loclibs or scfiles:
+        depinfo = self.resolve_dependencies()
+        if "loclibs" in depinfo or "scfiles" in depinfo:
             warnings.warn(
                 "only object files are considered for a static library"
             )
+        if len(depinfo.get("obfiles")) < 1:
+            raise ValueError("No object files found for the static library")
         yield self.CLINE.format(
             tgtname=self.target_name(),
-            obfiles=" ".join(obfiles),
+            obfiles=" ".join(depinfo.get("obfiles")),
         )
 
 
