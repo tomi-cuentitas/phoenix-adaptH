@@ -1,12 +1,21 @@
 import numpy as np
-from aux import aux
-import timeit
 
+# from aux_o3 import aux
+import timeit
+import sys
 from matplotlib import pyplot as plt
 
-REPS = 15000
-PMAX = 30
-PEXP = 1.25
+import importlib
+
+extension = sys.argv[1]
+
+auxmod = importlib.import_module(f"aux_o{extension}")
+aux = auxmod.aux
+
+REPS = 5000
+SREP = 5
+PMAX = 200  # 30
+PEXP = 1.051  # 1.25
 
 num_vals = [0 for _ in range(PMAX + 1)]
 time_test_loop = [0.0 for _ in range(PMAX + 1)]
@@ -36,8 +45,15 @@ time_test_ilsh = [0.0 for _ in range(PMAX + 1)]
 time_test_irsh = [0.0 for _ in range(PMAX + 1)]
 time_test_igsh = [0.0 for _ in range(PMAX + 1)]
 
-for pnum in range(0, PMAX + 1):
-    num = int(PEXP**pnum)
+# aux.test_dmul([1.0], [1.0], 1)
+
+# pnums = map(int, sys.argv[1:])
+# for pnum in [125]:  #
+# num = int(PEXP ** (pnum + 90))
+# for pnum in pnums:
+for pnum in range(1, PMAX + 1):
+    num = pnum + 90
+
     print(pnum, num)
 
     num_vals[pnum] = num
@@ -53,7 +69,7 @@ for pnum in range(0, PMAX + 1):
 
     # aux.test_loop(pnum)
     # times = timeit.repeat(
-    #     f"aux.test_loop(pnum)", number=1, repeat=1_000_000, globals=globals()
+    #     f"dump = aux.test_loop(pnum)", number=SREP, repeat=1_000_000, globals=globals()
     # )
     plain_loop_time = 0  # np.min(times)
 
@@ -61,8 +77,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_iadd(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_iadd(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_iadd(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -70,8 +86,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_fadd(flt_inp1, flt_inp2, num)
     times = timeit.repeat(
-        f"aux.test_fadd(flt_inp1, flt_inp2, num)",
-        number=1,
+        f"dump = aux.test_fadd(flt_inp1, flt_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -79,8 +95,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_dadd(dbl_inp1, dbl_inp2, num)
     times = timeit.repeat(
-        f"aux.test_dadd(dbl_inp1, dbl_inp2, num)",
-        number=1,
+        f"dump = aux.test_dadd(dbl_inp1, dbl_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -88,8 +104,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_isub(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_isub(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_isub(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -97,8 +113,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_fsub(flt_inp1, flt_inp2, num)
     times = timeit.repeat(
-        f"aux.test_fsub(flt_inp1, flt_inp2, num)",
-        number=1,
+        f"dump = aux.test_fsub(flt_inp1, flt_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -106,8 +122,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_dsub(dbl_inp1, dbl_inp2, num)
     times = timeit.repeat(
-        f"aux.test_dsub(dbl_inp1, dbl_inp2, num)",
-        number=1,
+        f"dump = aux.test_dsub(dbl_inp1, dbl_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -117,8 +133,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_imul(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_imul(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_imul(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -126,8 +142,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_fmul(flt_inp1, flt_inp2, num)
     times = timeit.repeat(
-        f"aux.test_fmul(flt_inp1, flt_inp2, num)",
-        number=1,
+        f"dump = aux.test_fmul(flt_inp1, flt_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -135,8 +151,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_dmul(dbl_inp1, dbl_inp2, num)
     times = timeit.repeat(
-        f"aux.test_dmul(dbl_inp1, dbl_inp2, num)",
-        number=1,
+        f"dump = aux.test_dmul(dbl_inp1, dbl_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -144,8 +160,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_idiv(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_idiv(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_idiv(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -153,8 +169,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_fdiv(flt_inp1, flt_inp2, num)
     times = timeit.repeat(
-        f"aux.test_fdiv(flt_inp1, flt_inp2, num)",
-        number=1,
+        f"dump = aux.test_fdiv(flt_inp1, flt_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -162,8 +178,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_ddiv(dbl_inp1, dbl_inp2, num)
     times = timeit.repeat(
-        f"aux.test_ddiv(dbl_inp1, dbl_inp2, num)",
-        number=1,
+        f"dump = aux.test_ddiv(dbl_inp1, dbl_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -173,8 +189,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_iand(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_iand(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_iand(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -182,8 +198,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_iior(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_iior(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_iior(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -191,8 +207,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_ixor(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_ixor(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_ixor(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -200,8 +216,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_igsh(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_igsh(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_igsh(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -209,8 +225,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_ilsh(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_ilsh(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_ilsh(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -218,8 +234,8 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_irsh(int_inp1, int_inp2, num)
     times = timeit.repeat(
-        f"aux.test_irsh(int_inp1, int_inp2, num)",
-        number=1,
+        f"dump = aux.test_irsh(int_inp1, int_inp2, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
@@ -227,15 +243,19 @@ for pnum in range(0, PMAX + 1):
 
     aux.test_inot(int_inp1, num)
     times = timeit.repeat(
-        f"aux.test_inot(int_inp1, num)",
-        number=1,
+        f"dump = aux.test_inot(int_inp1, num)",
+        number=SREP,
         repeat=REPS,
         globals=globals(),
     )
     time_test_inot[pnum] = np.min(times) - plain_loop_time
 
 
-plt.figure("basic arithmetic")
+# sys.exit()
+
+plt.figure(f"basic arithmetic o{extension}")
+plt.ylim(-13.6, -13.1)
+plt.grid()
 plt.plot(
     num_vals[1:], np.log(time_test_iadd[1:]), ".-", linewidth=3, label="iadd"
 )
@@ -257,7 +277,9 @@ plt.plot(
 )
 plt.legend()
 
-plt.figure("extended arithmetic")
+plt.figure(f"extended arithmetic o{extension}")
+plt.ylim(-13.7, -12.5)
+plt.grid()
 plt.plot(
     num_vals[1:], np.log(time_test_imul[1:]), ".-", linewidth=3, label="imul"
 )
@@ -279,7 +301,9 @@ plt.plot(
 )
 plt.legend()
 
-plt.figure("logics")
+plt.figure(f"logics o{extension}")
+plt.ylim(-13.75, -12.8)
+plt.grid()
 plt.plot(
     num_vals[1:], np.log(time_test_iand[1:]), ".-", linewidth=3, label="iand"
 )
@@ -316,6 +340,15 @@ observations:
 
 optimization level has no real impact on performance for basic arithmetics.
 LSHIFT and RSHIFT are suprisingly more performant than ISHFT.
-IDIV is significantly worse than RDIV and DDIV, but obviously the operations cannot be compared
+IDIV is significantly worse than RDIV and DDIV, but obviously the operations
+cannot be compared.
+
+You can observe an increase in computation time for certain array sizes that
+I would explain by cache limitations.
+
+Loop-unroll can increase the performance a little (-funroll-loops)
+
+-ftree-vectorize -funroll-all-loops -fstrict-aliasing -march=native
+can increase the performance massively for certain operations
 """
 )
