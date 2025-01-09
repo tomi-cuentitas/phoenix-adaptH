@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 10/12/2024, 14:49
-# Version:     0.0.323
+# Last Update: 09/01/2025, 15:31
+# Version:     0.0.324
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 
 from phoenix.fgen.library import LibraryManager
-from phoenix.fgen.backends.backend_f90_linear import (
+from phoenix.fgen.backends.backend_f90_sr_linear import (
     LibRoutineF90LinearBase,
     LibRoutineF90LinearOffs,
     LibRoutineF90LinearList,

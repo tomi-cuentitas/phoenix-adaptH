@@ -5,10 +5,14 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/01/2025
-# Last Update: 09/01/2025, 13:07
-# Version:     0.0.1
+# Last Update: 09/01/2025, 14:05
+# Version:     0.0.2
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+# generate a keymap
+# add keys
+# generate a tree-like structure

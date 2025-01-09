@@ -5,10 +5,16 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/01/2025
-# Last Update: 09/01/2025, 13:07
-# Version:     0.0.1
+# Last Update: 09/01/2025, 14:05
+# Version:     0.0.3
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+# generate multiple instruction
+# summarize multiple instructions of different families
+# sort a set of instructions
+# filter a set of instructions
+# regroup a set of instructions

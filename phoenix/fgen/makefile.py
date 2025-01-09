@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 13/12/2024, 14:02
-# Version:     0.0.452
+# Last Update: 09/01/2025, 15:39
+# Version:     0.0.453
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -253,13 +253,13 @@ class MakeFileTarget:
         }
 
 
-gen = ["Hello  World", "Hello World", "Hello        WOrld"]
+# gen = ["Hello  World", "Hello World", "Hello        WOrld"]
 
-mfm = MakeFileManager("test")
-for line in mfm.filter_double_space(gen):
-    print(line)
+# mfm = MakeFileManager("test")
+# for line in mfm.filter_double_space(gen):
+#     print(line)
 
-print()
-print()
-for line in mfm.get_makefile_lines():
-    print(line)
+# print()
+# print()
+# for line in mfm.get_makefile_lines():
+#     print(line)
