@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 10/01/2025, 14:25
-# Version:     0.0.3021
+# Last Update: 10/01/2025, 15:10
+# Version:     0.0.3023
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -193,8 +193,8 @@ class Key:
         self._key_segments = []
         # decompose into _KeySegments
         for tkey in keys:
-            # if _key is None:
-            #     continue
+            if tkey is None:
+                continue
             if isinstance(tkey, _KeySegment):
                 self._key_segments += [tkey]  # no-copy
                 # tkey.parnet._tagged_keyseg(tkey.label)  # copy

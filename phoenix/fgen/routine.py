@@ -5,13 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 12/12/2024, 14:09
-# Version:     0.0.108
+# Last Update: 10/01/2025, 15:02
+# Version:     0.0.147
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+from __future__ import annotations
 
 __doc__ = """
 Routine module description
@@ -21,31 +23,31 @@ Routine module description
 """
 
 import pickle
-from phoenix.fgen.tomography import Tomography
 from phoenix.fgen.instruction3 import InstructionGroup
+import warnings
 
 # pylint: disable=too-many-arguments
 
 
-class Routine:
-    """Routine class description"""
+class AbstractRoutine:
+    """An abstract routine does not specify input or output data types,
+    therefore all instructions remain based on keys.
+    """
 
     def __init__(
         self,
         name: str,
         *,
         itype,
-        out_var,
-        in_vars,
         instruction_group=None,
     ):
         self._name = name
         if instruction_group is None:
+            warnings.warn(f"Routine {name} has empty instruction group")
             instruction_group = InstructionGroup([])
         self.instruction_group = instruction_group
-        self._dependencies = []
-        self.in_vars = in_vars
-        self.out_var = out_var
+        self.localized_instructions = InstructionGroup([])
+        self._dependencies: list[Routine] = []
         self._itype = itype
         self._ready = False
 
@@ -64,17 +66,6 @@ class Routine:
         group
         """
         yield from self.instruction_group.instructions
-
-    def checksum(self):
-        """a checksum to make sure, that the naming is safe"""
-        test_tuple = (
-            self._name,
-            self.itype,
-            self.out_var.get_size(),
-            tuple(inp_var.get_size() for inp_var in self.in_vars),
-            self.instruction_group.checksum(),
-        )
-        return test_tuple
 
     @classmethod
     def get_filename(cls, name):
@@ -95,33 +86,33 @@ class Routine:
         with open(filename, "wb") as f:
             pickle.dump(self, f)
 
-    @staticmethod
-    def from_function(
-        function,  # generating function
-        tomography: Tomography,
-        name=None,  # name
-        parallel=0,  # use multiple cores for generation if > 0
-        verbose=False,
-        **kwargs,  # catch other arguments if any
-    ):
-        """generate instructions from function tomography"""
+    # @staticmethod
+    # def from_function(
+    #     function,  # generating function
+    #     tomography: Tomography,
+    #     name=None,  # name
+    #     parallel=0,  # use multiple cores for generation if > 0
+    #     verbose=False,
+    #     **kwargs,  # catch other arguments if any
+    # ):
+    #     """generate instructions from function tomography"""
 
-        if name is None:
-            name = function.__name__
+    #     if name is None:
+    #         name = function.__name__
 
-        # change here: tomography will return an instruction group directly
-        instruction_group = tomography.apply(
-            function,
-            parallel=parallel,
-            verbose=verbose,
-        )
-        return Routine(
-            name=name,
-            itype=tomography.itype,
-            out_var=tomography.out_var,
-            in_vars=tomography.in_vars,
-            instruction_group=instruction_group,
-        )
+    #     # change here: tomography will return an instruction group directly
+    #     instruction_group = tomography.apply(
+    #         function,
+    #         parallel=parallel,
+    #         verbose=verbose,
+    #     )
+    #     return Routine(
+    #         name=name,
+    #         itype=tomography.itype,
+    #         out_var=tomography.out_var,
+    #         in_vars=tomography.in_vars,
+    #         instruction_group=instruction_group,
+    #     )
 
     @property
     def name(self):
@@ -140,3 +131,60 @@ class Routine:
         if routine.name not in self._dependencies:
             self._dependencies[routine.name] = routine
         return self
+
+    def checksum(self):
+        """a checksum to make sure, that the naming is safe"""
+        test_tuple = (
+            self._name,
+            self.itype,
+            None,
+            (),
+            self.instruction_group.checksum(),
+        )
+        return test_tuple
+
+    def specify(self, out_var, *in_vars):
+        """
+        create a specific routine by specifying output and input variable data
+        types.
+        """
+        return Routine(
+            self.name,
+            itype=self.itype,
+            out_var=out_var,
+            in_vars=in_vars,
+            instruction_group=self.instruction_group,
+        )
+
+
+class Routine(AbstractRoutine):
+    """Routine class description"""
+
+    def __init__(
+        self,
+        name: str,
+        *,
+        itype,
+        out_var,
+        in_vars,
+        instruction_group=None,
+    ):
+        super().__init__(
+            name,
+            itype=itype,
+            instruction_group=instruction_group,
+        )
+        self.out_var = out_var
+        self.in_vars = in_vars
+        # localize the instructions here.
+
+    def checksum(self):
+        """a checksum to make sure, that the naming is safe"""
+        test_tuple = (
+            self._name,
+            self.itype,
+            self.out_var.get_size(),
+            tuple(inp_var.get_size() for inp_var in self.in_vars),
+            self.instruction_group.checksum(),
+        )
+        return test_tuple

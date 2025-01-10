@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 12/12/2024, 16:42
-# Version:     0.0.649
+# Last Update: 10/01/2025, 15:08
+# Version:     0.0.719
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -258,7 +258,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -383,33 +385,65 @@ class InstructionGroup(Instruction, ftype="group"):
 
 
 class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
-    """Base class for polynomial instructions"""
+    """
+    Base class for polynomial instructions
+    y0 = c0 x0^0 + c1 x0 ** 1 + c2 x0 ** 2 + ...
+    """
 
     def __init__(self, key_tgt, key_src, *coeffs):
-        params = {f"C{num}": val for num, val in enumerate(coeffs)}
-        params["deg"] = len(coeffs) - 1
-        params["key_tgt"] = key_tgt
-        params["key_src"] = key_src
+        params = {}
+        degree = len(coeffs) - 1
+        params["degree"] = degree
+        params["key_tgt_0"] = key_tgt
+        params["key_src_0"] = key_src
+        for exp, coeff in enumerate(coeffs):
+            params[f"coeff_x{exp}"] = coeff
         super().__init__(**params, itype=self.ftype)
 
 
-class LinearOperationInstruction(PolynomialInstruction, ftype="linear"):
-    """Ax + b type instruction"""
+class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
+    """y0 = a * x0 + b type instruction"""
 
-    # def __init__(self, a, )
+    def __init__(self, key_tgt, key_src, val_a, val_b):
+        super().__init__(key_tgt, key_src, val_b, val_a)
+        self["coeff_a"] = val_a
+        self["coeff_a"] = val_b
 
 
-class CallMultiOffsetInstruction(GenericInstruction, ftype="call"):
+class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
+    """y0 = a * x0 type instruction"""
+
+    def __init__(self, key_tgt, key_src, coeff):
+        super().__init__(key_tgt, key_src, 0, coeff)
+
+
+class BiLinearOperationInstruction(GenericInstruction, ftype="bilinear"):
+    """y0 = a * x0 * x1 type instruction"""
+
+    def __init__(self, key_tgt, key_src_0, key_src_1, coeff):
+        params = {}
+        params["key_tgt_0"] = key_tgt
+        params["key_src_0"] = key_src_0
+        params["key_src_1"] = key_src_1
+        super().__init__(**params, itype=self.ftype)
+
+
+class Call1I1OWithOffsetInstruction(GenericInstruction, ftype="call_1i1o"):
     """Call other routines with this instruction"""
 
-    # def __init__(self, a, )
-    # remember: routine, offset(s)
+    def __init__(self, routine, key_tgt_off, key_src_off):
+        params = {}
+        params["routine"] = routine
+        params["key_offs_tgt_0"] = key_tgt_off
+        params["key_offs_src_0"] = key_src_off
+        super().__init__(**params, itype=self.ftype)
 
 
-class CallMultiInstruction(CallMultiOffsetInstruction, ftype="callnooff"):
+class Call1I1OInstruction(Call1I1OWithOffsetInstruction, ftype="call_1i1o!"):
     """Call other routines with this instruction"""
 
-    # def __init__(self, a, )
+    def __init__(self, routine):
+        super().__init__(routine, None, None)
 
 
 if __name__ == "__main__":
