@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/01/2025
-# Last Update: 09/01/2025, 14:05
-# Version:     0.0.2
+# Last Update: 10/01/2025, 14:25
+# Version:     0.0.80
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,3 +16,85 @@
 # generate a keymap
 # add keys
 # generate a tree-like structure
+
+
+from phoenix.keymap import KeyMap, Entry, Domain, Key, Region
+
+
+main_keymap = KeyMap(name="Main KeyMap")
+sub_keymap1 = KeyMap(name="Sub KeyMap 1")
+sub_keymap2 = KeyMap(name="Sub KeyMap 2")
+sub_keymap3 = KeyMap(name="Sub KeyMap 3")
+
+main_keymap.extend(sub_keymap1)
+main_keymap.extend(sub_keymap2)
+main_keymap.extend(sub_keymap3)
+
+ss_keymap21 = KeyMap(name="Sub Sub KeyMap 2-1")
+ss_keymap22 = KeyMap(name="Sub Sub KeyMap 2-2")
+
+for num in range(3):
+    ss_keymap21.entry(f"I am entry #{num+1}!")
+for num in range(4):
+    ss_keymap22.entry(f"I am entry #{num+1}!")
+
+
+for num in range(10):
+    sub_keymap1.entry(f"I am entry #{num+1}!")
+
+for num in range(5):
+    sub_keymap2.entry(f"I am entry #{num+1}!")
+
+sub_keymap2.extend(ss_keymap21)
+sub_keymap2.extend(ss_keymap22)
+
+for num in range(5):
+    sub_keymap2.entry(f"I am entry #{num+6}!")
+
+
+for num in range(2):
+    sub_keymap3.entry(f"I am entry #{num+1}!")
+
+
+print(list(main_keymap.keys()))
+print(list(main_keymap.keys(recursive=True)))
+
+print(main_keymap.is_ud)
+print(len(main_keymap))
+
+for level, key, domain in main_keymap.tree():
+    print(level * "  ", f"- Key: {key}: {domain}")
+
+print()
+
+print("==========")
+
+for key, domain in sub_keymap2.items(recursive=False):
+    print(key, "::", domain)
+print("- - - - - ")
+for key, domain in sub_keymap2.items(recursive=True):
+    print(key, "::", domain)
+
+print("==========")
+
+
+print("==========")
+
+for key in sub_keymap2.keys(recursive=False):
+    print(key)
+print("- - - - - ")
+for key in sub_keymap2.keys(recursive=True):
+    print(key)
+
+print("==========")
+
+
+print("==========")
+
+for value in sub_keymap2.values(recursive=False):
+    print(value)
+print("- - - - - ")
+for value in sub_keymap2.values(recursive=True):
+    print(value)
+
+print("==========")

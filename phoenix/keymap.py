@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/11/2024, 11:47
-# Version:     0.0.2964
+# Last Update: 10/01/2025, 14:25
+# Version:     0.0.3021
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -297,7 +297,7 @@ class Key:
         return f"[{'|'.join(map(lambda x: str(x.label), self._key_segments))}]"
 
     def __str__(self) -> str:
-        return f"<K{self.__repr__()}>"
+        return f"<Key{self.__repr__()}>"
 
     def __or__(self, other: Any) -> Key:
         if isinstance(other, (Key, _KeySegment)):
@@ -338,7 +338,7 @@ class Domain:
     The class handles the base functionality about name and update procedure
     as well as str and repr display.
 
-    NOTE: might become an abstract class. Not supposed to be used directly.
+    info: see this as an abstract class. Not supposed to be used directly.
     """
 
     _IDENTIFIER = "Domain"
@@ -372,7 +372,7 @@ class Domain:
     @property
     def name(self) -> str:
         """
-        Access (almost-) read-only variable name.
+        Access protected variable name.
 
         :returns: the name."""
         return self._name
@@ -381,11 +381,10 @@ class Domain:
     def name(self, name):
         if self.is_locked:
             raise RuntimeError("Domain is locked!")
-        else:
-            warnings.warn(
-                "Bad programmer, bad! But seriously, be careful with renaming."
-            )
-            self._name = name
+        # warnings.warn(
+        #     "Bad programmer, bad! But seriously, be careful with renaming."
+        # )
+        self._name = name
 
     @property
     def size(self) -> int:
@@ -419,7 +418,7 @@ class Domain:
         """
         if not self.is_ud:
             self._is_ud_flag = self.update()
-        if not self.is_ud:
+        if not self._is_ud_flag:
             raise RuntimeError("update did not succeed")
         return self
 
@@ -500,10 +499,13 @@ class Domain:
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        if prefix is None:
-            yield Key()
-        else:
+        self._update()
+        if recursive:
+            if prefix is None:
+                prefix = Key()
             yield Key(prefix)
+        return
+        yield
 
     def items(self, recursive=False, prefix: Key | None = None):
         """
@@ -514,10 +516,13 @@ class Domain:
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        if prefix is None:
-            yield Key()
-        else:
+        self._update()
+        if recursive:
+            if prefix is None:
+                prefix = Key()
             yield Key(prefix), self
+        return
+        yield
 
     def values(self, recursive=False):
         """
@@ -527,7 +532,11 @@ class Domain:
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        yield self
+        self._update()
+        if recursive:
+            yield self
+        return
+        yield
 
     def lock(self) -> Self:
         """
@@ -541,6 +550,12 @@ class Domain:
             content.lock()
         self._is_locked = True
         return self
+
+    def tree(self, level=0, key=None):
+        """a generator that reveals tree information"""
+        yield level, key, self
+        for key, domain in self.items():
+            yield from domain.tree(level=level + 1, key=key)
 
 
 ###############################################################################
@@ -581,7 +596,7 @@ class KeyMap(Domain):
 
     def _reset(self):
         """Reset anything that has to do with counters and offsets."""
-        assert not self._is_locked
+        assert not self.is_locked
         self._is_ud_flag = False
         self._size = 0
         self._pos2dom = []
@@ -727,6 +742,7 @@ class KeyMap(Domain):
         # register the current domain as a parent to the included domain
         domain.add_parent(self)
         self.flag_ud()
+        return self
 
     def _append(self, kseg, domain):
         """Internal append, no checks applied except kseg format."""
@@ -734,7 +750,7 @@ class KeyMap(Domain):
         assert isinstance(domain, Domain)
         self._content.append((kseg, domain))
 
-    def _update(self):
+    def update(self):
         """
         Internal update routine. Go through content and refill the indexing
         dictionaries while appending.
@@ -746,7 +762,7 @@ class KeyMap(Domain):
         for tkey, domain in self._content:
             domain._update()
             if domain.size <= 0:
-                print(f"skipping domain {domain} as it is empty")
+                warnings.warn(f"domain {domain} is empty")
                 continue
 
             # move into the selected domain
@@ -758,7 +774,7 @@ class KeyMap(Domain):
                 offset_pointer += 1
         assert len(self._pos2dom) == offset_pointer
         self._size = offset_pointer
-        return self
+        return True
 
     def __getitem__(self, key):
         _, entry = self.find(key)
@@ -799,6 +815,7 @@ class KeyMap(Domain):
         """
         # we COULD have prefix: Key = Key() in the args list, as the empty key
         # as default could be a monad, but it is cleaner like that.
+        self._update()
         if prefix is None:
             prefix = Key()
         for key, dom in self._key2dom.items():
@@ -815,6 +832,7 @@ class KeyMap(Domain):
         :param prefix: a Key to start from
         :returns: a generator of Key objects
         """
+        self._update()
         if prefix is None:
             prefix = Key()
         for key, dom in self._key2dom.items():
@@ -830,6 +848,7 @@ class KeyMap(Domain):
         :param recursive: whether to forward recursive call for each domain
         :returns: a generator of Key objects
         """
+        self._update()
         for _, dom in self._key2dom.items():
             if recursive:
                 yield from dom.values(recursive=True)
@@ -923,6 +942,8 @@ class Region(KeyMap):
         :params domain: must be an entry to extend the region with.
         :raises: ValueError, if the domain is not an Entry.
         """
+        if self.is_locked:
+            raise ValueError("Cannot add to a locked domain")
         if not isinstance(domain, Entry):
             raise ValueError("Can only extend with Entry objects")
         if autorename:
@@ -974,34 +995,65 @@ class Entry(Region):
 
     def __init__(self, *, name=None):
         super().__init__(0, name=name)
-        # init with 0 so no entries are appended inside
+        # init with 0, no entries are appended inside
         self._content = None
         self._size = 1
         self._is_ud_flag = True
 
-    # -----------------------------------------------------------
-    # NOTE: keys, items and values break the recursive call here!
+    # -----------------------------------------------------------------------
+    # important: keys, items and values break the recursive call here!
+    # The breakers are basically designed itentically to the ones in Domain,
+    # but it's clearer if they are redefined here properly.
 
     def keys(self, recursive=False, prefix: Key | None = None):
-        # we break the recursive call here. Fallback to Domain parent^3.
-        yield from Domain.keys(self, recursive=recursive, prefix=prefix)
-        # if prefix is None:
-        #     yield Key()
-        # else:
-        #     yield Key(prefix)
+        """
+        The generator equivalent to dict's keys function.
+
+        :param recursive: whether to forward recursive call for each domain
+        :param prefix: a Key to start from
+        :returns: a generator of Key objects
+        """
+        # we break the recursive call here.
+        self._update()
+        if recursive:
+            if prefix is None:
+                prefix = Key()
+            yield Key(prefix)
+        return
+        yield
 
     def items(self, recursive=False, prefix: Key | None = None):
-        # we break the recursive call here. Fallback to Domain parent^3.
-        yield from Domain.items(self, recursive=recursive, prefix=prefix)
-        # if prefix is None:
-        #     yield Key()
-        # else:
-        #     yield Key(prefix), self
+        """
+        The generator equivalent to dict's items function
+
+        :param recursive: whether to forward recursive call for each domain
+        :param prefix: a Key to start from
+        :returns: a generator of Key objects
+        """
+        # we break the recursive call here.
+        self._update()
+        if recursive:
+            if prefix is None:
+                prefix = Key()
+            yield Key(prefix), self
+        return
+        yield
 
     def values(self, recursive=False):
-        # we break the recursive call here. Fallback to Domain parent^3.
-        yield from Domain.values(self, recursive=recursive)
-        # yield self
+        """
+        The generator equivalent to dict's values function
+
+        :param recursive: whether to forward recursive call for each domain
+        :returns: a generator of Key objects
+        """
+        # we break the recursive call here.
+        self._update()
+        if recursive:
+            yield self
+        return
+        yield
+
+    # -----------------------------------------------------------------------
 
     def _update(self):
         # just to be sure, let us reassure the initialization here
@@ -1016,6 +1068,8 @@ class Entry(Region):
         return _ForbiddenKey
 
     def reorder(self, function):
+        if self.is_locked:
+            raise ValueError("Cannot add to a locked domain")
         return self
 
     def put(self, keylike, /, domain, no_override=True):
