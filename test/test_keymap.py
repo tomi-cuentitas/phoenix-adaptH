@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/01/2025
-# Last Update: 10/01/2025, 14:25
-# Version:     0.0.80
+# Last Update: 13/01/2025, 16:14
+# Version:     0.0.112
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,26 +34,26 @@ ss_keymap21 = KeyMap(name="Sub Sub KeyMap 2-1")
 ss_keymap22 = KeyMap(name="Sub Sub KeyMap 2-2")
 
 for num in range(3):
-    ss_keymap21.entry(f"I am entry #{num+1}!")
+    ss_keymap21.entry(f"I am entry #{num+1}")  # in sub_sub_keymap2-1!")
 for num in range(4):
-    ss_keymap22.entry(f"I am entry #{num+1}!")
+    ss_keymap22.entry(f"I am entry #{num+1}")  # in sub_sub_keymap2-2!")
 
 
 for num in range(10):
-    sub_keymap1.entry(f"I am entry #{num+1}!")
+    sub_keymap1.entry(f"I am entry #{num+1}")  # in sub_keymap1!")
 
 for num in range(5):
-    sub_keymap2.entry(f"I am entry #{num+1}!")
+    sub_keymap2.entry(f"I am entry #{num+1}")  # in sub_keymap2!")
 
 sub_keymap2.extend(ss_keymap21)
 sub_keymap2.extend(ss_keymap22)
 
 for num in range(5):
-    sub_keymap2.entry(f"I am entry #{num+6}!")
+    sub_keymap2.entry(f"I am entry #{num+6}")  # in sub_keymap2!")
 
 
 for num in range(2):
-    sub_keymap3.entry(f"I am entry #{num+1}!")
+    sub_keymap3.entry(f"I am entry #{num+1}")  # in sub_keymap3!")
 
 
 print(list(main_keymap.keys()))
@@ -71,30 +71,48 @@ print("==========")
 
 for key, domain in sub_keymap2.items(recursive=False):
     print(key, "::", domain)
-print("- - - - - ")
+print("- - - - - - - - - - - - - - -")
 for key, domain in sub_keymap2.items(recursive=True):
     print(key, "::", domain)
-
-print("==========")
-
+print("- - - - - - - - - - - - - - -")
+for key, domain in main_keymap.items(recursive=True):
+    print(key, "::", domain)
 
 print("==========")
 
 for key in sub_keymap2.keys(recursive=False):
     print(key)
-print("- - - - - ")
+print("- - - - - - - - - - - - - - -")
 for key in sub_keymap2.keys(recursive=True):
     print(key)
-
-print("==========")
-
+print("- - - - - - - - - - - - - - -")
+for key in main_keymap.keys(recursive=True):
+    print(key)
 
 print("==========")
 
 for value in sub_keymap2.values(recursive=False):
     print(value)
-print("- - - - - ")
+print("- - - - - - - - - - - - - - -")
 for value in sub_keymap2.values(recursive=True):
+    print(value)
+print("- - - - - - - - - - - - - - -")
+for value in main_keymap.values(recursive=True):
     print(value)
 
 print("==========")
+
+
+sk2_key = main_keymap.key("Sub KeyMap 2")
+sk22_key = ss_keymap22.key("I am entry #1")
+print(
+    main_keymap[
+        Key("Sub KeyMap 2") | Key("Sub Sub KeyMap 2-1") | Key("I am entry #1")
+    ]
+)
+print(main_keymap[sk2_key | Key("Sub Sub KeyMap 2-2") | sk22_key])
+try:
+    print(main_keymap[sk2_key | Key("Sub Sub KeyMap 2-1") | sk22_key])
+    assert False
+except KeyError:
+    print("successfully caught KeyError for unproperly tagged key case")

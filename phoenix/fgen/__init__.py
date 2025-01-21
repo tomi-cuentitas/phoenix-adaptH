@@ -13,3 +13,9 @@
 # del routine
 # del function
 # del library
+
+from . import instruction3
+
+instruction = instruction3
+
+print(dir())

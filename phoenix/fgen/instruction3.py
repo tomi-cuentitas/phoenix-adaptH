@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 10/01/2025, 15:08
-# Version:     0.0.719
+# Last Update: 21/01/2025, 15:49
+# Version:     0.0.801
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -164,6 +164,8 @@ class Instruction:
 class GenericInstruction(Instruction, ftype="generic"):
     """Generic instruction"""
 
+    _alias: dict[str, str] = {}
+
     def __init__(self, **params):
         super().__init__(itype=self.ftype)
         self._params = params
@@ -198,10 +200,17 @@ class GenericInstruction(Instruction, ftype="generic"):
         yield from self._params.values()
 
     def __getitem__(self, key):
-        return self.get(key)
+        if key in self._params:
+            return self._params[key]
+        return self._from_alias(key)
 
     def __setitem__(self, key, value):
         self.set(key, value)
+
+    @classmethod
+    def set_alias(cls, alias, reference):
+        """add an alias to the class"""
+        cls._alias[alias] = reference
 
     def checksum(self):
         test_tuple = (
@@ -264,6 +273,13 @@ class GenericInstruction(Instruction, ftype="generic"):
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
+
+    def _from_alias(self, key):
+        print(f"look up potential alias {key} in {self.__class__.__name__}")
+        if key in self.__class__._alias:
+            # don't call self._params here, so alias can chain
+            return self[self.__class__._alias[key]]
+        raise KeyError("Key not found in alias map")
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -387,144 +403,49 @@ class InstructionGroup(Instruction, ftype="group"):
 class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
-    y0 = c0 x0^0 + c1 x0 ** 1 + c2 x0 ** 2 + ...
+    y[key_trgt] = c0 x[key_trgt]^0 + c1 x[key_trgt]^1 + c2 x[key_trgt]^2 + ...
     """
 
-    def __init__(self, key_tgt, key_src, *coeffs):
+    def __init__(self, key_trgt, key_src0, *coeffs):
         params = {}
         degree = len(coeffs) - 1
         params["degree"] = degree
-        params["key_tgt_0"] = key_tgt
-        params["key_src_0"] = key_src
+        params["key_trgt"] = key_trgt
+        params["key_src0"] = key_src0
         for exp, coeff in enumerate(coeffs):
             params[f"coeff_x{exp}"] = coeff
         super().__init__(**params, itype=self.ftype)
 
 
 class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
-    """y0 = a * x0 + b type instruction"""
+    """y[key_trgt] = a * x[key_src] + b type instruction"""
 
-    def __init__(self, key_tgt, key_src, val_a, val_b):
-        super().__init__(key_tgt, key_src, val_b, val_a)
-        self["coeff_a"] = val_a
-        self["coeff_a"] = val_b
+    def __init__(self, key_trgt, key_src0, alpha, beta):
+        super().__init__(key_trgt, key_src0, beta, alpha)
 
 
 class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
-    """y0 = a * x0 type instruction"""
+    """y[key_trgt] = a * x[key_src] type instruction"""
 
-    def __init__(self, key_tgt, key_src, coeff):
-        super().__init__(key_tgt, key_src, 0, coeff)
-
-
-class BiLinearOperationInstruction(GenericInstruction, ftype="bilinear"):
-    """y0 = a * x0 * x1 type instruction"""
-
-    def __init__(self, key_tgt, key_src_0, key_src_1, coeff):
-        params = {}
-        params["key_tgt_0"] = key_tgt
-        params["key_src_0"] = key_src_0
-        params["key_src_1"] = key_src_1
-        super().__init__(**params, itype=self.ftype)
+    def __init__(self, key_trgt, key_src0, alpha):
+        super().__init__(key_trgt, key_src0, 0, alpha)
 
 
-class Call1I1OWithOffsetInstruction(GenericInstruction, ftype="call_1i1o"):
+class CallInstruction(GenericInstruction, ftype="call"):
     """Call other routines with this instruction"""
 
-    def __init__(self, routine, key_tgt_off, key_src_off):
+    def __init__(
+        self,
+        routine,
+        key_offs_trgt=None,
+        key_offs_src0=None,
+        var_name_src0=None,
+        var_name_trgt=None,
+    ):
         params = {}
         params["routine"] = routine
-        params["key_offs_tgt_0"] = key_tgt_off
-        params["key_offs_src_0"] = key_src_off
+        params["key_offs_trgt"] = key_offs_trgt
+        params["key_offs_src0"] = key_offs_src0
+        params["var_name_src0"] = var_name_src0
+        params["var_name_trgt"] = var_name_trgt
         super().__init__(**params, itype=self.ftype)
-
-
-class Call1I1OInstruction(Call1I1OWithOffsetInstruction, ftype="call_1i1o!"):
-    """Call other routines with this instruction"""
-
-    def __init__(self, routine):
-        super().__init__(routine, None, None)
-
-
-if __name__ == "__main__":
-    x = GenericInstruction(foo="bar")
-    print(x.params)
-    print(x.ftype)
-
-    class SpecificInstruction(GenericInstruction, ftype="specific"):
-        def __init__(self, *, foo):
-            super().__init__(foo=foo)
-
-    class OtherSpecificInstruction(GenericInstruction, ftype="otherspecific"):
-        pass
-
-    class MoreSpecificInstruction(SpecificInstruction, ftype="more"):
-        def __init__(self):
-            super().__init__(foo="default")
-
-    y = SpecificInstruction(foo="foo")
-    z = OtherSpecificInstruction(foo="bar")
-    k = MoreSpecificInstruction()
-    print(y.ftype)
-
-    print(InstructionGroup._get_itype_common_root([z, k]))
-
-    foo = InstructionGroup([y, k])
-    print(foo.ftype)
-    print(foo._itype)
-    print(foo.itype)
-    print(foo._itype)
-
-    print(y.is_subtype(x))
-    print(y.is_subtype(y))
-    # print(foo.is_subtype(y))
-
-    print()
-    bar = InstructionGroup(
-        [
-            foo,
-            foo,
-        ]
-    )
-    for instruction in bar.instructions:
-        print(instruction)
-
-    print()
-
-    baz = bar.flatten()
-    foo = baz.grouped(lambda x: x["foo"])
-    print([len(instr) for instr in foo.instructions])
-    bar = baz.group_to_size(5)
-    print([len(instr) for instr in bar.instructions])
-
-    for instruction in baz.instructions:
-        print(instruction)
-
-    try:
-        next(baz.instructions)["foo"] = "bazbaz"
-    except ValueError as e:
-        print(e)
-
-    with next(baz.instructions) as this_instruction:
-        print("Here", this_instruction)
-        this_instruction["foo"] = "bazbazbaz"
-
-    test = InstructionGroup(list(baz.unpack()) + [z, z])
-
-    print(len(test))
-    for ins in test.instructions:
-        print(ins)
-
-    print()
-    for ins in foo.unpack(recursive=True):
-        print(ins, len(ins), ins.to_dict(), ins.to_tuple())
-        print("in this test we output 'foo' as {foo}.".format(**ins))
-
-    # print(SpecificInstruction.__mro__[::-1])
-    # print(MoreSpecificInstruction.__mro__[::-1])
-    # print(OtherSpecificInstruction.__mro__[::-1])
-
-    print(test.ftype, test.itype)
-
-    polytest = PolynomialInstruction(0, 1, 2, 3)
-    print(polytest.to_dict())
