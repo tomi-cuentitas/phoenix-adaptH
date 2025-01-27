@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 27/01/2025, 15:48
-# Version:     0.0.43
+# Last Update: 27/01/2025, 16:03
+# Version:     0.0.53
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -56,3 +56,17 @@ class PyCudaCAADAA(
     ComplexArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
 ):
     """OpenCL based data layer"""
+
+
+print(ComplexArrayADAA._IDENTIFIER)
+print(ComplexArrayADAA._IDENTIFIER)
+print(RawPyCAADAA._DATATYPES)
+
+MyType = RawPyCAADAA.fix_size(24)
+
+print(RawPyCAADAA)
+
+a = MyType()
+print(a.data)
+print(a.real, type)
+print(a.identifier)
