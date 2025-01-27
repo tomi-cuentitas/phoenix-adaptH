@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 03/12/2024, 11:10
-# Version:     0.0.21
+# Last Update: 27/01/2025, 15:48
+# Version:     0.0.43
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.adaa import ADAA
+from phoenix.adaa2 import ComplexArrayADAA
 from phoenix.coeffbackend_derived import RawPyCoeffBackend
 from phoenix.coeffbackend_derived import NumPyCoeffBackend
 from phoenix.coeffbackend_derived import FortranCoeffBackend
@@ -22,25 +22,37 @@ from phoenix.coeffbackend_derived import OpenClCoeffBackend
 from phoenix.coeffbackend_derived import PyCudaCoeffBackend
 
 
-class RawPyADAA(ADAA, backend=RawPyCoeffBackend(), identifier="RAWPYTHON"):
+class RawPyCAADAA(
+    ComplexArrayADAA, backend=RawPyCoeffBackend(), identifier="RAWPYTHON"
+):
     """Raw Python data layer"""
 
 
-class NumPyADAA(ADAA, backend=NumPyCoeffBackend(), identifier="NUMPY"):
+class NumPyCAADAA(
+    ComplexArrayADAA, backend=NumPyCoeffBackend(), identifier="NUMPY"
+):
     """NumPy based data layer"""
 
 
-class FortranADAA(ADAA, backend=FortranCoeffBackend(), identifier="FORTRAN"):
+class FortranCAADAA(
+    ComplexArrayADAA, backend=FortranCoeffBackend(), identifier="FORTRAN"
+):
     """FORTRAN based data layer (implemented via NumPy)"""
 
 
-class CupyADAA(ADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
+class CupyCAADAA(
+    ComplexArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"
+):
     """CuPy based data layer"""
 
 
-class OpenClADAA(ADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"):
+class OpenClCAADAA(
+    ComplexArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
+):
     """OpenCL based data layer"""
 
 
-class PyCudaADAA(ADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"):
+class PyCudaCAADAA(
+    ComplexArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
+):
     """OpenCL based data layer"""
