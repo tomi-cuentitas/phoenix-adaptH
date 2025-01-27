@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/01/2025, 16:02
-# Version:     0.0.1924
+# Last Update: 27/01/2025, 16:05
+# Version:     0.0.1925
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -145,7 +145,8 @@ class GenericADAA:
     def datatypes(self):
         """access the data type pattern"""
         return [
-            (identifier, thistype) for identifier, thistype in self._DATATYPES
+            (identifier, thistype)
+            for identifier, thistype in self._DATATYPES.items()
         ]
 
     def to_zero(self):

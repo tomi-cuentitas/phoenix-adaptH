@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 27/01/2025, 16:03
-# Version:     0.0.53
+# Last Update: 27/01/2025, 16:04
+# Version:     0.0.56
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -22,37 +22,35 @@ from phoenix.coeffbackend_derived import OpenClCoeffBackend
 from phoenix.coeffbackend_derived import PyCudaCoeffBackend
 
 
-class RawPyCAADAA(
+class RawPyCA(
     ComplexArrayADAA, backend=RawPyCoeffBackend(), identifier="RAWPYTHON"
 ):
     """Raw Python data layer"""
 
 
-class NumPyCAADAA(
+class NumPyCA(
     ComplexArrayADAA, backend=NumPyCoeffBackend(), identifier="NUMPY"
 ):
     """NumPy based data layer"""
 
 
-class FortranCAADAA(
+class FortranCA(
     ComplexArrayADAA, backend=FortranCoeffBackend(), identifier="FORTRAN"
 ):
     """FORTRAN based data layer (implemented via NumPy)"""
 
 
-class CupyCAADAA(
-    ComplexArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"
-):
+class CupyCA(ComplexArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
     """CuPy based data layer"""
 
 
-class OpenClCAADAA(
+class OpenClCA(
     ComplexArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
 ):
     """OpenCL based data layer"""
 
 
-class PyCudaCAADAA(
+class PyCudaCA(
     ComplexArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
 ):
     """OpenCL based data layer"""
@@ -60,11 +58,13 @@ class PyCudaCAADAA(
 
 print(ComplexArrayADAA._IDENTIFIER)
 print(ComplexArrayADAA._IDENTIFIER)
-print(RawPyCAADAA._DATATYPES)
+print(RawPyCA._DATATYPES)
 
-MyType = RawPyCAADAA.fix_size(24)
+MyType = RawPyCA.fix_size(24)
 
-print(RawPyCAADAA)
+print(RawPyCA)
+
+print(RawPyCA(12).datatypes())
 
 a = MyType()
 print(a.data)
