@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 10/01/2025, 15:02
-# Version:     0.0.147
+# Last Update: 27/01/2025, 12:07
+# Version:     0.0.151
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,7 +18,29 @@ from __future__ import annotations
 __doc__ = """
 Routine module description
 
+Note:
 
+I was drawn back and forth whether routine is specific to dtypes, keymaps or
+not specific at all.
+
+Pro nothing:
+would only be a named instruction group. However, there could be routines
+involved to manage the rearrangement of instructions in these groups to boost
+execution performance
+
+Pro keymaps:
+I liked the keymap idea to identify the indices only when the routine is
+implemented in a specific backend. This however excludes compatability with
+routines that do not act on keymap-based datatypes, where the real,real,int 
+based datatype for paulis is a simple example
+
+Pro datatype:
+This is what I have settled with. Datatypes can have their keymaps attached
+but do not have to. The datatype has to provide a lookup function to get the
+index of whatever input we're looking for.
+Instruction indices are computed at runtime though, so they are not purely
+keymap based, enabling implementations where e.g. real and imaginary parts of
+numbers are within the same array
 
 """
 
@@ -29,7 +51,7 @@ import warnings
 # pylint: disable=too-many-arguments
 
 
-class AbstractRoutine:
+class Routine:
     """An abstract routine does not specify input or output data types,
     therefore all instructions remain based on keys.
     """
@@ -39,6 +61,8 @@ class AbstractRoutine:
         name: str,
         *,
         itype,
+        out_dtype,
+        in_dtypes,
         instruction_group=None,
     ):
         self._name = name
@@ -50,6 +74,20 @@ class AbstractRoutine:
         self._dependencies: list[Routine] = []
         self._itype = itype
         self._ready = False
+        self.out_dtype = out_dtype
+        self.in_dtypes = in_dtypes
+        # localize the instructions here.
+
+    def checksum(self):
+        """a checksum to make sure, that the naming is safe"""
+        test_tuple = (
+            self._name,
+            self.itype,
+            self.out_dtype.get_size(),
+            tuple(inp_dt.get_size() for inp_dt in self.in_dtypes),
+            self.instruction_group.checksum(),
+        )
+        return test_tuple
 
     def __len__(self):
         return len(self.instruction_group)
@@ -132,59 +170,26 @@ class AbstractRoutine:
             self._dependencies[routine.name] = routine
         return self
 
-    def checksum(self):
-        """a checksum to make sure, that the naming is safe"""
-        test_tuple = (
-            self._name,
-            self.itype,
-            None,
-            (),
-            self.instruction_group.checksum(),
-        )
-        return test_tuple
+    # def checksum(self):
+    #     """a checksum to make sure, that the naming is safe"""
+    #     test_tuple = (
+    #         self._name,
+    #         self.itype,
+    #         None,
+    #         (),
+    #         self.instruction_group.checksum(),
+    #     )
+    #     return test_tuple
 
-    def specify(self, out_var, *in_vars):
-        """
-        create a specific routine by specifying output and input variable data
-        types.
-        """
-        return Routine(
-            self.name,
-            itype=self.itype,
-            out_var=out_var,
-            in_vars=in_vars,
-            instruction_group=self.instruction_group,
-        )
-
-
-class Routine(AbstractRoutine):
-    """Routine class description"""
-
-    def __init__(
-        self,
-        name: str,
-        *,
-        itype,
-        out_var,
-        in_vars,
-        instruction_group=None,
-    ):
-        super().__init__(
-            name,
-            itype=itype,
-            instruction_group=instruction_group,
-        )
-        self.out_var = out_var
-        self.in_vars = in_vars
-        # localize the instructions here.
-
-    def checksum(self):
-        """a checksum to make sure, that the naming is safe"""
-        test_tuple = (
-            self._name,
-            self.itype,
-            self.out_var.get_size(),
-            tuple(inp_var.get_size() for inp_var in self.in_vars),
-            self.instruction_group.checksum(),
-        )
-        return test_tuple
+    # def specify(self, out_var, *in_vars):
+    #     """
+    #     create a specific routine by specifying output and input variable data
+    #     types.
+    #     """
+    #     return Routine(
+    #         self.name,
+    #         itype=self.itype,
+    #         out_var=out_var,
+    #         in_vars=in_vars,
+    #         instruction_group=self.instruction_group,
+    #     )
