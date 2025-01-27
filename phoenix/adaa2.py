@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/01/2025, 15:31
-# Version:     0.0.1901
+# Last Update: 27/01/2025, 15:51
+# Version:     0.0.1902
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -208,7 +208,7 @@ class GenericADAA:
             cls.BACKEND = backend
         if identifier is None:
             identifier = cls.__name__  # get default
-        if cls._IDENTIFIER:
+        if cls._IDENTIFIER != "GENERIC":
             cls._IDENTIFIER = cls._IDENTIFIER + "." + identifier
         else:
             cls._IDENTIFIER = identifier
