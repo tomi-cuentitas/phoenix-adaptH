@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 09/01/2025, 16:01
-# Version:     0.0.388
+# Last Update: 30/01/2025, 15:21
+# Version:     0.0.420
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,12 +33,12 @@ class LibRoutine:
     backend when the libroutine is created from the routines.
     """
 
-    implementation = "generic"
+    _implementation = "generic"
 
     def __init__(self, routine, library=None, dependencies=None):
         self._identifier = routine.name
         self._library = library  # the library the libroutine is attached to
-        self.routine = routine  # the generating routine
+        self._routine = routine  # the generating routine
         self._dependencies = {}  # (identifier, implementation): libroutine
         #                          (key to be replaced by a hash)
         self._constant_arrays = {}  # arrname: (dtype, values)
@@ -79,12 +79,12 @@ class LibRoutine:
     @property
     def name(self):
         """read-only access to attribute name"""
-        return f"{self.identifier}_{self.implementation}"
+        return f"{self.identifier}_{self._implementation}"
 
     @property
     def identifier(self):
         """read-only access to attribute identifier"""
-        return self._identifier
+        return str(self._identifier)
 
     def create_source_lines(self, **kwargs):
         """create the source code lines"""
@@ -92,11 +92,7 @@ class LibRoutine:
 
     def get_instructions(self):
         """iterate through all instructions"""
-        for instruction in (
-            self.routine.instruction_group.sorted(lambda x: x["targ_indx"])
-            .flatten()
-            .instructions
-        ):
+        for instruction in self._routine.instruction_group.instructions:
             yield instruction
 
     def add_dependency(self, libroutine):
@@ -115,11 +111,19 @@ class LibRoutine:
         """return meta information on the library"""
         return {
             "subroutine_name": self.name,
-            "num_instructions": len(self.routine.instruction_group),
-            "implementation": self.implementation,
+            "num_instructions": len(self._routine.instruction_group),
+            "implementation": self._implementation,
             "identifier": self.identifier,
             "library": self.identifier,
         }
+
+
+class LibRoutineLine:
+    """
+    LibRoutine Line
+
+    a line or section of lines in a libroutine
+    """
 
 
 class LibraryManager:

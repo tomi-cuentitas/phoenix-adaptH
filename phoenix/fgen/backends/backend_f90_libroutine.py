@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 13/12/2024, 16:09
-# Version:     0.0.66
+# Last Update: 30/01/2025, 15:12
+# Version:     0.0.70
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.fgen.library import LibRoutine
+from phoenix.fgen.library import LibRoutine, LibRoutineLine
 from phoenix.fgen.makefile import MakeFileManager
 
 DEFAULT_OPTIONS = {
@@ -157,3 +157,7 @@ class LibRoutineF90(LibRoutine):
 
         for line in self.code_foot.split("\n"):
             yield line.format(**options)
+
+
+class LibRoutineLineF90(LibRoutineLine):
+    pass

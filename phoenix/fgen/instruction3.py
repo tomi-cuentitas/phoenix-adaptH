@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 21/01/2025, 15:49
-# Version:     0.0.801
+# Last Update: 30/01/2025, 14:40
+# Version:     0.0.945
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -29,7 +29,7 @@ to data.
 
 
 from phoenix._aux import segment_overlap, mro_latest_common_parent
-
+from phoenix.keymap import Key
 
 # class _PartialFormatDict(dict):
 #     """allows partial formatting of strings"""
@@ -56,26 +56,35 @@ class Instruction:
             return None
         segments_list = [instr.itype.split(".") for instr in instruction_list]
         latest_parent_itype = ".".join(segment_overlap(*segments_list))
-
-        # pylint: disable=pointless-string-statement
+        """
         # TODO: maybe implement this later as alternative to segment_list:
-        if __debug__:
-            # use __mro__ to find latest common parent
-            alternative_segment_list = list(
-                [
-                    list(
-                        filter(
-                            lambda x: issubclass(x, Instruction),
-                            instr.__class__.__mro__,
-                        )
-                    )[::-1]
-                    for instr in instruction_list
-                ]
-            )
-            latest_parent = mro_latest_common_parent(*alternative_segment_list)
-            assert latest_parent._ftype == latest_parent_itype
-
-        # pylint: enable=pointless-string-statement
+        # if __debug__:
+        #     # use __mro__ to find latest common parent
+        #     alternative_segment_list = list(
+        #         [
+        #             list(
+        #                 filter(
+        #                     lambda x: issubclass(x, Instruction),
+        #                     instr.__class__.__mro__,
+        #                 )
+        #             )[::-1]
+        #             for instr in instruction_list
+        #         ]
+        #     )
+        #     print("ASL", alternative_segment_list)
+        #     latest_parent = mro_latest_common_parent(*alternative_segment_list)
+        #     print(
+        #         latest_parent._ftype == latest_parent_itype,
+        #         latest_parent._ftype,
+        #         latest_parent_itype,
+        #         latest_parent,
+        #     )
+        #     if latest_parent._ftype != latest_parent_itype:
+        #         print(latest_parent._itype, latest_parent_itype)
+        #         assert False
+        # CONCLUSION: No, don't do that, groups are functionally represented by
+        # their itype, not their ftype. The class encodes the latter!
+        """
         return latest_parent_itype
 
     def __len__(self):
@@ -162,7 +171,11 @@ class Instruction:
 
 
 class GenericInstruction(Instruction, ftype="generic"):
-    """Generic instruction"""
+    """Generic instruction.
+
+    At this point the params dictionary is introduced. Multiple aliases are
+    supported for flexible entry access without creating duplicates.
+    """
 
     _alias: dict[str, str] = {}
 
@@ -267,9 +280,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(
-                self.get(key, defaults.get(key, None)) for key in keys
-            )
+            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -279,7 +290,17 @@ class GenericInstruction(Instruction, ftype="generic"):
         if key in self.__class__._alias:
             # don't call self._params here, so alias can chain
             return self[self.__class__._alias[key]]
-        raise KeyError("Key not found in alias map")
+        raise KeyError(f"Key '{key}' not found in dict nor alias map")
+
+
+class KeyMapBasedInstruction(GenericInstruction, ftype="keymap"):
+    """Subclass for KeyMap based instructions"""
+
+    def get_index(self, var):
+        return self[f"{var}_idx"]
+
+    def get_key(self, var):
+        return self[f"{var}_key"]
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -288,6 +309,8 @@ class InstructionGroup(Instruction, ftype="group"):
     def __init__(self, instructions, itype=None):
         self._instructions = list(instructions)
         self._len = len(self._instructions)
+        if itype is None:
+            itype = InstructionGroup._get_itype_common_root(self._instructions)
         super().__init__(itype=itype)
 
     def __len__(self):
@@ -295,17 +318,13 @@ class InstructionGroup(Instruction, ftype="group"):
 
     @property
     def itype(self):
-        if self._itype is None:
-            self._itype = InstructionGroup._get_itype_common_root(
-                self._instructions
-            )
         return self._itype
 
-    def _update(self):
-        self._len = len(self._instructions)
-        self._itype = InstructionGroup._get_itype_common_root(
-            self._instructions
-        )
+    # def _update(self):
+    #     self._len = len(self._instructions)
+    #     self._itype = InstructionGroup._get_itype_common_root(
+    #         self._instructions
+    #     )
 
     @property
     def instructions(self):
@@ -322,20 +341,22 @@ class InstructionGroup(Instruction, ftype="group"):
 
     def flatten(self):
         """flatten instructions, which will unpack all inner groups"""
-        return InstructionGroup(list(self.unpack()), itype=self._itype)
+        return self.__class__(list(self.unpack()), itype=self._itype)
 
-    def sorted(self, function=None):
+    def sorted(self, ordering_function=None, sort_function=None):
         """return a sorted version. Sort function is optional. Does not
         overwrite sort keys. If no function is given, the default
         sort keys are used"""
-        if function is None:
-            return InstructionGroup(
-                list(sorted(self.instructions)), itype=self._itype
+        if sort_function is None:
+            sort_function = sorted
+        if ordering_function is None:
+            return self.__class__(
+                list(sort_function(self.instructions)), itype=self._itype
             )
-        sorted_instructions = sorted(
-            [(function(instr), instr) for instr in self.instructions]
+        sorted_instructions = sort_function(
+            [(ordering_function(instr), instr) for instr in self.instructions]
         )
-        return InstructionGroup(
+        return self.__class__(
             [instr for _, instr in sorted_instructions], itype=self._itype
         )
 
@@ -360,7 +381,7 @@ class InstructionGroup(Instruction, ftype="group"):
                     "only one of 'function', 'size' and 'number' can be set"
                 )
 
-    def group_by_key(self, function):
+    def group_by_key(self, function, group_type=None):
         """generate groups by a key generating function"""
         groups = {}
         for instr in self.instructions:
@@ -368,39 +389,66 @@ class InstructionGroup(Instruction, ftype="group"):
             if group_id not in groups:
                 groups[group_id] = []
             groups[group_id].append(instr)
-        return InstructionGroup(
-            [
-                InstructionGroup(group, itype=self._itype)
-                for group in groups.values()
-            ],
+        if group_type is None:
+            group_type = self.__class__
+        return self.__class__(
+            [group_type(group, itype=self._itype) for group in groups.values()],
             itype=self._itype,
         )
 
-    def group_to_batches(self, num_batches):
+    def group_to_batches(self, num_batches, group_type=None):
         """subdivide the group into a number of batches.
         Does not conserve continuousity of data"""
         groups = [[] for _ in num_batches]
+        if group_type is None:
+            group_type = self.__class__
         for num, instr in enumerate(self.instructions):
             groups[num % num_batches].append(instr)
-        return InstructionGroup(
-            [InstructionGroup(group) for group in groups], itype=self._itype
+        return self.__class__(
+            [group_type(group) for group in groups], itype=self._itype
         )
 
-    def group_to_size(self, max_size):
+    def group_to_size(self, max_size, group_type=None):
         """split the instructions into groups of a certain (maximum) size"""
         group = []
         collect = []
+        if group_type is None:
+            group_type = self.__class__
         for instr in self.instructions:
             if len(group) >= max_size:
-                collect.append(InstructionGroup(group, itype=self._itype))
+                collect.append(group_type(group, itype=self._itype))
                 group = []
             group.append(instr)
         if group:
-            collect.append(InstructionGroup(group, itype=self._itype))
-        return InstructionGroup(collect, itype=self._itype)
+            collect.append(group_type(group, itype=self._itype))
+        return self.__class__(collect, itype=self._itype)
 
 
-class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
+class OffsetRepeat(InstructionGroup, ftype="offsetrepeat"):
+    """
+    OffsetRepeat
+
+    Repeat the content for multiple offsets
+    """
+
+    def __init__(self, instructions, offsets, itype=None):
+        InstructionGroup.__init__(self, instructions, itype=itype)
+        self._offsets: dict[str, list[Key]] = offsets
+
+
+class SubroutineGroup(InstructionGroup, ftype="subroutine"):
+    """
+    SubroutineGroup
+
+    suggests that upon implementation these instructions are grouped in a
+    subroutine
+    """
+
+    def __init__(self, instructions, itype=None):
+        super().__init__(instructions, itype=itype)
+
+
+class PolynomialInstruction(KeyMapBasedInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
     y[key_trgt] = c0 x[key_trgt]^0 + c1 x[key_trgt]^1 + c2 x[key_trgt]^2 + ...
@@ -410,8 +458,8 @@ class PolynomialInstruction(GenericInstruction, ftype="polynomial"):
         params = {}
         degree = len(coeffs) - 1
         params["degree"] = degree
-        params["key_trgt"] = key_trgt
-        params["key_src0"] = key_src0
+        params["trgt_key"] = key_trgt
+        params["src0_key"] = key_src0
         for exp, coeff in enumerate(coeffs):
             params[f"coeff_x{exp}"] = coeff
         super().__init__(**params, itype=self.ftype)
@@ -431,21 +479,11 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
         super().__init__(key_trgt, key_src0, 0, alpha)
 
 
-class CallInstruction(GenericInstruction, ftype="call"):
-    """Call other routines with this instruction"""
+print(SubroutineGroup([GenericInstruction()]).itype)
 
-    def __init__(
-        self,
-        routine,
-        key_offs_trgt=None,
-        key_offs_src0=None,
-        var_name_src0=None,
-        var_name_trgt=None,
-    ):
-        params = {}
-        params["routine"] = routine
-        params["key_offs_trgt"] = key_offs_trgt
-        params["key_offs_src0"] = key_offs_src0
-        params["var_name_src0"] = var_name_src0
-        params["var_name_trgt"] = var_name_trgt
-        super().__init__(**params, itype=self.ftype)
+
+"""
+instructions = [IGroup1, IGroup2, ...]
+
+Routine(instructions)
+"""

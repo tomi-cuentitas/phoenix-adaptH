@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/01/2025
-# Last Update: 21/01/2025, 15:49
-# Version:     0.0.63
+# Last Update: 30/01/2025, 14:08
+# Version:     0.0.79
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -70,12 +70,7 @@ print(y.is_subtype(y))
 # print(foo.is_subtype(y))
 
 print()
-bar = InstructionGroup(
-    [
-        foo,
-        foo,
-    ]
-)
+bar = InstructionGroup([foo, foo])
 for instruction in bar.instructions:
     print(instruction)
 
@@ -120,3 +115,7 @@ polytest = PolynomialInstruction("foo", "bar", 0, 1, 2, 3)
 print(polytest.to_dict())
 print(polytest.ftype)
 print(polytest.itype)
+
+baz = InstructionGroup([foo, bar])
+print(baz.ftype)
+print(baz.itype)

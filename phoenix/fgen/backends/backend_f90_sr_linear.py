@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 13/12/2024, 16:09
-# Version:     0.0.272
+# Last Update: 30/01/2025, 14:32
+# Version:     0.0.287
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,18 +28,18 @@ from phoenix.fgen.backends.backend_f90_libroutine import (
 
 
 SR_LINEAR_BASE_LINE = """
-{tab}tgt1_r({tgt1_indx}) = tgt1_r({tgt1_indx}) + src1_r({src1_indx}) * {alph_r} - src1_i({src1_indx}) * {alph_i}
-{tab}tgt1_i({tgt1_indx}) = tgt1_i({tgt1_indx}) + src1_r({src1_indx}) * {alph_i} + src1_i({src1_indx}) * {alph_r}"""
+{tab}trgt_r({trgt_idx}) = trgt_r({trgt_idx}) + src0_r({src0_idx}) * {alph_r} - src0_i({src0_idx}) * {alph_i}
+{tab}trgt_i({trgt_idx}) = trgt_i({trgt_idx}) + src0_r({src0_idx}) * {alph_i} + src0_i({src0_idx}) * {alph_r}"""
 
 
 ###############################################################################
 
 
 SR_LINEAR_OFFS_LINE = """
-{tab}tgt1_shft = {tgt1_indx} + tgt1_offs
-{tab}src1_shft = {src1_indx} + src1_offs
-{tab}tgt1_r(tgt1_shft) = tgt1_r(tgt1_shft) + src1_r(src1_shft) * {alph_r} - src1_i(src1_shft) * {alph_i}
-{tab}tgt1_i(tgt1_shft) = tgt1_i(tgt1_shft) + src1_r(src1_shft) * {alph_i} + src1_i(src1_shft) * {alph_r}"""
+{tab}trgt_shft = {trgt_idx} + trgt_offs
+{tab}src0_shft = {src0_idx} + src0_offs
+{tab}trgt_r(trgt_shft) = trgt_r(trgt_shft) + src0_r(src0_shft) * {alph_r} - src0_i(src0_shft) * {alph_i}
+{tab}trgt_i(trgt_shft) = trgt_i(trgt_shft) + src0_r(src0_shft) * {alph_i} + src0_i(src0_shft) * {alph_r}"""
 
 
 ###############################################################################
@@ -53,12 +53,12 @@ SR_LINEAR_LIST_PRMB = """
 {tab}double precision :: alph_i
 {tab}
 {tab}do kk=1, {num_instructions}
-{tab}{tab}tgt1_shft = {subroutine_name}_tgt1_indx(kk) + tgt1_offs
-{tab}{tab}src1_shft = {subroutine_name}_src1_indx(kk) + src1_offs
+{tab}{tab}trgt_shft = {subroutine_name}_trgt_idx(kk) + trgt_offs
+{tab}{tab}src0_shft = {subroutine_name}_src0_idx(kk) + src0_offs
 {tab}{tab}alph_r = {subroutine_name}_alph_r(kk)
 {tab}{tab}alph_i = {subroutine_name}_alph_i(kk)
-{tab}{tab}tgt1_r(tgt1_shft) = tgt1_r(tgt1_shft) + src1_r(src1_shft) * alph_r - src1_i(src1_shft) * alph_i
-{tab}{tab}tgt1_i(tgt1_shft) = tgt1_i(tgt1_shft) + src1_r(src1_shft) * alph_i + src1_i(src1_shft) * alph_r
+{tab}{tab}trgt_r(trgt_shft) = trgt_r(trgt_shft) + src0_r(src0_shft) * alph_r - src0_i(src0_shft) * alph_i
+{tab}{tab}trgt_i(trgt_shft) = trgt_i(trgt_shft) + src0_r(src0_shft) * alph_i + src0_i(src0_shft) * alph_r
 {tab}end do
 """
 
@@ -97,15 +97,21 @@ class LibRoutineF90LinearList(LibRoutineF90):
 
     def __init__(self, routine, library, dependencies=None):
         super().__init__(routine, library, dependencies=None)
-        src1_indx = [instr["src1_indx"] for instr in self.get_instructions()]
-        tgt1_indx = [instr["src1_indx"] for instr in self.get_instructions()]
-        _alph_r = [instr["alph_r"] for instr in self.get_instructions()]
-        _alph_i = [instr["alph_i"] for instr in self.get_instructions()]
-        self.add_constant_array(f"{self.name}_src1_indx", "integer", src1_indx)
-        self.add_constant_array(f"{self.name}_tgt1_indx", "integer", tgt1_indx)
+        src0_idxs = [
+            instr.get_index("src0") for instr in self.get_instructions()
+        ]
+        trgt_idxs = [
+            instr.get_index("trgt") for instr in self.get_instructions()
+        ]
+        self.add_constant_array(f"{self.name}_idxs_src0", "integer", src0_idxs)
+        self.add_constant_array(f"{self.name}_idxs_trgt", "integer", trgt_idxs)
         self.add_constant_array(
-            f"{self.name}_alph_r", "double precision", _alph_r
+            f"{self.name}_alph_r",
+            "double precision",
+            [instr["alph_r"] for instr in self.get_instructions()],
         )
         self.add_constant_array(
-            f"{self.name}_alph_i", "double precision", _alph_i
+            f"{self.name}_alph_i",
+            "double precision",
+            [instr["alph_i"] for instr in self.get_instructions()],
         )

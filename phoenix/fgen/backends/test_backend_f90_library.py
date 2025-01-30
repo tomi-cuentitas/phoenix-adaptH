@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 10/01/2025, 13:16
-# Version:     0.0.308
+# Last Update: 30/01/2025, 14:31
+# Version:     0.0.322
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,65 +15,69 @@
 
 
 from phoenix.fgen.routine import Routine
-from phoenix.fgen.instruction3 import InstructionGroup, GenericInstruction
+from phoenix.fgen.instruction3 import (
+    InstructionGroup,
+    GenericInstruction,
+    KeyMapBasedInstruction,
+)
 from phoenix.fgen.backends.backend_f90_library import LibraryManagerF90
 
 
 instruction_group = (
     InstructionGroup(
         [
-            GenericInstruction(
-                src1_indx=num + 1,
-                tgt1_indx=10 - num,
+            KeyMapBasedInstruction(
+                src0_key=num + 1,
+                trgt_key=10 - num,
                 alph_r=1.0,
                 alph_i=0.0,
             )
             for num in range(10)
         ]
     )
-    .sorted(lambda x: x["tgt1_indx"])
+    .sorted(lambda x: x["trgt_key"])
     .flatten()
 )
 my_routine_1 = Routine(
     "myroutine",
     itype=None,
-    out_var=None,
-    in_vars=[None],
+    out_dtype=None,
+    in_dtypes=[None],
     instruction_group=instruction_group,
 )
 my_routine_2 = Routine(
     "myotherroutine",
     itype=None,
-    out_var=None,
-    in_vars=[None],
+    out_dtype=None,
+    in_dtypes=[None],
     instruction_group=instruction_group,
 )
 my_routine_3 = Routine(
     "myotherroutine3",
     itype=None,
-    out_var=None,
-    in_vars=[None],
+    out_dtype=None,
+    in_dtypes=[None],
     instruction_group=instruction_group,
 )
 my_routine_4 = Routine(
     "myotherroutine4",
     itype=None,
-    out_var=None,
-    in_vars=[None],
+    out_dtype=None,
+    in_dtypes=[None],
     instruction_group=instruction_group,
 )
 my_routine_5 = Routine(
     "myotherroutine5",
     itype=None,
-    out_var=None,
-    in_vars=[None],
+    out_dtype=None,
+    in_dtypes=[None],
     instruction_group=instruction_group,
 )
 my_routine_6 = Routine(
     "myotherroutine6",
     itype=None,
-    out_var=None,
-    in_vars=[None],
+    out_dtype=None,
+    in_dtypes=[None],
     instruction_group=instruction_group,
 )
 mylib = LibraryManagerF90("mylib")
