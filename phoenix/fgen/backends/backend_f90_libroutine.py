@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 30/01/2025, 15:12
-# Version:     0.0.70
+# Last Update: 31/01/2025, 11:54
+# Version:     0.0.76
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -104,10 +104,6 @@ call {subroutine_name}(tgt1_r, tgt1_i, tgt1_n, src1_r, src1_i, src1_n, tgt1_offs
 ###############################################################################
 
 
-class MakefileManagerF90(MakeFileManager):
-    """Fortran implementation of the makefile manager"""
-
-
 class LibRoutineF90(LibRoutine):
     """
     The f90 style subroutines can be composed from a basic scheme, which is
@@ -119,7 +115,7 @@ class LibRoutineF90(LibRoutine):
     code_line = ""
     code_call = ""
     code_prmb = ""
-    code_post = ""
+    code_eplg = ""
     implementation = "generic"
 
     def get_meta(self):
@@ -137,26 +133,26 @@ class LibRoutineF90(LibRoutine):
         for line in self.code_call.split("\n"):
             yield line.format(**options)
 
-    def create_source_lines(self, **kwargs):
-        options = dict(DEFAULT_OPTIONS)
-        options.update(self.get_meta())
-        options.update(kwargs)
+    # def create_source_lines(self, **kwargs):
+    #     options = dict(DEFAULT_OPTIONS)
+    #     options.update(self.get_meta())
+    #     options.update(kwargs)
 
-        for line in self.code_head.split("\n"):
-            yield line.format(**options)
+    #     for line in self.code_head.split("\n"):
+    #         yield line.format(**options)
 
-        for line in self.code_prmb.split("\n"):
-            yield line.format(**options)
+    #     for line in self.code_prmb.split("\n"):
+    #         yield line.format(**options)
 
-        for instruction in self.get_instructions():
-            for line in self.code_line.split("\n"):
-                yield line.format(**(options | instruction.to_dict()))
+    #     for instruction in self.get_instructions():
+    #         for line in self.code_line.split("\n"):
+    #             yield line.format(**(options | instruction.to_dict()))
 
-        for line in self.code_post.split("\n"):
-            yield line.format(**options)
+    #     for line in self.code_eplg.split("\n"):
+    #         yield line.format(**options)
 
-        for line in self.code_foot.split("\n"):
-            yield line.format(**options)
+    #     for line in self.code_foot.split("\n"):
+    #         yield line.format(**options)
 
 
 class LibRoutineLineF90(LibRoutineLine):

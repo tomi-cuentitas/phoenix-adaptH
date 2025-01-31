@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 30/01/2025, 14:40
-# Version:     0.0.945
+# Last Update: 31/01/2025, 11:02
+# Version:     0.0.968
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -241,11 +241,21 @@ class GenericInstruction(Instruction, ftype="generic"):
         """mimic the get behaviour of dicts"""
         match in_args:
             case (key, default):
-                return self._params.get(key, default)
+                if key in self._params:
+                    return self._params[key]
+                try:
+                    return self._from_alias(key)
+                except KeyError:
+                    return default
+                return default
             case (key,):
-                return self._params.get(key)
+                if key in self._params:
+                    return self._params[key]
+                return self._from_alias(key)
             case _:
-                raise RuntimeError("You shouldn't be here!")
+                raise ValueError(
+                    "get requires a key and an optional default value to return"
+                )
 
     def set(self, key, value):
         """set a value, consider protection"""
@@ -280,7 +290,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -293,14 +305,8 @@ class GenericInstruction(Instruction, ftype="generic"):
         raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
 
-class KeyMapBasedInstruction(GenericInstruction, ftype="keymap"):
+class KMInstruction(GenericInstruction, ftype="keymap"):
     """Subclass for KeyMap based instructions"""
-
-    def get_index(self, var):
-        return self[f"{var}_idx"]
-
-    def get_key(self, var):
-        return self[f"{var}_key"]
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -392,7 +398,10 @@ class InstructionGroup(Instruction, ftype="group"):
         if group_type is None:
             group_type = self.__class__
         return self.__class__(
-            [group_type(group, itype=self._itype) for group in groups.values()],
+            [
+                group_type(group, itype=self._itype)
+                for group in groups.values()
+            ],
             itype=self._itype,
         )
 
@@ -431,9 +440,12 @@ class OffsetRepeat(InstructionGroup, ftype="offsetrepeat"):
     Repeat the content for multiple offsets
     """
 
-    def __init__(self, instructions, offsets, itype=None):
+    def __init__(self, instructions, itype=None):
         InstructionGroup.__init__(self, instructions, itype=itype)
-        self._offsets: dict[str, list[Key]] = offsets
+        self._offsets = []
+
+    def append_offset(self, **offest_parameters):
+        """append offset, consider defaults"""
 
 
 class SubroutineGroup(InstructionGroup, ftype="subroutine"):
@@ -448,7 +460,7 @@ class SubroutineGroup(InstructionGroup, ftype="subroutine"):
         super().__init__(instructions, itype=itype)
 
 
-class PolynomialInstruction(KeyMapBasedInstruction, ftype="polynomial"):
+class PolynomialInstruction(KMInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
     y[key_trgt] = c0 x[key_trgt]^0 + c1 x[key_trgt]^1 + c2 x[key_trgt]^2 + ...
@@ -479,7 +491,7 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
         super().__init__(key_trgt, key_src0, 0, alpha)
 
 
-print(SubroutineGroup([GenericInstruction()]).itype)
+print(SubroutineGroup([AffineOperationInstruction(1, 2, 4, 4)]).itype)
 
 
 """

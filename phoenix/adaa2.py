@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/01/2025, 16:05
-# Version:     0.0.1925
+# Last Update: 31/01/2025, 12:20
+# Version:     0.0.1976
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -75,7 +75,7 @@ class GenericADAA:
 
     _IDENTIFIER = ""
     _BACKEND: CoeffBackend
-    _KEYMAP: KeyMap = None
+    _KEYMAP: KeyMap | None = None
     _FIXED_SIZE = None
     _DATATYPES: dict[str, str] = {}
 
@@ -105,28 +105,6 @@ class GenericADAA:
             self.to_zero()  # should probably be forced anyways.
 
     @property
-    def real(self):
-        """Access protected attribute real."""
-        return self._data["real"]
-
-    @real.setter
-    def real(self, arr):
-        """Set the data for real part."""
-        # self._set_data(real=arr)
-        raise ValueError("Real part of the data cannot be set directly.")
-
-    @property
-    def imag(self):
-        """Access protected attribute imag."""
-        return self._data["imag"]
-
-    @imag.setter
-    def imag(self, arr):
-        """Set the data for imag part."""
-        # self._set_data(imag=arr)
-        raise ValueError("Imag part of the data cannot be set directly.")
-
-    @property
     def identifier(self) -> str:
         """access write-protected property 'identifier'"""
         return self._IDENTIFIER
@@ -142,44 +120,47 @@ class GenericADAA:
         # TODO
         return self._data
 
-    def datatypes(self):
+    @classmethod
+    def datatypes(cls):
         """access the data type pattern"""
-        return [
-            (identifier, thistype)
-            for identifier, thistype in self._DATATYPES.items()
+        yield from [
+            (identifier, thisdtype)
+            for identifier, thisdtype in cls._DATATYPES.items()
         ]
+
+    def unpack(self):
+        """unpack the references and the size"""
+        for identifier in self._DATATYPES:
+            yield self._data[identifier]
+        yield self.size
 
     def to_zero(self):
         """Set the coefficient data to zero."""
-        for identifier, thistype in self._DATATYPES.items():
+        for identifier, thisdtype in self._DATATYPES.items():
             self._BACKEND.coeff_to_zero(
                 self._data[identifier],
                 size=self.size,
-                dtype=thistype,
+                dtype=thisdtype,
             )
         return self
-
-    def unpack(self) -> tuple:
-        """Unpack the layer into a tuple to apply it to functions."""
-        return (self._data["real"], self._data["imag"], self.size)
 
     def copy(self) -> GenericADAA:
         """Creates a real copy of self."""
         copy = self.__class__(self.size)
-        for identifier, thistype in self._DATATYPES.items():
+        for identifier, thisdtype in self._DATATYPES.items():
             self._BACKEND.coeff_copy_data(
                 copy.data[identifier],
                 self.data[identifier],
                 size=self.size,
-                dtype=thistype,
+                dtype=thisdtype,
             )
         return copy
 
     def free_memory(self):
         """free the occupied memory"""
-        for identifier, thistype in self._DATATYPES.items():
+        for identifier, thisdtype in self._DATATYPES.items():
             self._data[identifier] = self._BACKEND.coeff_free(
-                self._data[identifier], size=self.size, dtype=thistype
+                self._data[identifier], size=self.size, dtype=thisdtype
             )
 
     def _reinit(self, size=None):
@@ -194,9 +175,9 @@ class GenericADAA:
     def reinit(self, size):
         """Actual reinitialization. Forced."""
         self.free_memory()
-        for identifier, thistype in self._DATATYPES.items():
+        for identifier, thisdtype in self._DATATYPES.items():
             self._data[identifier] = self._BACKEND.coeff_new_array(
-                size, dtype=thistype
+                size, dtype=thisdtype
             )
         self._size = size
 
@@ -237,14 +218,14 @@ class GenericADAA:
         """
         if op_a.size != op_b.size:
             raise ValueError("Compared operators must have the same size.")
-        for identifier, thistype in cls._DATATYPES.items():
+        for identifier, thisdtype in cls._DATATYPES.items():
             this_all_close = cls._BACKEND.coeff_allclose(
                 op_a.data[identifier],
                 op_b.data[identifier],
                 rtol,
                 atol,
                 size=op_a.size,
-                dtype=thistype,
+                dtype=thisdtype,
             )
             if not this_all_close:
                 return False
@@ -372,7 +353,9 @@ class GenericADAA:
         return self.size > 0
 
     def __eq__(self, other):
-        return self.__class__.allclose(self, other)  # , rtol=1e-08, atol=1e-12)
+        return self.__class__.allclose(
+            self, other
+        )  # , rtol=1e-08, atol=1e-12)
 
     def __del__(self):
         self.free_memory()
@@ -381,10 +364,34 @@ class GenericADAA:
 ###############################################################################
 
 
-class ComplexArrayADAA(GenericADAA, identifier="COMPLEXARRAY"):
+class ComplexArrayADAA(
+    GenericADAA, identifier="COMPLEXARRAY", backend=CoeffBackend
+):
     "implement a complex array as default"
 
-    _DATATYPES: dict[str, str] = {"real": "i64", "imag": "f64"}
+    _DATATYPES: dict[str, str] = {"real": "f64", "imag": "f64"}
+
+    @property
+    def real(self):
+        """Access protected attribute real."""
+        return self._data["real"]
+
+    @real.setter
+    def real(self, arr):
+        """Set the data for real part."""
+        # self._set_data(real=arr)
+        raise ValueError("Real part of the data cannot be set directly.")
+
+    @property
+    def imag(self):
+        """Access protected attribute imag."""
+        return self._data["imag"]
+
+    @imag.setter
+    def imag(self, arr):
+        """Set the data for imag part."""
+        # self._set_data(imag=arr)
+        raise ValueError("Imag part of the data cannot be set directly.")
 
     @classmethod
     def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
@@ -413,8 +420,12 @@ class ComplexArrayADAA(GenericADAA, identifier="COMPLEXARRAY"):
         else:
             sbr, sbi = (complex(sc_b).real, complex(sc_b).imag)
 
-        aux_r = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["real"])
-        aux_i = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["imag"])
+        aux_r = cls._BACKEND.coeff_new_array(
+            size, dtype=cls._DATATYPES["real"]
+        )
+        aux_i = cls._BACKEND.coeff_new_array(
+            size, dtype=cls._DATATYPES["imag"]
+        )
 
         # sbr * ocr - sbi * oci -> aux_r
         cls._BACKEND.coeff_linop(

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 09/01/2025, 15:31
-# Version:     0.0.324
+# Last Update: 31/01/2025, 16:51
+# Version:     0.0.326
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -169,22 +169,22 @@ class LibraryManagerF90(LibraryManager):
         for line in LIBRARY_FOOT.split("\n"):
             yield line.format(**options)
 
-    def to_libroutine(self, routine, implementation="base"):
-        match implementation:
-            case "base":
-                return LibRoutineF90LinearBase(
-                    routine,
-                    library=self,
-                )
-            case "offs":
-                return LibRoutineF90LinearOffs(
-                    routine,
-                    library=self,
-                )
-            case "list":
-                return LibRoutineF90LinearList(
-                    routine,
-                    library=self,
-                )
-            case _:
-                raise ValueError(f"Invalid implementation: {implementation}")
+    # def to_libroutine(self, routine, implementation="base"):
+    #     match implementation:
+    #         case "base":
+    #             return LibRoutineF90LinearBase(
+    #                 routine,
+    #                 library=self,
+    #             )
+    #         case "offs":
+    #             return LibRoutineF90LinearOffs(
+    #                 routine,
+    #                 library=self,
+    #             )
+    #         case "list":
+    #             return LibRoutineF90LinearList(
+    #                 routine,
+    #                 library=self,
+    #             )
+    #         case _:
+    #             raise ValueError(f"Invalid implementation: {implementation}")

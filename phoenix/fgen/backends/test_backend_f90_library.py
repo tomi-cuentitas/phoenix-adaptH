@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/12/2024
-# Last Update: 30/01/2025, 14:31
-# Version:     0.0.322
+# Last Update: 31/01/2025, 16:50
+# Version:     0.0.324
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,7 +18,7 @@ from phoenix.fgen.routine import Routine
 from phoenix.fgen.instruction3 import (
     InstructionGroup,
     GenericInstruction,
-    KeyMapBasedInstruction,
+    # KeyMapBasedInstruction,
 )
 from phoenix.fgen.backends.backend_f90_library import LibraryManagerF90
 
@@ -26,7 +26,7 @@ from phoenix.fgen.backends.backend_f90_library import LibraryManagerF90
 instruction_group = (
     InstructionGroup(
         [
-            KeyMapBasedInstruction(
+            GenericInstruction(
                 src0_key=num + 1,
                 trgt_key=10 - num,
                 alph_r=1.0,

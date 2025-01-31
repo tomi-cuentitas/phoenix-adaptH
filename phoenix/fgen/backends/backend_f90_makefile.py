@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 09/01/2025, 15:45
-# Version:     0.0.398
+# Last Update: 31/01/2025, 11:11
+# Version:     0.0.399
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -31,7 +31,7 @@ from phoenix.fgen.makefile import (
     MFGID_GENERL,
 )
 
-GCFLAGS = []
+GCFLAGS: list[str] = []
 
 
 class MFTF2Py(MakeFileTarget):

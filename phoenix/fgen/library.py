@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 30/01/2025, 15:21
-# Version:     0.0.420
+# Last Update: 31/01/2025, 16:49
+# Version:     0.0.456
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,13 +35,28 @@ class LibRoutine:
 
     _implementation = "generic"
 
-    def __init__(self, routine, library=None, dependencies=None):
-        self._identifier = routine.name
+    def __init__(
+        self,
+        identifier,
+        instruction_group,
+        adaa_outp,
+        adaa_inps,
+        library=None,
+        dependencies=None,
+    ):
+        self._identifier = identifier
         self._library = library  # the library the libroutine is attached to
-        self._routine = routine  # the generating routine
+        self._instruction_group = instruction_group  # the instruction group
+        self._adaa_inps = adaa_inps  # input ADAAs of the routine
+        self._adaa_outp = adaa_outp  # input ADAAs of the routine
         self._dependencies = {}  # (identifier, implementation): libroutine
         #                          (key to be replaced by a hash)
         self._constant_arrays = {}  # arrname: (dtype, values)
+
+        self._inp_names = [
+            f"src{num}" for num, _ in enumerate(self._adaa_inps)
+        ]
+        self._outp_name = "outp"
 
         if dependencies is not None:
             if isinstance(dependencies, dict):
@@ -79,21 +94,40 @@ class LibRoutine:
     @property
     def name(self):
         """read-only access to attribute name"""
-        return f"{self.identifier}_{self._implementation}"
+        return f"{self._identifier}_{self._implementation}"
 
     @property
     def identifier(self):
         """read-only access to attribute identifier"""
         return str(self._identifier)
 
+    def _create_source_lines_header(self, **_kwargs):
+        return
+        yield
+
+    def _create_source_lines_preamble(self, **_kwargs):
+        return
+        yield
+
+    def _create_source_lines_body(self, **_kwargs):
+        return
+        yield
+
+    def _create_source_lines_epilogue(self, **_kwargs):
+        return
+        yield
+
+    def _create_source_lines_foot(self, **_kwargs):
+        return
+        yield
+
     def create_source_lines(self, **kwargs):
         """create the source code lines"""
-        yield ""
-
-    def get_instructions(self):
-        """iterate through all instructions"""
-        for instruction in self._routine.instruction_group.instructions:
-            yield instruction
+        yield from self._create_source_lines_header(**kwargs)
+        yield from self._create_source_lines_preamble(**kwargs)
+        yield from self._create_source_lines_body(**kwargs)
+        yield from self._create_source_lines_epilogue(**kwargs)
+        yield from self._create_source_lines_foot(**kwargs)
 
     def add_dependency(self, libroutine):
         """add a dependency to a certain libroutine"""
@@ -105,13 +139,15 @@ class LibRoutine:
     @property
     def dependencies(self):
         """get all dependencies"""
-        yield from self._dependencies.items()
+        for ident_impl, libroutine in self._dependencies.items():
+            yield ident_impl, libroutine
+            yield from libroutine.dependencies()
 
     def get_meta(self):
         """return meta information on the library"""
         return {
             "subroutine_name": self.name,
-            "num_instructions": len(self._routine.instruction_group),
+            "num_instructions": len(self._instruction_group),
             "implementation": self._implementation,
             "identifier": self.identifier,
             "library": self.identifier,
@@ -122,8 +158,19 @@ class LibRoutineLine:
     """
     LibRoutine Line
 
-    a line or section of lines in a libroutine
+    a line or section of lines in a libroutine.
+    The LibRoutineClass will provide all potential LibRoutineLines and upon
+    routine creation, instructions can be mapped to the best fit.
     """
+
+    def __init__(self, backend, instruction_type, data_structures):
+        self._backend = backend
+        self._instruction_type = instruction_type
+        self._data_structures = data_structures
+
+    def from_instruction(self, instruction):
+        """get code lines from instruction"""
+        yield ""
 
 
 class LibraryManager:
@@ -144,6 +191,7 @@ class LibraryManager:
         self._ready = False
         self._created = False
         self._source_file_name = f"{self.name}.f90"
+        self._libroutine_lines = {}
 
     @property
     def name(self):
@@ -159,7 +207,7 @@ class LibraryManager:
         self, routine, implementation="default", exception_existing=False
     ):
         """append a routine to the library"""
-        libroutine = self.to_libroutine(routine, implementation=implementation)
+        libroutine = self.from_routine(routine, implementation=implementation)
         ident_impl = (libroutine.identifier, libroutine.implementation)
         if ident_impl in self._libroutines:
             if exception_existing:
@@ -177,7 +225,7 @@ class LibraryManager:
         identififer, implementation = key
         return self._libroutines.get((identififer, implementation))
 
-    def to_libroutine(self, routine, implementation=None):
+    def from_routine(self, routine, implementation=None):
         """create a libroutine from the routine"""
         raise NotImplementedError(
             "'to_libroutine' must be implemented by subclasses"
@@ -198,14 +246,33 @@ class LibraryManager:
         # finally:
         self._created = True
 
-    def create_source_lines(self, **_kwargs):
-        """create the source code lines"""
-        yield ""
+    def _get_library_head_lines(self, **_kwargs):
+        return
+        yield
 
-    # @property
-    # def dependencies(self):
-    #     """get all dependencies"""
-    #     yield from self._dependencies.items()
+    def _get_library_deps_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_const_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_routine_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_foot_lines(self, **_kwargs):
+        return
+        yield
+
+    def create_source_lines(self, **kwargs):
+        """create the source code lines"""
+        yield from self._get_library_head_lines(**kwargs)
+        yield from self._get_library_deps_lines(**kwargs)
+        yield from self._get_library_const_lines(**kwargs)
+        yield from self._get_library_routine_lines(**kwargs)
+        yield from self._get_library_foot_lines(**kwargs)
 
     def get_meta(self, key=None):
         """return meta information on the library"""

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/10/2024
-# Last Update: 27/01/2025, 15:31
-# Version:     0.0.161
+# Last Update: 31/01/2025, 12:01
+# Version:     0.0.163
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -61,7 +61,9 @@ class CoeffBackend(metaclass=ABCMeta):
 
     def coeff_copy_data(self, targ: Any, source: Any, size: int, dtype: str):
         """Copy the data from source to targ."""
-        self.coeff_linop(targ, None, source, None, None, size=size, dtype=dtype)
+        self.coeff_linop(
+            targ, None, source, None, None, size=size, dtype=dtype
+        )
 
     def coeff_free(self, reference, size: int, dtype: str):
         """free the memory at ref."""

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 27/01/2025, 16:04
-# Version:     0.0.56
+# Last Update: 31/01/2025, 12:01
+# Version:     0.0.57
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -70,3 +70,4 @@ a = MyType()
 print(a.data)
 print(a.real, type)
 print(a.identifier)
+print(a.unpack())
