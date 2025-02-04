@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 04/02/2025, 17:22
-# Version:     0.0.1179
+# Last Update: 04/02/2025, 19:42
+# Version:     0.0.1313
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,7 +28,7 @@ to data.
 """
 
 
-from phoenix._aux import segment_overlap, mro_latest_common_parent
+from phoenix._aux import segment_overlap
 from phoenix.keymap import Key
 
 # class _PartialFormatDict(dict):
@@ -54,15 +54,18 @@ class InstructionVar:
     _name: None | str = None
     _dtype: None | str = None
 
-    def __init__(self, param):
-        self._param = param
+    def __init__(self, *params, offsets=None):
+        self._params = params
+        if offsets is None:
+            offsets = []
+        self._offsets = offsets
 
     def __str__(self):
         dtype = self._dtype or "?"
-        return f"<{self._name}({dtype})[{self._param}]>"
+        return f"<{self._name}({dtype})[{self._params}]>"
 
     def __repr__(self):
-        return f"<{self._name}[{self._param}]>"
+        return f"<{self._name}[{self._params}]>"
 
     @classmethod
     def new(cls, name, dtype=None):
@@ -80,25 +83,111 @@ class InstructionVar:
         cls._name = name
         cls._dtype = dtype
 
+    @property
+    def offsets(self):
+        """access offsets"""
+        return list(self._offsets)
+
+    def to_offset(self):
+        """
+        Translate the current progress into an offset.
+        Return value is the sumn of all int contributions and an accumulation
+        of all non-int contributions
+        """
+        self.resolve()
+        return (
+            sum(offs for offs in self._offsets if isinstance(offs, int)),
+            [offs for offs in self._offsets if not isinstance(offs, int)],
+        )
+
+    def progress(self, param):
+        """progress another param"""
+        raise NotImplementedError("Must be implemented in subclass")
+
+    def progressed(self, param):
+        """return a progressed copy another param"""
+        raise NotImplementedError("Must be implemented in subclass")
+
+    def resolve(self):
+        """resolve the params"""
+        raise NotImplementedError("Must be implemented in subclass")
+
+    def resolved(self):
+        """return a resolved copy"""
+        raise NotImplementedError("Must be implemented in subclass")
+
 
 class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
-    """Represents a variable that is based on a keymap"""
+    """
+    KeyMapInstructionVar
 
-    def __init_subclass__(cls, name=None, keymap=None, dtype=None, _exc=True):
-        super().__init_subclass__(name=name, dtype=dtype, _exc=_exc)
-        if _exc:
-            if keymap is None:
-                raise ValueError("keymap must be provided")
-        cls._kmap = keymap
+    Represents a variable that is based on a keymap.
 
-    @classmethod
-    def new(cls, name, keymap, dtype=None):
-        """create a new subclass from the name"""
+    The main purpose is that there is a representation of input and output
+    variables in instructions. They can be assigned to the ADAAs and have
+    information on datatype and names.
 
-        class SubClass(cls, name=name, keymap=keymap, dtype=dtype, _exc=True):
-            pass
+    Especially for the keymap-version, the variable can be progressed when we
+    move along nested keymaps, accumulating offsets.
 
-        return SubClass
+    """
+
+    def __init__(self, *params, keymap, offsets=None):
+        super().__init__(params, offsets=offsets)
+        self._keymap = keymap
+        # will resolve the key sequence params as seen from keymap
+
+    @property
+    def keymap(self):
+        """access keymap"""
+        return self._keymap
+
+    def copy(self):
+        """generate a copy of this variable"""
+        return self.__class__(
+            *self._params, keymap=self.keymap, offsets=self.offsets
+        )
+
+    def progress(self, param):
+        """progress another param"""
+        self._params = tuple(*self._params, param)
+        return self
+
+    def progressed(self, param):
+        """return a progressed copy another param"""
+        return self.__class__(
+            *self._params, param, keymap=self.keymap, offsets=self.offsets
+        )
+
+    def resolve(self):
+        """resolve the params"""
+        for param in self._params:
+            offset, nkeymap = self._keymap.find(param)
+            self._offsets.append(offset)
+            self._keymap = nkeymap
+
+    def resolved(self):
+        """return a resolved copy"""
+        if self._params:
+            offset, nkeymap = self._keymap.find(self._params[0])
+            return self.__class__(
+                *self._params[1:],
+                keymap=nkeymap,
+                offets=self.offsets + [offset],
+            ).resolved()
+        return self.copy()
+
+    def check_consistency(self, other):
+        """
+        check, if the variable can be consistently merged with another
+        variable, i.e. if the keymaps are consistent if both are defined.
+
+        Scenario: offset-loop to execute some small subroutine, that is defined
+        on one of the inner keymaps. The offsets get us to different places and
+        now we need to make sure, that at these places there is the right
+        keymap. This might be obsolete when we use tagged keys, but just to be
+        sure, it's good to have such a routine prepared.
+        """
 
 
 class Instruction:
@@ -339,12 +428,8 @@ class GenericInstruction(Instruction, ftype="generic"):
         raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
 
-class KmInstruction(GenericInstruction, ftype="expr"):
-    """Supports keymap based stuff"""
-
-
-class KmExpressionInstruction(KmInstruction, ftype="expr"):
-    """Any expression instruction, supports keymap and index stuff"""
+class ExpressionInstruction(GenericInstruction, ftype="expr"):
+    """Represents an Expression"""
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -498,7 +583,7 @@ class SubroutineGroup(InstructionGroup, ftype="subroutine"):
         super().__init__(instructions, itype=itype)
 
 
-class PolynomialInstruction(KmExpressionInstruction, ftype="polynomial"):
+class PolynomialInstruction(ExpressionInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
     y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
@@ -532,11 +617,13 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
 
 
 var_inp = InstructionVar.new(name="input1")
-var_out = KeyMapInstructionVar.new(name="output1", keymap="keymap")
+var_out = KeyMapInstructionVar.new(name="output1")
 
 a = SubroutineGroup(
     [
-        LinearOperationInstruction(var_out(num), var_inp(10 - num), 1.0)
+        LinearOperationInstruction(
+            var_out(num, keymap=None), var_inp(10 - num), 1.0
+        )
         for num in range(10)
     ],
     None,
@@ -552,3 +639,49 @@ print(LinearOperationInstruction._obj_id_count)
 print(AffineOperationInstruction._obj_id_count)
 
 print(var_inp._name)
+
+
+print(
+    """
+Strategy:
+
+We introduce the variable data type to remember the variable name and the
+proper way to access it. At the instruction level, this access is not specific
+to a backend yet.
+
+A variable is represented by its own subclass of the proper parent class.
+Loops over offset variations can be realized by resolving the accumulated param
+values that refer to KeyMap Keys in case of a KeyMapInstructionVar.
+They can be translated into an offset. 
+
+Upon application, this offset can be included into a loop variable, that can be
+used symbolically.
+
+This loop variable can be hard coded in the instruction group. For example, the
+GPU implementation might not need it, and at instruction level I don't want the
+structure to be too specific.
+
+My dream-procedure:
+We introduce a offset-repeat instruction, where a single instructiongroup is
+repeated for multiple offsets. This instruction group can take offset
+configurations. Right now I am not sure if these offset configurations should
+be a list of offsets passed to a special group, or just repetitions of a
+special apply-offset command and some code magic. Or maybe a special group and
+a special operation that simply says "repeat".
+
+As of now I think, that an OffsetApplyInstruction in a RepeatGroup is the right
+way to go. Upon evaluation, the Instruction group to be offsetted will be 
+recognized by ID once it is repeated a couple times. In this case, OffsetApply
+should group automatically. At least if the Group is purely made from
+OffsetApplyInstructions.
+
+This might be elegant to implement as an environment, and the repeat group
+would repeat the environment for the instructiongroup to be repeated.
+
+A potential reason to introduce the RepeatGroup would be external affirmation,
+that the computation can be done in parallel.
+
+In this case it would be a ParallelGroup that expects subgroups of type
+environment.
+"""
+)

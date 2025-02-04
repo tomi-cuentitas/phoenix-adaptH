@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/10/2024
-# Last Update: 09/10/2024, 14:03
-# Version:     0.0.6
+# Last Update: 04/02/2025, 18:17
+# Version:     0.0.7
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,14 +43,14 @@ def segment_overlap(*segments_list):
     return common_segments
 
 
-def mro_latest_common_parent(*class_list):
-    """class based approach to find the common class in a list.
-    Used as alternative to find a common parent in a set of instructions that
-    are to be merged into a list"""
-    latest = None
-    for this_classes in zip(*class_list):
-        try:
-            latest = all_same(this_classes)
-        except ValueError:
-            break
-    return latest
+# def mro_latest_common_parent(*class_list):
+#     """class based approach to find the common class in a list.
+#     Used as alternative to find a common parent in a set of instructions that
+#     are to be merged into a list"""
+#     latest = None
+#     for this_classes in zip(*class_list):
+#         try:
+#             latest = all_same(this_classes)
+#         except ValueError:
+#             break
+#     return latest
