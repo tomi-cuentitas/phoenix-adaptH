@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/01/2025, 12:07
-# Version:     0.0.151
+# Last Update: 03/02/2025, 12:33
+# Version:     0.0.155
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -61,8 +61,8 @@ class Routine:
         name: str,
         *,
         itype,
-        out_dtype,
-        in_dtypes,
+        out_dtypes,
+        inp_dtypes,
         instruction_group=None,
     ):
         self._name = name
@@ -74,8 +74,8 @@ class Routine:
         self._dependencies: list[Routine] = []
         self._itype = itype
         self._ready = False
-        self.out_dtype = out_dtype
-        self.in_dtypes = in_dtypes
+        self.out_dtypes = out_dtypes
+        self.inp_dtypes = inp_dtypes
         # localize the instructions here.
 
     def checksum(self):
@@ -83,8 +83,8 @@ class Routine:
         test_tuple = (
             self._name,
             self.itype,
-            self.out_dtype.get_size(),
-            tuple(inp_dt.get_size() for inp_dt in self.in_dtypes),
+            self.out_dtypes.get_size(),
+            tuple(inp_dt.get_size() for inp_dt in self.inp_dtypes),
             self.instruction_group.checksum(),
         )
         return test_tuple

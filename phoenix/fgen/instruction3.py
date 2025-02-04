@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 31/01/2025, 11:02
-# Version:     0.0.968
+# Last Update: 03/02/2025, 18:54
+# Version:     0.0.1003
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -49,6 +49,11 @@ class Instruction:
     """Base class for instructions"""
 
     _ftype = "instruction"
+    _obj_id_count = 0
+
+    def _get_obj_id(self):
+        self.__class__._obj_id_count += 1
+        return f"{self._ftype}#{self.__class__._obj_id_count}"
 
     @staticmethod
     def _get_itype_common_root(instruction_list):
@@ -56,35 +61,6 @@ class Instruction:
             return None
         segments_list = [instr.itype.split(".") for instr in instruction_list]
         latest_parent_itype = ".".join(segment_overlap(*segments_list))
-        """
-        # TODO: maybe implement this later as alternative to segment_list:
-        # if __debug__:
-        #     # use __mro__ to find latest common parent
-        #     alternative_segment_list = list(
-        #         [
-        #             list(
-        #                 filter(
-        #                     lambda x: issubclass(x, Instruction),
-        #                     instr.__class__.__mro__,
-        #                 )
-        #             )[::-1]
-        #             for instr in instruction_list
-        #         ]
-        #     )
-        #     print("ASL", alternative_segment_list)
-        #     latest_parent = mro_latest_common_parent(*alternative_segment_list)
-        #     print(
-        #         latest_parent._ftype == latest_parent_itype,
-        #         latest_parent._ftype,
-        #         latest_parent_itype,
-        #         latest_parent,
-        #     )
-        #     if latest_parent._ftype != latest_parent_itype:
-        #         print(latest_parent._itype, latest_parent_itype)
-        #         assert False
-        # CONCLUSION: No, don't do that, groups are functionally represented by
-        # their itype, not their ftype. The class encodes the latter!
-        """
         return latest_parent_itype
 
     def __len__(self):
@@ -93,10 +69,12 @@ class Instruction:
     def __init__(self, *, itype=None):
         self._sort_key = None
         self._itype = itype
+        self._obj_id = self._get_obj_id()
 
     def __init_subclass__(cls, ftype):
         # print("asd", cls._ftype, ftype, cls.__name__)
         ftype = ftype.replace(".", ":")
+        cls._obj_id_count = 0
         cls._ftype += f".{ftype}"
 
     def checksum(self):
@@ -463,14 +441,14 @@ class SubroutineGroup(InstructionGroup, ftype="subroutine"):
 class PolynomialInstruction(KMInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
-    y[key_trgt] = c0 x[key_trgt]^0 + c1 x[key_trgt]^1 + c2 x[key_trgt]^2 + ...
+    y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
     """
 
-    def __init__(self, key_trgt, key_src0, *coeffs):
+    def __init__(self, key_trg0, key_src0, *coeffs):
         params = {}
         degree = len(coeffs) - 1
         params["degree"] = degree
-        params["trgt_key"] = key_trgt
+        params["trg0_key"] = key_trg0
         params["src0_key"] = key_src0
         for exp, coeff in enumerate(coeffs):
             params[f"coeff_x{exp}"] = coeff
@@ -478,24 +456,27 @@ class PolynomialInstruction(KMInstruction, ftype="polynomial"):
 
 
 class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
-    """y[key_trgt] = a * x[key_src] + b type instruction"""
+    """y[key_tgt0] = a * x[key_src] + b type instruction"""
 
-    def __init__(self, key_trgt, key_src0, alpha, beta):
-        super().__init__(key_trgt, key_src0, beta, alpha)
+    def __init__(self, key_tgt0, key_src0, alpha, beta):
+        super().__init__(key_tgt0, key_src0, beta, alpha)
 
 
 class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
-    """y[key_trgt] = a * x[key_src] type instruction"""
+    """y[key_tgt0] = a * x[key_src] type instruction"""
 
-    def __init__(self, key_trgt, key_src0, alpha):
-        super().__init__(key_trgt, key_src0, 0, alpha)
-
-
-print(SubroutineGroup([AffineOperationInstruction(1, 2, 4, 4)]).itype)
+    def __init__(self, key_tgt0, key_src0, alpha):
+        super().__init__(key_tgt0, key_src0, 0, alpha)
 
 
-"""
-instructions = [IGroup1, IGroup2, ...]
+a = SubroutineGroup(
+    [AffineOperationInstruction(1, 2, 4, 4) for _ in range(10)]
+)
+for instruction in a.instructions:
+    print(instruction._obj_id)
+print(a._obj_id)
 
-Routine(instructions)
-"""
+print(SubroutineGroup._obj_id_count)
+print(PolynomialInstruction._obj_id_count)
+print(LinearOperationInstruction._obj_id_count)
+print(AffineOperationInstruction._obj_id_count)

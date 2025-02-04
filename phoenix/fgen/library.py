@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 31/01/2025, 16:49
-# Version:     0.0.456
+# Last Update: 03/02/2025, 19:00
+# Version:     0.0.473
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,154 +25,6 @@ misleading.
 """
 
 
-class LibRoutine:
-    """
-    LibRoutine collects and manages all information for a routine in a library.
-
-    # include a backend signature here. The backend can be set from the ADAAs
-    backend when the libroutine is created from the routines.
-    """
-
-    _implementation = "generic"
-
-    def __init__(
-        self,
-        identifier,
-        instruction_group,
-        adaa_outp,
-        adaa_inps,
-        library=None,
-        dependencies=None,
-    ):
-        self._identifier = identifier
-        self._library = library  # the library the libroutine is attached to
-        self._instruction_group = instruction_group  # the instruction group
-        self._adaa_inps = adaa_inps  # input ADAAs of the routine
-        self._adaa_outp = adaa_outp  # input ADAAs of the routine
-        self._dependencies = {}  # (identifier, implementation): libroutine
-        #                          (key to be replaced by a hash)
-        self._constant_arrays = {}  # arrname: (dtype, values)
-
-        self._inp_names = [
-            f"src{num}" for num, _ in enumerate(self._adaa_inps)
-        ]
-        self._outp_name = "outp"
-
-        if dependencies is not None:
-            if isinstance(dependencies, dict):
-                for dep in dependencies.values():
-                    self.add_dependency(dep)
-            else:
-                raise ValueError("dependencies must be a dict")
-
-    def add_constant_array(self, arrname, dtype, values):
-        """append a constant array to the section"""
-        if arrname in self._constant_arrays:
-            raise KeyError(f"Constant array '{arrname}' already exists")
-        self._constant_arrays[arrname] = (dtype, values)
-
-    def get_constant_arrays(self):
-        """get the arrays"""
-        yield from self._constant_arrays.items()
-
-    @property
-    def library(self):
-        """read-only access to attribute library"""
-        if self._library is None:
-            self._library = self.to_standalone_library()
-        return self._library
-
-    def to_standalone_library(self):
-        """
-        Generates a standalone library that only contains this one routine.
-        Returns the LibraryManager
-        """
-        raise NotImplementedError(
-            "'to_standalone_library' must be implemented in subclass"
-        )
-
-    @property
-    def name(self):
-        """read-only access to attribute name"""
-        return f"{self._identifier}_{self._implementation}"
-
-    @property
-    def identifier(self):
-        """read-only access to attribute identifier"""
-        return str(self._identifier)
-
-    def _create_source_lines_header(self, **_kwargs):
-        return
-        yield
-
-    def _create_source_lines_preamble(self, **_kwargs):
-        return
-        yield
-
-    def _create_source_lines_body(self, **_kwargs):
-        return
-        yield
-
-    def _create_source_lines_epilogue(self, **_kwargs):
-        return
-        yield
-
-    def _create_source_lines_foot(self, **_kwargs):
-        return
-        yield
-
-    def create_source_lines(self, **kwargs):
-        """create the source code lines"""
-        yield from self._create_source_lines_header(**kwargs)
-        yield from self._create_source_lines_preamble(**kwargs)
-        yield from self._create_source_lines_body(**kwargs)
-        yield from self._create_source_lines_epilogue(**kwargs)
-        yield from self._create_source_lines_foot(**kwargs)
-
-    def add_dependency(self, libroutine):
-        """add a dependency to a certain libroutine"""
-        ident_impl = (libroutine.identifier, libroutine.implementation)
-        if ident_impl in self._dependencies:
-            return
-        self._dependencies[ident_impl] = libroutine
-
-    @property
-    def dependencies(self):
-        """get all dependencies"""
-        for ident_impl, libroutine in self._dependencies.items():
-            yield ident_impl, libroutine
-            yield from libroutine.dependencies()
-
-    def get_meta(self):
-        """return meta information on the library"""
-        return {
-            "subroutine_name": self.name,
-            "num_instructions": len(self._instruction_group),
-            "implementation": self._implementation,
-            "identifier": self.identifier,
-            "library": self.identifier,
-        }
-
-
-class LibRoutineLine:
-    """
-    LibRoutine Line
-
-    a line or section of lines in a libroutine.
-    The LibRoutineClass will provide all potential LibRoutineLines and upon
-    routine creation, instructions can be mapped to the best fit.
-    """
-
-    def __init__(self, backend, instruction_type, data_structures):
-        self._backend = backend
-        self._instruction_type = instruction_type
-        self._data_structures = data_structures
-
-    def from_instruction(self, instruction):
-        """get code lines from instruction"""
-        yield ""
-
-
 class LibraryManager:
     """
     Library manager class description.
@@ -180,18 +32,29 @@ class LibraryManager:
     Used to create, manage, adapt and compile libraries.
     """
 
+    _FILEENDING = "txt"
+    _INDENTSTR = "  "
+
     def __init__(self, libname):
         self._libname = libname
-        self._libbasepath = "."
-        self._libroutines = {}
-        # self._dependencies = {}  # tbi: global deps
+        self._fileinfo = {
+            "basepath": ".",
+            "filename": f"{self.name}.{self.fileending}",
+        }
         self._meta = {
             "library_name": f"{self.name}",
         }
-        self._ready = False
-        self._created = False
-        self._source_file_name = f"{self.name}.f90"
-        self._libroutine_lines = {}
+        self._status = {
+            "created": False,
+            "compiled": False,
+        }
+        self._dependencies = {}
+        self._libroutines = {}
+
+    @property
+    def fileending(self):
+        """file type ending"""
+        return self._FILEENDING
 
     @property
     def name(self):
@@ -214,10 +77,10 @@ class LibraryManager:
                 raise KeyError(
                     f"Routine '{libroutine.name}' already exists in library"
                 )
-            else:
-                warnings.warn(
-                    f"Routine '{libroutine.name}' already exists in library"
-                )
+
+            warnings.warn(
+                f"Routine '{libroutine.name}' already exists in library"
+            )
             return
         self._libroutines[ident_impl] = libroutine
 
@@ -233,18 +96,18 @@ class LibraryManager:
 
     def compile(self):
         """compile the library"""
-        if not self._created:
+        if not self._status["created"]:
             self.create()
         # compile dependencies, then compile self.
         # finally:
-        self._ready = True
+        self._status["ready"] = True
 
     def create(self):
         """create the library, i.e. write to file(s)"""
         # create dependencies,
         # then create self.
         # finally:
-        self._created = True
+        self._status["created"] = True
 
     def _get_library_head_lines(self, **_kwargs):
         return
