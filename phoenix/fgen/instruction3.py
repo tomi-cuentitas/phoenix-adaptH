@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 03/02/2025, 18:54
-# Version:     0.0.1003
+# Last Update: 04/02/2025, 17:22
+# Version:     0.0.1179
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,6 +43,62 @@ from phoenix.keymap import Key
 #         if key in self:
 #             return super().__getitem__(key)
 #         return "{" + key + "}"
+
+
+class InstructionVar:
+    """Represents a variable in an instruction"""
+
+    # every variable is derived as a subclass
+    # every instance represents a certain entry in that class
+
+    _name: None | str = None
+    _dtype: None | str = None
+
+    def __init__(self, param):
+        self._param = param
+
+    def __str__(self):
+        dtype = self._dtype or "?"
+        return f"<{self._name}({dtype})[{self._param}]>"
+
+    def __repr__(self):
+        return f"<{self._name}[{self._param}]>"
+
+    @classmethod
+    def new(cls, name, dtype=None):
+        """create a new subclass from the name"""
+
+        class SubClass(cls, name=name, dtype=dtype, _exc=True):
+            pass
+
+        return SubClass
+
+    def __init_subclass__(cls, name=None, dtype=None, _exc=True):
+        if _exc:
+            if name is None:
+                raise ValueError("name must be provided")
+        cls._name = name
+        cls._dtype = dtype
+
+
+class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
+    """Represents a variable that is based on a keymap"""
+
+    def __init_subclass__(cls, name=None, keymap=None, dtype=None, _exc=True):
+        super().__init_subclass__(name=name, dtype=dtype, _exc=_exc)
+        if _exc:
+            if keymap is None:
+                raise ValueError("keymap must be provided")
+        cls._kmap = keymap
+
+    @classmethod
+    def new(cls, name, keymap, dtype=None):
+        """create a new subclass from the name"""
+
+        class SubClass(cls, name=name, keymap=keymap, dtype=dtype, _exc=True):
+            pass
+
+        return SubClass
 
 
 class Instruction:
@@ -283,8 +339,12 @@ class GenericInstruction(Instruction, ftype="generic"):
         raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
 
-class KMInstruction(GenericInstruction, ftype="keymap"):
-    """Subclass for KeyMap based instructions"""
+class KmInstruction(GenericInstruction, ftype="expr"):
+    """Supports keymap based stuff"""
+
+
+class KmExpressionInstruction(KmInstruction, ftype="expr"):
+    """Any expression instruction, supports keymap and index stuff"""
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -434,22 +494,24 @@ class SubroutineGroup(InstructionGroup, ftype="subroutine"):
     subroutine
     """
 
-    def __init__(self, instructions, itype=None):
+    def __init__(self, instructions, inp_names, out_names, itype=None):
         super().__init__(instructions, itype=itype)
 
 
-class PolynomialInstruction(KMInstruction, ftype="polynomial"):
+class PolynomialInstruction(KmExpressionInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
     y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
     """
 
-    def __init__(self, key_trg0, key_src0, *coeffs):
+    def __init__(self, trg0, src0, *coeffs):
         params = {}
         degree = len(coeffs) - 1
+        assert isinstance(trg0, InstructionVar)
+        assert isinstance(src0, InstructionVar)
         params["degree"] = degree
-        params["trg0_key"] = key_trg0
-        params["src0_key"] = key_src0
+        params["trg0"] = trg0
+        params["src0"] = src0
         for exp, coeff in enumerate(coeffs):
             params[f"coeff_x{exp}"] = coeff
         super().__init__(**params, itype=self.ftype)
@@ -458,19 +520,27 @@ class PolynomialInstruction(KMInstruction, ftype="polynomial"):
 class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
     """y[key_tgt0] = a * x[key_src] + b type instruction"""
 
-    def __init__(self, key_tgt0, key_src0, alpha, beta):
-        super().__init__(key_tgt0, key_src0, beta, alpha)
+    def __init__(self, tgt0, src0, alpha, beta):
+        super().__init__(tgt0, src0, beta, alpha)
 
 
 class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
     """y[key_tgt0] = a * x[key_src] type instruction"""
 
-    def __init__(self, key_tgt0, key_src0, alpha):
-        super().__init__(key_tgt0, key_src0, 0, alpha)
+    def __init__(self, tgt0, src0, alpha):
+        super().__init__(tgt0, src0, 0, alpha)
 
+
+var_inp = InstructionVar.new(name="input1")
+var_out = KeyMapInstructionVar.new(name="output1", keymap="keymap")
 
 a = SubroutineGroup(
-    [AffineOperationInstruction(1, 2, 4, 4) for _ in range(10)]
+    [
+        LinearOperationInstruction(var_out(num), var_inp(10 - num), 1.0)
+        for num in range(10)
+    ],
+    None,
+    None,
 )
 for instruction in a.instructions:
     print(instruction._obj_id)
@@ -480,3 +550,5 @@ print(SubroutineGroup._obj_id_count)
 print(PolynomialInstruction._obj_id_count)
 print(LinearOperationInstruction._obj_id_count)
 print(AffineOperationInstruction._obj_id_count)
+
+print(var_inp._name)
