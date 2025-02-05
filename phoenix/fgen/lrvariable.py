@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 04/02/2025, 12:45
-# Version:     0.0.2
+# Last Update: 05/02/2025, 18:53
+# Version:     0.0.3
 #
 #################################################end#of#autoheader#do#not#modify
 

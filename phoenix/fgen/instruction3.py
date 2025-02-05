@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 05/02/2025, 13:55
-# Version:     0.0.1419
+# Last Update: 05/02/2025, 19:48
+# Version:     0.0.1455
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -27,6 +27,7 @@ denominator of instruction types within the group, i.e. how it is to be applied
 to data.
 """
 
+from typing import Self
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
@@ -55,12 +56,15 @@ class InstructionVar:
     _dtype: None | str = None
     _count: int = 0
 
-    def __init__(self, *params, offsets=None):
+    def __init__(self, *params, offsets=None, history=None):
         if offsets is None:
             offsets = []
-        self._offsets = offsets
-        self._params = []
-        self.progress(*params)
+        if history is None:
+            history = []
+        self._offs = offsets
+        self._hist = history
+        self._pars = list(params)
+        self.progress()
 
     def __str__(self):
         dtype = self._dtype or "?"
@@ -88,20 +92,42 @@ class InstructionVar:
     @property
     def offsets(self):
         """access offsets"""
-        return list(self._offsets)
+        return list(self._offs)
+
+    @property
+    def history(self):
+        """access offsets"""
+        return list(self._hist)
 
     @property
     def params(self):
         """access params"""
-        return list(self._params)
+        return list(self._pars)
 
-    def progress(self, *params):
+    def copy(self):
+        """return a copy"""
+        return self.__class__(
+            *self.params, offsets=self.offsets, history=self.history
+        )
+
+    def progress(self, *params) -> Self:
         """progress another param"""
         raise NotImplementedError("Must be implemented in subclass")
 
-    def resolved(self):
-        """return a resolved copy"""
+    def resolve(self, num=None) -> Self:
+        """resolve num steps in param"""
         raise NotImplementedError("Must be implemented in subclass")
+
+    def resolved(self):
+        """return a resolved copy of self"""
+        return self.copy().resolve()
+
+    def apply_as_offset_to(self, other):
+        """combine two variables"""
+        return self.resolved().progress(*other.history, *other.params)
+
+    def __xor__(self, other):
+        return self.apply_as_offset_to(other)
 
 
 class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
@@ -121,9 +147,9 @@ class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
 
     _ckeymap: None | KeyMap = None
 
-    def __init__(self, *params, offsets=None):
+    def __init__(self, *params, offsets=None, history=None):
         self._kmap_ptr = self._ckeymap
-        super().__init__(*params, offsets=offsets)
+        super().__init__(*params, offsets=offsets, history=history)
         # will resolve the key sequence params as seen from keymap
 
     def __init_subclass__(cls, **kwargs):
@@ -157,27 +183,22 @@ class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
     def progress(self, *params):
         """progress params"""
         for param in params:
-            offset, self._kmap_ptr = self._kmap_ptr.find(param)
-            self._offsets.append(offset)
-            self._params.append(param)
+            self._pars.append(param)
         return self
 
-    def resolved(self):
-        """return a resolved copy"""
-        raise NotImplementedError("TODO")
-
-    def check_consistency(self, other):
-        """
-        check, if the variable can be consistently merged with another
-        variable, i.e. if the keymaps are consistent if both are defined.
-
-        Scenario: offset-loop to execute some small subroutine, that is defined
-        on one of the inner keymaps. The offsets get us to different places and
-        now we need to make sure, that at these places there is the right
-        keymap. This might be obsolete when we use tagged keys, but just to be
-        sure, it's good to have such a routine prepared.
-        """
-        raise NotImplementedError("TODO")
+    def resolve(self, num=None):
+        """resolve num steps in param"""
+        if num is None:
+            num = len(self._pars)
+        for _ in range(num):
+            if self._pars:
+                param = self._pars.pop(0)
+                offset, self._kmap_ptr = self._kmap_ptr.find(param)
+                self._offs.append(offset)
+                self._hist.append(param)
+            else:
+                raise ValueError("No more parameters to resolve")
+        return self
 
 
 class Instruction:
@@ -546,6 +567,19 @@ class InstructionGroup(Instruction, ftype="group"):
         return self.__class__(collect, itype=self._itype)
 
 
+class OffsetEnvironment(InstructionGroup, ftype="applyoffset"):
+    """Within this environment, variables are offsetted"""
+
+    # TODO
+
+    # Contains
+    # - Instructions to be offsetted
+
+    # requires:
+    # - value of offset
+    # - optional offset mapping if names change
+
+
 class OffsetRepeat(InstructionGroup, ftype="offsetrepeat"):
     """
     OffsetRepeat
@@ -659,7 +693,7 @@ print(var_inp._name)
 print(var_inp("foo1"))
 
 print(
-    """
+    """s
 Strategy:
 
 We introduce the variable data type to remember the variable name and the
