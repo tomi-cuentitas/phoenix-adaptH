@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 04/02/2025, 19:42
-# Version:     0.0.1313
+# Last Update: 05/02/2025, 13:55
+# Version:     0.0.1419
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -29,7 +29,7 @@ to data.
 
 
 from phoenix._aux import segment_overlap
-from phoenix.keymap import Key
+from phoenix.keymap import Key, KeyMap
 
 # class _PartialFormatDict(dict):
 #     """allows partial formatting of strings"""
@@ -53,63 +53,50 @@ class InstructionVar:
 
     _name: None | str = None
     _dtype: None | str = None
+    _count: int = 0
 
     def __init__(self, *params, offsets=None):
-        self._params = params
         if offsets is None:
             offsets = []
         self._offsets = offsets
+        self._params = []
+        self.progress(*params)
 
     def __str__(self):
         dtype = self._dtype or "?"
-        return f"<{self._name}({dtype})[{self._params}]>"
+        return f"<{self._name}({dtype}){self.params}>"
 
     def __repr__(self):
-        return f"<{self._name}[{self._params}]>"
+        return f"<{self._name}{self.params}>"
 
     @classmethod
-    def new(cls, name, dtype=None):
+    def new(cls, name=None, dtype=None):
         """create a new subclass from the name"""
+        return type(name, (cls,), {"_name": name, "_dtype": dtype})
 
-        class SubClass(cls, name=name, dtype=dtype, _exc=True):
-            pass
-
-        return SubClass
-
-    def __init_subclass__(cls, name=None, dtype=None, _exc=True):
-        if _exc:
-            if name is None:
-                raise ValueError("name must be provided")
-        cls._name = name
+    def __init_subclass__(cls, **kwargs):
+        cls._count += 1
+        name = kwargs.get("name", None)
+        dtype = kwargs.get("dtype")
+        if name is None:
+            name = f"ivar{cls._count}"
+        if dtype is None:
+            dtype = "f64"
         cls._dtype = dtype
+        cls._name = name
 
     @property
     def offsets(self):
         """access offsets"""
         return list(self._offsets)
 
-    def to_offset(self):
-        """
-        Translate the current progress into an offset.
-        Return value is the sumn of all int contributions and an accumulation
-        of all non-int contributions
-        """
-        self.resolve()
-        return (
-            sum(offs for offs in self._offsets if isinstance(offs, int)),
-            [offs for offs in self._offsets if not isinstance(offs, int)],
-        )
+    @property
+    def params(self):
+        """access params"""
+        return list(self._params)
 
-    def progress(self, param):
+    def progress(self, *params):
         """progress another param"""
-        raise NotImplementedError("Must be implemented in subclass")
-
-    def progressed(self, param):
-        """return a progressed copy another param"""
-        raise NotImplementedError("Must be implemented in subclass")
-
-    def resolve(self):
-        """resolve the params"""
         raise NotImplementedError("Must be implemented in subclass")
 
     def resolved(self):
@@ -132,50 +119,52 @@ class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
 
     """
 
-    def __init__(self, *params, keymap, offsets=None):
-        super().__init__(params, offsets=offsets)
-        self._keymap = keymap
+    _ckeymap: None | KeyMap = None
+
+    def __init__(self, *params, offsets=None):
+        self._kmap_ptr = self._ckeymap
+        super().__init__(*params, offsets=offsets)
         # will resolve the key sequence params as seen from keymap
+
+    def __init_subclass__(cls, **kwargs):
+        cls._count += 1
+        name = kwargs.get("name", None)
+        dtype = kwargs.get("dtype", None)
+        ckeymap = kwargs.get("keymap", cls._ckeymap)
+        if name is None:
+            name = f"ivar{cls._count}"
+        if dtype is None:
+            dtype = "f64"
+        if ckeymap is None:
+            raise ValueError("No keymap provided")
+        cls._dtype = dtype
+        cls._name = name
+        cls._ckeymap = ckeymap
+
+    # this simply repeats so the linter knows what's going on
+    @classmethod
+    def new(cls, name=None, keymap=None, dtype=None):
+        """create a new subclass from the name"""
+        return type(
+            name, (cls,), {"_name": name, "_dtype": dtype, "_ckeymap": keymap}
+        )
 
     @property
     def keymap(self):
         """access keymap"""
-        return self._keymap
+        return self._kmap_ptr
 
-    def copy(self):
-        """generate a copy of this variable"""
-        return self.__class__(
-            *self._params, keymap=self.keymap, offsets=self.offsets
-        )
-
-    def progress(self, param):
-        """progress another param"""
-        self._params = tuple(*self._params, param)
-        return self
-
-    def progressed(self, param):
-        """return a progressed copy another param"""
-        return self.__class__(
-            *self._params, param, keymap=self.keymap, offsets=self.offsets
-        )
-
-    def resolve(self):
-        """resolve the params"""
-        for param in self._params:
-            offset, nkeymap = self._keymap.find(param)
+    def progress(self, *params):
+        """progress params"""
+        for param in params:
+            offset, self._kmap_ptr = self._kmap_ptr.find(param)
             self._offsets.append(offset)
-            self._keymap = nkeymap
+            self._params.append(param)
+        return self
 
     def resolved(self):
         """return a resolved copy"""
-        if self._params:
-            offset, nkeymap = self._keymap.find(self._params[0])
-            return self.__class__(
-                *self._params[1:],
-                keymap=nkeymap,
-                offets=self.offsets + [offset],
-            ).resolved()
-        return self.copy()
+        raise NotImplementedError("TODO")
 
     def check_consistency(self, other):
         """
@@ -188,6 +177,7 @@ class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
         keymap. This might be obsolete when we use tagged keys, but just to be
         sure, it's good to have such a routine prepared.
         """
+        raise NotImplementedError("TODO")
 
 
 class Instruction:
@@ -616,21 +606,47 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
         super().__init__(tgt0, src0, 0, alpha)
 
 
-var_inp = InstructionVar.new(name="input1")
-var_out = KeyMapInstructionVar.new(name="output1")
+from phoenix.keymap import KeyMap, Key
+
+ltl_km = KeyMap(name="little")
+ltl_km.entry("key1")
+ltl_km.entry("key2")
+ltl_km.entry("key3")
+
+big_km = KeyMap(name="big")
+big_km.link("foo1", ltl_km)
+big_km.link("foo2", ltl_km)
+
+big_km.update()
+print(list(big_km.keys()))
+
+var_inp = KeyMapInstructionVar.new(name="input1", keymap=big_km)
+var_out = KeyMapInstructionVar.new(name="output1", keymap=big_km)
 
 a = SubroutineGroup(
-    [
-        LinearOperationInstruction(
-            var_out(num, keymap=None), var_inp(10 - num), 1.0
-        )
-        for num in range(10)
-    ],
+    sum(
+        (
+            [
+                LinearOperationInstruction(
+                    var_out(foo, "key1"), var_inp(foo, "key3"), 1.0
+                ),
+                LinearOperationInstruction(
+                    var_out(foo, "key2"), var_inp(foo, "key2"), 1.0
+                ),
+                LinearOperationInstruction(
+                    var_out(foo, "key3"), var_inp(foo, "key1"), 1.0
+                ),
+            ]
+            for foo in ["foo1", "foo2"]
+        ),
+        start=[],
+    ),
     None,
     None,
 )
 for instruction in a.instructions:
     print(instruction._obj_id)
+    print(instruction.to_dict())
 print(a._obj_id)
 
 print(SubroutineGroup._obj_id_count)
@@ -640,6 +656,7 @@ print(AffineOperationInstruction._obj_id_count)
 
 print(var_inp._name)
 
+print(var_inp("foo1"))
 
 print(
     """

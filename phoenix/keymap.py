@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 10/01/2025, 15:10
-# Version:     0.0.3023
+# Last Update: 05/02/2025, 13:50
+# Version:     0.0.3042
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,7 +32,7 @@ chained into longer keys to summarize multiple branching decisions in a multi
 level tree.
 
 The KeyMap provides multiple routines to add new domains to it. The routine
-put(key, domain) appends the domain at 'key'. The routine extend(domain)
+link(key, domain) appends the domain at 'key'. The routine extend(domain)
 derives the key automatically from the name of the extending keymap object.
 The routine entry(label) appends an Entry object at key Key(label).
 
@@ -393,22 +393,22 @@ class Domain:
 
         :returns: the size.
         """
-        self._update()
+        self._update_internals()
         return self._size
 
     def __str__(self):
-        self._update()
+        self._update_internals()
         return f"<{self._IDENTIFIER} '{self.name}'>"
 
     def __repr__(self):
-        self._update()
+        self._update_internals()
         return f"<{self._IDENTIFIER_SHORT}[{self.name}]>"
 
     def __len__(self):
-        self._update()
+        self._update_internals()
         return self._size
 
-    def _update(self) -> Self:
+    def _update_internals(self, force=False) -> bool:
         """
         Wrapped call to internal update procedure. Skips update if already up to
         date.
@@ -416,15 +416,21 @@ class Domain:
         :returns: self, so you can chain calls.
         :raises: RuntimeError if update did not succeed.
         """
-        if not self.is_ud:
-            self._is_ud_flag = self.update()
+        if self.is_ud and not force:
+            return True
+        self._is_ud_flag = self._update(force=force)
         if not self._is_ud_flag:
             raise RuntimeError("update did not succeed")
-        return self
-
-    def update(self) -> bool:
-        """Placeholder for user update. Overwritten later."""
         return True
+
+    def _update(self, force=False) -> bool:
+        """the actual update procedure"""
+        raise NotImplementedError("Subclasses must implement this method")
+
+    def update(self, force=False) -> Self:
+        """Placeholder for user update. Overwritten later."""
+        self._update_internals(force=force)
+        return self
 
     @property
     def is_ud(self) -> bool:
@@ -471,7 +477,7 @@ class Domain:
         :raises: IOError (from pickle) if the file could not be opened or
                  written to.
         """
-        self._update()
+        self._update_internals()
         with open(filename, "wb") as handle:
             pickle.dump(self, handle)
         return self
@@ -499,7 +505,7 @@ class Domain:
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        self._update()
+        self._update_internals()
         if recursive:
             if prefix is None:
                 prefix = Key()
@@ -516,7 +522,7 @@ class Domain:
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        self._update()
+        self._update_internals()
         if recursive:
             if prefix is None:
                 prefix = Key()
@@ -532,7 +538,7 @@ class Domain:
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        self._update()
+        self._update_internals()
         if recursive:
             yield self
         return
@@ -665,7 +671,7 @@ class KeyMap(Domain):
         if self.is_locked:
             raise ValueError("Cannot add entry to a locked domain")
         key = self.key(keylike)
-        self.put(key, Entry(name=key.onlylabel()))
+        self.link(key, Entry(name=key.onlylabel()))
         return self
 
     def extend(self, domain, autorename=True):
@@ -696,10 +702,10 @@ class KeyMap(Domain):
                     kseg = self._tagged_keyseg(name)
             else:
                 raise KeyError(f"Key '{kseg.label}' already exists")
-        self._put(kseg, domain)
+        self._link(kseg, domain)
         return self
 
-    def put(self, keylike, /, domain, no_override=True):
+    def link(self, keylike, /, domain, no_override=True):
         """
         Append a domain object at a key.
         The key is either given or generated from the domains name.
@@ -727,10 +733,10 @@ class KeyMap(Domain):
         if no_override:
             if kseg in self:
                 raise KeyError(f"Key '{kseg}' already exists")
-        self._put(kseg, domain)
+        self._link(kseg, domain)
         return self
 
-    def _put(self, kseg, domain):
+    def _link(self, kseg, domain):
         """
         Places a domain at a keyseg and manage the parent. Flag for update.
         No overwrite checks are performed!
@@ -750,7 +756,7 @@ class KeyMap(Domain):
         assert isinstance(domain, Domain)
         self._content.append((kseg, domain))
 
-    def update(self):
+    def _update(self, force=False) -> bool:
         """
         Internal update routine. Go through content and refill the indexing
         dictionaries while appending.
@@ -760,7 +766,9 @@ class KeyMap(Domain):
 
         # go through domains in content
         for tkey, domain in self._content:
-            domain._update()
+            ret = domain.update(force=force)
+            if not ret:
+                raise RuntimeError("domain update failed")
             if domain.size <= 0:
                 warnings.warn(f"domain {domain} is empty")
                 continue
@@ -815,7 +823,7 @@ class KeyMap(Domain):
         """
         # we COULD have prefix: Key = Key() in the args list, as the empty key
         # as default could be a monad, but it is cleaner like that.
-        self._update()
+        self._update_internals()
         if prefix is None:
             prefix = Key()
         for key, dom in self._key2dom.items():
@@ -832,7 +840,7 @@ class KeyMap(Domain):
         :param prefix: a Key to start from
         :returns: a generator of Key objects
         """
-        self._update()
+        self._update_internals()
         if prefix is None:
             prefix = Key()
         for key, dom in self._key2dom.items():
@@ -848,7 +856,7 @@ class KeyMap(Domain):
         :param recursive: whether to forward recursive call for each domain
         :returns: a generator of Key objects
         """
-        self._update()
+        self._update_internals()
         for _, dom in self._key2dom.items():
             if recursive:
                 yield from dom.values(recursive=True)
@@ -861,7 +869,7 @@ class KeyMap(Domain):
 
         :param keys: keys to find
         :returns: a tuple of (position, Domain)"""
-        self._update()
+        self._update_internals()
         key = Key(*keys)
         current_obj = self
         current_pos = 0
@@ -872,7 +880,9 @@ class KeyMap(Domain):
                         f"Tagged key {kseg.label} not from keymap {current_obj}"
                     )
             if kseg not in current_obj._key2pos:
-                raise KeyError(f"Cannot find key in domain '{current_obj}'")
+                raise KeyError(
+                    f"Cannot find key {kseg} in domain '{current_obj}'"
+                )
             current_pos += current_obj._key2pos[kseg]
             current_obj = current_obj._key2dom[kseg]
 
@@ -923,9 +933,9 @@ class Region(KeyMap):
         self._counter = 0
         for count in range(size):
             self.entry()
-        self._update()
+        self._update_internals()
 
-    def put(self, keylike, /, domain, no_override=True):
+    def link(self, keylike, /, domain, no_override=True):
         """
         Regions are internally managed, so this will raise an Exception.
 
@@ -949,7 +959,7 @@ class Region(KeyMap):
         if autorename:
             warnings.warn("autorename has no effect in Region.extend")
         kseg = self._tagged_keyseg(self._counter)
-        self._put(kseg, domain)
+        self._link(kseg, domain)
         self._counter += 1
 
     def entry(self, keylike=None, /):
@@ -1014,7 +1024,7 @@ class Entry(Region):
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        self._update()
+        self._update_internals()
         if recursive:
             if prefix is None:
                 prefix = Key()
@@ -1031,7 +1041,7 @@ class Entry(Region):
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        self._update()
+        self._update_internals()
         if recursive:
             if prefix is None:
                 prefix = Key()
@@ -1047,7 +1057,7 @@ class Entry(Region):
         :returns: a generator of Key objects
         """
         # we break the recursive call here.
-        self._update()
+        self._update_internals()
         if recursive:
             yield self
         return
@@ -1055,10 +1065,10 @@ class Entry(Region):
 
     # -----------------------------------------------------------------------
 
-    def _update(self):
+    def _update(self, force=False) -> bool:
         # just to be sure, let us reassure the initialization here
         self._size = 1
-        return self
+        return True
 
     def __len__(self):
         return 1
@@ -1072,7 +1082,7 @@ class Entry(Region):
             raise ValueError("Cannot add to a locked domain")
         return self
 
-    def put(self, keylike, /, domain, no_override=True):
+    def link(self, keylike, /, domain, no_override=True):
         raise ValueError("Entries cannot be extended.")
 
     def extend(self, domain, autorename=True):
