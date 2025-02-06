@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 05/02/2025, 19:48
-# Version:     0.0.1455
+# Last Update: 06/02/2025, 17:04
+# Version:     0.0.1483
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -31,6 +31,7 @@ from typing import Self
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
+from phoenix.fgen.instructionvar import InstructionVar, KeyMapInstructionVar
 
 # class _PartialFormatDict(dict):
 #     """allows partial formatting of strings"""
@@ -46,159 +47,18 @@ from phoenix.keymap import Key, KeyMap
 #         return "{" + key + "}"
 
 
-class InstructionVar:
-    """Represents a variable in an instruction"""
-
-    # every variable is derived as a subclass
-    # every instance represents a certain entry in that class
-
-    _name: None | str = None
-    _dtype: None | str = None
-    _count: int = 0
-
-    def __init__(self, *params, offsets=None, history=None):
-        if offsets is None:
-            offsets = []
-        if history is None:
-            history = []
-        self._offs = offsets
-        self._hist = history
-        self._pars = list(params)
-        self.progress()
-
-    def __str__(self):
-        dtype = self._dtype or "?"
-        return f"<{self._name}({dtype}){self.params}>"
-
-    def __repr__(self):
-        return f"<{self._name}{self.params}>"
-
-    @classmethod
-    def new(cls, name=None, dtype=None):
-        """create a new subclass from the name"""
-        return type(name, (cls,), {"_name": name, "_dtype": dtype})
-
-    def __init_subclass__(cls, **kwargs):
-        cls._count += 1
-        name = kwargs.get("name", None)
-        dtype = kwargs.get("dtype")
-        if name is None:
-            name = f"ivar{cls._count}"
-        if dtype is None:
-            dtype = "f64"
-        cls._dtype = dtype
-        cls._name = name
-
-    @property
-    def offsets(self):
-        """access offsets"""
-        return list(self._offs)
-
-    @property
-    def history(self):
-        """access offsets"""
-        return list(self._hist)
-
-    @property
-    def params(self):
-        """access params"""
-        return list(self._pars)
-
-    def copy(self):
-        """return a copy"""
-        return self.__class__(
-            *self.params, offsets=self.offsets, history=self.history
-        )
-
-    def progress(self, *params) -> Self:
-        """progress another param"""
-        raise NotImplementedError("Must be implemented in subclass")
-
-    def resolve(self, num=None) -> Self:
-        """resolve num steps in param"""
-        raise NotImplementedError("Must be implemented in subclass")
-
-    def resolved(self):
-        """return a resolved copy of self"""
-        return self.copy().resolve()
-
-    def apply_as_offset_to(self, other):
-        """combine two variables"""
-        return self.resolved().progress(*other.history, *other.params)
-
-    def __xor__(self, other):
-        return self.apply_as_offset_to(other)
-
-
-class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
-    """
-    KeyMapInstructionVar
-
-    Represents a variable that is based on a keymap.
-
-    The main purpose is that there is a representation of input and output
-    variables in instructions. They can be assigned to the ADAAs and have
-    information on datatype and names.
-
-    Especially for the keymap-version, the variable can be progressed when we
-    move along nested keymaps, accumulating offsets.
-
-    """
-
-    _ckeymap: None | KeyMap = None
-
-    def __init__(self, *params, offsets=None, history=None):
-        self._kmap_ptr = self._ckeymap
-        super().__init__(*params, offsets=offsets, history=history)
-        # will resolve the key sequence params as seen from keymap
-
-    def __init_subclass__(cls, **kwargs):
-        cls._count += 1
-        name = kwargs.get("name", None)
-        dtype = kwargs.get("dtype", None)
-        ckeymap = kwargs.get("keymap", cls._ckeymap)
-        if name is None:
-            name = f"ivar{cls._count}"
-        if dtype is None:
-            dtype = "f64"
-        if ckeymap is None:
-            raise ValueError("No keymap provided")
-        cls._dtype = dtype
-        cls._name = name
-        cls._ckeymap = ckeymap
-
-    # this simply repeats so the linter knows what's going on
-    @classmethod
-    def new(cls, name=None, keymap=None, dtype=None):
-        """create a new subclass from the name"""
-        return type(
-            name, (cls,), {"_name": name, "_dtype": dtype, "_ckeymap": keymap}
-        )
-
-    @property
-    def keymap(self):
-        """access keymap"""
-        return self._kmap_ptr
-
-    def progress(self, *params):
-        """progress params"""
-        for param in params:
-            self._pars.append(param)
-        return self
-
-    def resolve(self, num=None):
-        """resolve num steps in param"""
-        if num is None:
-            num = len(self._pars)
-        for _ in range(num):
-            if self._pars:
-                param = self._pars.pop(0)
-                offset, self._kmap_ptr = self._kmap_ptr.find(param)
-                self._offs.append(offset)
-                self._hist.append(param)
-            else:
-                raise ValueError("No more parameters to resolve")
-        return self
+################################################################################
+#
+#  .oPYo.       .oo  .oPYo.  .oPYo.
+#  8   `8      .P 8  8       8.
+# o8YooP'     .P  8  `Yooo.  `boo
+#  8   `b    oPooo8      `8  .P
+#  8    8   .P    8       8  8
+#  8oooP'  .P     8  `YooP'  `YooP'
+# :......: ..:::::.. :.....: :.....:
+# :::::::: ::::::::: ::::::: :::::::
+# :::::::: ::::::::: ::::::: :::::::
+################################################################################
 
 
 class Instruction:
@@ -302,6 +162,20 @@ class Instruction:
 
     def __eq__(self, other):
         return self.itype == other.itype
+
+
+################################################################################
+#
+# .oPYo.  .oPYo.  o    o  .oPYo.   .oPYo.  o  .oPYo.
+# 8    8  8.      8b   8  8.       8   `8  8  8    8
+# 8       `boo    8`b  8  `boo    o8YooP'  8  8
+# 8   oo  .P      8 `b 8  .P       8   `b  8  8
+# 8    8  8       8  `b8  8        8    8  8  8    8
+# `YooP8  `YooP'  8   `8  `YooP'   8    8  8  `YooP'
+# :....8  :.....: ..:::.. :.....: :..:::.. .. :.....:
+# :::::8  ::::::: ::::::: ::::::: :::::::: :: :::::::
+# :::::.. ::::::: ::::::: ::::::: :::::::: :: :::::::
+################################################################################
 
 
 class GenericInstruction(Instruction, ftype="generic"):
@@ -424,9 +298,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(
-                self.get(key, defaults.get(key, None)) for key in keys
-            )
+            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -441,6 +313,20 @@ class GenericInstruction(Instruction, ftype="generic"):
 
 class ExpressionInstruction(GenericInstruction, ftype="expr"):
     """Represents an Expression"""
+
+
+################################################################################
+#
+# .oPYo.   .oPYo.  .oPYo.  o    o   .oPYo.  .oPYo.
+# 8    8   8   `8  8    8  8    8   8    8  8
+# 8       o8YooP'  8    8  8    8  o8YooP'  `Yooo.
+# 8   oo   8   `b  8    8  8    8   8           `8
+# 8    8   8    8  8    8  8    8   8            8
+# `YooP8   8    8  `YooP'  `YooP'   8       `YooP'
+# :....8  :..:::.. :.....: :.....: :..::::: :.....:
+# :::::8  :::::::: ::::::: ::::::: :::::::: :::::::
+# :::::.. :::::::: ::::::: ::::::: :::::::: :::::::
+################################################################################
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -532,10 +418,7 @@ class InstructionGroup(Instruction, ftype="group"):
         if group_type is None:
             group_type = self.__class__
         return self.__class__(
-            [
-                group_type(group, itype=self._itype)
-                for group in groups.values()
-            ],
+            [group_type(group, itype=self._itype) for group in groups.values()],
             itype=self._itype,
         )
 
@@ -567,7 +450,26 @@ class InstructionGroup(Instruction, ftype="group"):
         return self.__class__(collect, itype=self._itype)
 
 
-class OffsetEnvironment(InstructionGroup, ftype="applyoffset"):
+################################################################################
+#
+# VARIABLE ENVIRONMENT
+# ====================
+
+
+class EnvironmentInstructionGroup(InstructionGroup, ftype="environment"):
+    """Within this environment, variables are provided"""
+
+    # TODO
+    # provides variables
+
+
+################################################################################
+#
+# OFFSET ENVIRONMENT
+# ==================
+
+
+class OffsetInstructionGroup(EnvironmentInstructionGroup, ftype="offset"):
     """Within this environment, variables are offsetted"""
 
     # TODO
@@ -577,25 +479,18 @@ class OffsetEnvironment(InstructionGroup, ftype="applyoffset"):
 
     # requires:
     # - value of offset
-    # - optional offset mapping if names change
+    # - offset mapping if names change
 
 
-class OffsetRepeat(InstructionGroup, ftype="offsetrepeat"):
-    """
-    OffsetRepeat
-
-    Repeat the content for multiple offsets
-    """
-
-    def __init__(self, instructions, itype=None):
-        InstructionGroup.__init__(self, instructions, itype=itype)
-        self._offsets = []
-
-    def append_offset(self, **offest_parameters):
-        """append offset, consider defaults"""
+################################################################################
+#
+# SUBROUTINE GROUP
+# ================
 
 
-class SubroutineGroup(InstructionGroup, ftype="subroutine"):
+class SubroutineInstructionGroup(
+    EnvironmentInstructionGroup, ftype="subroutine"
+):
     """
     SubroutineGroup
 
@@ -605,6 +500,26 @@ class SubroutineGroup(InstructionGroup, ftype="subroutine"):
 
     def __init__(self, instructions, inp_names, out_names, itype=None):
         super().__init__(instructions, itype=itype)
+
+
+################################################################################
+#
+# .oPYo.   .oPYo.  .oPYo.  .oPYo.  o   ooooo  o  .oPYo.
+# 8        8    8  8.      8    8  8   8      8  8    8
+# `Yooo.  o8YooP'  `boo    8       8  o8oo    8  8
+#     `8   8       .P      8       8   8      8  8
+#      8   8       8       8    8  8   8      8  8    8
+# `YooP'   8       `YooP'  `YooP'  8   8      8  `YooP'
+# :.....: :..::::: :.....: :.....: .. :..:::: .. :.....:
+# ::::::: :::::::: ::::::: ::::::: :: ::::::: :: :::::::
+# ::::::: :::::::: ::::::: ::::::: :: ::::::: :: :::::::
+################################################################################
+
+
+################################################################################
+#
+# POLYNOMIAL INSTRUCTION
+# ======================
 
 
 class PolynomialInstruction(ExpressionInstruction, ftype="polynomial"):
@@ -626,11 +541,23 @@ class PolynomialInstruction(ExpressionInstruction, ftype="polynomial"):
         super().__init__(**params, itype=self.ftype)
 
 
+################################################################################
+#
+# AFFINE INSTRUCTION
+# ==================
+
+
 class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
     """y[key_tgt0] = a * x[key_src] + b type instruction"""
 
     def __init__(self, tgt0, src0, alpha, beta):
         super().__init__(tgt0, src0, beta, alpha)
+
+
+################################################################################
+#
+# LINEAR INSTRUCTION
+# ==================
 
 
 class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
@@ -640,7 +567,11 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
         super().__init__(tgt0, src0, 0, alpha)
 
 
-from phoenix.keymap import KeyMap, Key
+################################################################################
+#
+# TESTING
+# =======
+
 
 ltl_km = KeyMap(name="little")
 ltl_km.entry("key1")
@@ -693,7 +624,7 @@ print(var_inp._name)
 print(var_inp("foo1"))
 
 print(
-    """s
+    """
 Strategy:
 
 We introduce the variable data type to remember the variable name and the

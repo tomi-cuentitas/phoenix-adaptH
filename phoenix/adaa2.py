@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 31/01/2025, 12:20
-# Version:     0.0.1976
+# Last Update: 06/02/2025, 13:43
+# Version:     0.0.1977
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -353,9 +353,7 @@ class GenericADAA:
         return self.size > 0
 
     def __eq__(self, other):
-        return self.__class__.allclose(
-            self, other
-        )  # , rtol=1e-08, atol=1e-12)
+        return self.__class__.allclose(self, other)  # , rtol=1e-08, atol=1e-12)
 
     def __del__(self):
         self.free_memory()
@@ -420,12 +418,8 @@ class ComplexArrayADAA(
         else:
             sbr, sbi = (complex(sc_b).real, complex(sc_b).imag)
 
-        aux_r = cls._BACKEND.coeff_new_array(
-            size, dtype=cls._DATATYPES["real"]
-        )
-        aux_i = cls._BACKEND.coeff_new_array(
-            size, dtype=cls._DATATYPES["imag"]
-        )
+        aux_r = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["real"])
+        aux_i = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["imag"])
 
         # sbr * ocr - sbi * oci -> aux_r
         cls._BACKEND.coeff_linop(
