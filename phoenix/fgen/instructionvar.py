@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 06/02/2025, 14:40
-# Version:     0.0.3
+# Last Update: 07/02/2025, 15:49
+# Version:     0.0.49
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -40,26 +40,34 @@ class InstructionVar:
 
     def __str__(self):
         dtype = self._dtype or "?"
-        return f"<{self._name}({dtype}){self.params}>"
+        offset = (
+            f"({'|'.join(map(str, self.offsets))})" if self.offsets else "O"
+        )
+        return f"<{self._name}({dtype})@{offset}{self.params}>"
 
     def __repr__(self):
-        return f"<{self._name}{self.params}>"
+        return f"<{self._name}>"
 
     @classmethod
-    def new(cls, name=None, dtype=None):
+    def new(cls, name, dtype=None):
         """create a new subclass from the name"""
         return type(name, (cls,), {"_name": name, "_dtype": dtype})
 
-    def __init_subclass__(cls, **kwargs):
+    def __init_subclass__(cls, name=None, dtype=None, **kwargs):
         cls._count += 1
-        name = kwargs.get("name", None)
-        dtype = kwargs.get("dtype")
-        if name is None:
-            name = f"ivar{cls._count}"
-        if dtype is None:
-            dtype = "f64"
-        cls._dtype = dtype
-        cls._name = name
+        if name is not None:
+            cls._name = name
+        if dtype is not None:
+            cls._dtype = dtype
+        if cls._name is None:
+            cls._name = f"ivar{cls._count}"
+        if cls._dtype is None:
+            cls._dtype = "f64"
+
+    @property
+    def name(self):
+        """access name attribute"""
+        return self._name
 
     @property
     def offsets(self):
@@ -83,8 +91,10 @@ class InstructionVar:
         )
 
     def progress(self, *params) -> Self:
-        """progress another param"""
-        raise NotImplementedError("Must be implemented in subclass")
+        """progress params"""
+        for param in params:
+            self._pars.append(param)
+        return self
 
     def resolve(self, num=None) -> Self:
         """resolve num steps in param"""
@@ -117,46 +127,38 @@ class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
 
     """
 
-    _ckeymap: None | KeyMap = None
+    _keymap: None | KeyMap = None
 
     def __init__(self, *params, offsets=None, history=None):
-        self._kmap_ptr = self._ckeymap
+        self._kmap_ptr = self._keymap
         super().__init__(*params, offsets=offsets, history=history)
         # will resolve the key sequence params as seen from keymap
 
-    def __init_subclass__(cls, **kwargs):
-        cls._count += 1
-        name = kwargs.get("name", None)
-        dtype = kwargs.get("dtype", None)
-        ckeymap = kwargs.get("keymap", cls._ckeymap)
-        if name is None:
-            name = f"ivar{cls._count}"
-        if dtype is None:
-            dtype = "f64"
-        if ckeymap is None:
+    def __init_subclass__(cls, keymap=None, **kwargs):
+        super().__init_subclass__(**kwargs)
+        if keymap is not None:
+            cls._keymap = keymap
+        if cls._keymap is None:
             raise ValueError("No keymap provided")
-        cls._dtype = dtype
-        cls._name = name
-        cls._ckeymap = ckeymap
 
     # this simply repeats so the linter knows what's going on
     @classmethod
-    def new(cls, name=None, keymap=None, dtype=None):
+    def new(cls, name, keymap=None, dtype=None):
         """create a new subclass from the name"""
         return type(
-            name, (cls,), {"_name": name, "_dtype": dtype, "_ckeymap": keymap}
+            name,
+            (cls,),
+            {
+                "_name": name,
+                "_dtype": dtype,
+                "_keymap": keymap,
+            },
         )
 
     @property
     def keymap(self):
         """access keymap"""
         return self._kmap_ptr
-
-    def progress(self, *params):
-        """progress params"""
-        for param in params:
-            self._pars.append(param)
-        return self
 
     def resolve(self, num=None):
         """resolve num steps in param"""

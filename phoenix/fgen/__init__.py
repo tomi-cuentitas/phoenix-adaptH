@@ -14,8 +14,8 @@
 # del function
 # del library
 
-from . import instruction3
+# from . import instruction3
 
-instruction = instruction3
+# instruction = instruction3
 
-print(dir())
+# print(dir())

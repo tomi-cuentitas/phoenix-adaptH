@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 06/02/2025, 17:04
-# Version:     0.0.1483
+# Last Update: 07/02/2025, 16:24
+# Version:     0.0.1521
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -47,7 +47,7 @@ from phoenix.fgen.instructionvar import InstructionVar, KeyMapInstructionVar
 #         return "{" + key + "}"
 
 
-################################################################################
+###############################################################################
 #
 #  .oPYo.       .oo  .oPYo.  .oPYo.
 #  8   `8      .P 8  8       8.
@@ -58,7 +58,7 @@ from phoenix.fgen.instructionvar import InstructionVar, KeyMapInstructionVar
 # :......: ..:::::.. :.....: :.....:
 # :::::::: ::::::::: ::::::: :::::::
 # :::::::: ::::::::: ::::::: :::::::
-################################################################################
+###############################################################################
 
 
 class Instruction:
@@ -164,7 +164,7 @@ class Instruction:
         return self.itype == other.itype
 
 
-################################################################################
+###############################################################################
 #
 # .oPYo.  .oPYo.  o    o  .oPYo.   .oPYo.  o  .oPYo.
 # 8    8  8.      8b   8  8.       8   `8  8  8    8
@@ -175,7 +175,7 @@ class Instruction:
 # :....8  :.....: ..:::.. :.....: :..:::.. .. :.....:
 # :::::8  ::::::: ::::::: ::::::: :::::::: :: :::::::
 # :::::.. ::::::: ::::::: ::::::: :::::::: :: :::::::
-################################################################################
+###############################################################################
 
 
 class GenericInstruction(Instruction, ftype="generic"):
@@ -298,7 +298,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -315,7 +317,7 @@ class ExpressionInstruction(GenericInstruction, ftype="expr"):
     """Represents an Expression"""
 
 
-################################################################################
+###############################################################################
 #
 # .oPYo.   .oPYo.  .oPYo.  o    o   .oPYo.  .oPYo.
 # 8    8   8   `8  8    8  8    8   8    8  8
@@ -326,11 +328,31 @@ class ExpressionInstruction(GenericInstruction, ftype="expr"):
 # :....8  :..:::.. :.....: :.....: :..::::: :.....:
 # :::::8  :::::::: ::::::: ::::::: :::::::: :::::::
 # :::::.. :::::::: ::::::: ::::::: :::::::: :::::::
-################################################################################
+###############################################################################
 
 
 class InstructionGroup(Instruction, ftype="group"):
     """Base class for instruction groups"""
+
+    # TODO
+    # I consider an allow_parallel keyword, that enables or disables the
+    # parallel execution of content.
+
+    # Is it required?
+    # Operations that enforce an order should maybe be executed in separate
+    # subroutines.
+
+    # Is it transferable?
+    # Will an operation, that should be parallelized on a gpu will be properly
+    # parallelized on a cpu, where blocks might be better?
+
+    # Is it useful?
+    # Most definitely, as we have some say in the later code design.
+
+    # How would I do it?
+    # Right now I think of parallelization levels, that can be chosen and even
+    # varied in the implementation step. A single operation parallelization
+    # could have a higher level, that we only enable on GPUs.
 
     def __init__(self, instructions, itype=None):
         self._instructions = list(instructions)
@@ -418,7 +440,10 @@ class InstructionGroup(Instruction, ftype="group"):
         if group_type is None:
             group_type = self.__class__
         return self.__class__(
-            [group_type(group, itype=self._itype) for group in groups.values()],
+            [
+                group_type(group, itype=self._itype)
+                for group in groups.values()
+            ],
             itype=self._itype,
         )
 
@@ -450,10 +475,10 @@ class InstructionGroup(Instruction, ftype="group"):
         return self.__class__(collect, itype=self._itype)
 
 
-################################################################################
+###############################################################################
 #
-# VARIABLE ENVIRONMENT
-# ====================
+# ENVIRONMENT BASE CLASS
+# ======================
 
 
 class EnvironmentInstructionGroup(InstructionGroup, ftype="environment"):
@@ -463,7 +488,7 @@ class EnvironmentInstructionGroup(InstructionGroup, ftype="environment"):
     # provides variables
 
 
-################################################################################
+###############################################################################
 #
 # OFFSET ENVIRONMENT
 # ==================
@@ -473,6 +498,7 @@ class OffsetInstructionGroup(EnvironmentInstructionGroup, ftype="offset"):
     """Within this environment, variables are offsetted"""
 
     # TODO
+    # Unpack (and therefore indirectly flatten) needs to consider offsets!
 
     # Contains
     # - Instructions to be offsetted
@@ -482,27 +508,61 @@ class OffsetInstructionGroup(EnvironmentInstructionGroup, ftype="offset"):
     # - offset mapping if names change
 
 
-################################################################################
+###############################################################################
+#
+# PARALLEL ENVIRONMENT GROUPS
+# ===========================
+
+
+class MapInstructionGroup(InstructionGroup, ftype="map"):
+    """
+    Within this environment, Environment groups (e.g. OffsetGroups) are applied
+    to an instructiongroup that is then executed from within every environment.
+    """
+
+    # TODO
+    # Decide what happens to instructions in environment when map is applied
+    # consider pre-map and post-map operations
+
+
+###############################################################################
+#
+# VARIATION ENVIRONMENT
+# =====================
+
+
+# class VariationGroup(InstructionGroup, ftype="variation"):
+#     """Within this environment, variables are offsetted"""
+
+#     # TODO
+
+#     # Contains
+#     # - Multiple Instruction groups accessible via keywords
+#     # - a default choice, e.g. the first submitted group
+
+#     # Functionality
+#     # User can select another keyword to alter the chosen instruction group
+
+
+###############################################################################
 #
 # SUBROUTINE GROUP
 # ================
 
 
-class SubroutineInstructionGroup(
-    EnvironmentInstructionGroup, ftype="subroutine"
-):
-    """
-    SubroutineGroup
+# class SubroutineInstructionGroup(InstructionGroup, ftype="subroutine"):
+#     """
+#     SubroutineGroup
 
-    suggests that upon implementation these instructions are grouped in a
-    subroutine
-    """
+#     suggests that upon implementation these instructions are grouped in a
+#     subroutine
+#     """
 
-    def __init__(self, instructions, inp_names, out_names, itype=None):
-        super().__init__(instructions, itype=itype)
+#     def __init__(self, instructions, inp_names, out_names, itype=None):
+#         super().__init__(instructions, itype=itype)
 
 
-################################################################################
+###############################################################################
 #
 # .oPYo.   .oPYo.  .oPYo.  .oPYo.  o   ooooo  o  .oPYo.
 # 8        8    8  8.      8    8  8   8      8  8    8
@@ -513,10 +573,10 @@ class SubroutineInstructionGroup(
 # :.....: :..::::: :.....: :.....: .. :..:::: .. :.....:
 # ::::::: :::::::: ::::::: ::::::: :: ::::::: :: :::::::
 # ::::::: :::::::: ::::::: ::::::: :: ::::::: :: :::::::
-################################################################################
+###############################################################################
 
 
-################################################################################
+###############################################################################
 #
 # POLYNOMIAL INSTRUCTION
 # ======================
@@ -541,7 +601,7 @@ class PolynomialInstruction(ExpressionInstruction, ftype="polynomial"):
         super().__init__(**params, itype=self.ftype)
 
 
-################################################################################
+###############################################################################
 #
 # AFFINE INSTRUCTION
 # ==================
@@ -554,7 +614,7 @@ class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
         super().__init__(tgt0, src0, beta, alpha)
 
 
-################################################################################
+###############################################################################
 #
 # LINEAR INSTRUCTION
 # ==================
@@ -567,103 +627,108 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
         super().__init__(tgt0, src0, 0, alpha)
 
 
-################################################################################
+###############################################################################
 #
 # TESTING
 # =======
 
+print("__name__", __name__)
 
-ltl_km = KeyMap(name="little")
-ltl_km.entry("key1")
-ltl_km.entry("key2")
-ltl_km.entry("key3")
+if __name__ == "__main__":
+    ltl_km = KeyMap(name="little")
+    ltl_km.entry("key1")
+    ltl_km.entry("key2")
+    ltl_km.entry("key3")
 
-big_km = KeyMap(name="big")
-big_km.link("foo1", ltl_km)
-big_km.link("foo2", ltl_km)
+    big_km = KeyMap(name="big")
+    big_km.link("foo1", ltl_km)
+    big_km.link("foo2", ltl_km)
 
-big_km.update()
-print(list(big_km.keys()))
+    big_km.update()
+    print(list(big_km.keys()))
 
-var_inp = KeyMapInstructionVar.new(name="input1", keymap=big_km)
-var_out = KeyMapInstructionVar.new(name="output1", keymap=big_km)
+    var_inp = KeyMapInstructionVar.new(name="input1", keymap=big_km)
+    var_out = KeyMapInstructionVar.new(name="output1", keymap=big_km)
 
-a = SubroutineGroup(
-    sum(
-        (
-            [
-                LinearOperationInstruction(
-                    var_out(foo, "key1"), var_inp(foo, "key3"), 1.0
-                ),
-                LinearOperationInstruction(
-                    var_out(foo, "key2"), var_inp(foo, "key2"), 1.0
-                ),
-                LinearOperationInstruction(
-                    var_out(foo, "key3"), var_inp(foo, "key1"), 1.0
-                ),
-            ]
-            for foo in ["foo1", "foo2"]
+    print(var_inp._keymap)
+
+    a = SubroutineInstructionGroup(
+        sum(
+            (
+                [
+                    LinearOperationInstruction(
+                        var_out(foo, "key1"), var_inp(foo, "key3"), 1.0
+                    ),
+                    LinearOperationInstruction(
+                        var_out(foo, "key2"), var_inp(foo, "key2"), 1.0
+                    ),
+                    LinearOperationInstruction(
+                        var_out(foo, "key3"), var_inp(foo, "key1"), 1.0
+                    ),
+                ]
+                for foo in ["foo1", "foo2"]
+            ),
+            start=[],
         ),
-        start=[],
-    ),
-    None,
-    None,
-)
-for instruction in a.instructions:
-    print(instruction._obj_id)
-    print(instruction.to_dict())
-print(a._obj_id)
+        None,
+        None,
+    )
+    for instruction in a.instructions:
+        print(instruction._obj_id)
+        print(instruction.to_dict())
+    print(a._obj_id)
 
-print(SubroutineGroup._obj_id_count)
-print(PolynomialInstruction._obj_id_count)
-print(LinearOperationInstruction._obj_id_count)
-print(AffineOperationInstruction._obj_id_count)
+    print(SubroutineInstructionGroup._obj_id_count)
+    print(PolynomialInstruction._obj_id_count)
+    print(LinearOperationInstruction._obj_id_count)
+    print(AffineOperationInstruction._obj_id_count)
 
-print(var_inp._name)
+    print(var_inp._name)
 
-print(var_inp("foo1"))
+    print(var_inp("foo1", "key2"))
+    print(var_inp("foo1", "key2").resolve())
 
-print(
+    print(
+        """
+    Strategy:
+
+    We introduce the variable data type to remember the variable name and the
+    proper way to access it. At the instruction level, this access is not specific
+    to a backend yet.
+
+    A variable is represented by its own subclass of the proper parent class.
+    Loops over offset variations can be realized by resolving the accumulated param
+    values that refer to KeyMap Keys in case of a KeyMapInstructionVar.
+    They can be translated into an offset. 
+
+    Upon application, this offset can be included into a loop variable, that can be
+    used symbolically.
+
+    This loop variable can be hard coded in the instruction group. For example, the
+    GPU implementation might not need it, and at instruction level I don't want the
+    structure to be too specific.
+
+    My dream-procedure:
+    We introduce a offset-repeat instruction, where a single instructiongroup is
+    repeated for multiple offsets. This instruction group can take offset
+    configurations. Right now I am not sure if these offset configurations should
+    be a list of offsets passed to a special group, or just repetitions of a
+    special apply-offset command and some code magic. Or maybe a special group and
+    a special operation that simply says "repeat".
+
+    As of now I think, that an OffsetApplyInstruction in a RepeatGroup is the right
+    way to go. Upon evaluation, the Instruction group to be offsetted will be 
+    recognized by ID once it is repeated a couple times. In this case, OffsetApply
+    should group automatically. At least if the Group is purely made from
+    OffsetApplyInstructions.
+
+    This might be elegant to implement as an environment, and the repeat group
+    would repeat the environment for the instructiongroup to be repeated.
+
+    A potential reason to introduce the RepeatGroup would be external affirmation,
+    that the computation can be done in parallel.
+
+    In this case it would be a ParallelGroup that expects subgroups of type
+    environment.
     """
-Strategy:
-
-We introduce the variable data type to remember the variable name and the
-proper way to access it. At the instruction level, this access is not specific
-to a backend yet.
-
-A variable is represented by its own subclass of the proper parent class.
-Loops over offset variations can be realized by resolving the accumulated param
-values that refer to KeyMap Keys in case of a KeyMapInstructionVar.
-They can be translated into an offset. 
-
-Upon application, this offset can be included into a loop variable, that can be
-used symbolically.
-
-This loop variable can be hard coded in the instruction group. For example, the
-GPU implementation might not need it, and at instruction level I don't want the
-structure to be too specific.
-
-My dream-procedure:
-We introduce a offset-repeat instruction, where a single instructiongroup is
-repeated for multiple offsets. This instruction group can take offset
-configurations. Right now I am not sure if these offset configurations should
-be a list of offsets passed to a special group, or just repetitions of a
-special apply-offset command and some code magic. Or maybe a special group and
-a special operation that simply says "repeat".
-
-As of now I think, that an OffsetApplyInstruction in a RepeatGroup is the right
-way to go. Upon evaluation, the Instruction group to be offsetted will be 
-recognized by ID once it is repeated a couple times. In this case, OffsetApply
-should group automatically. At least if the Group is purely made from
-OffsetApplyInstructions.
-
-This might be elegant to implement as an environment, and the repeat group
-would repeat the environment for the instructiongroup to be repeated.
-
-A potential reason to introduce the RepeatGroup would be external affirmation,
-that the computation can be done in parallel.
-
-In this case it would be a ParallelGroup that expects subgroups of type
-environment.
-"""
-)
+    )

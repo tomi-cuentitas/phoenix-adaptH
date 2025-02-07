@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 05/02/2025, 18:53
-# Version:     0.0.3
+# Last Update: 07/02/2025, 10:46
+# Version:     0.0.6
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 
 
-class LRVariable:
+class LibRoutineVariable:
     """Any kind of variable used in the library"""
 
     _VAR_IDENTIFIER = "G"
@@ -27,39 +27,44 @@ class LRVariable:
     @property
     def dtype(self):
         """access dtype, include preprocessing"""
-        if self._dtype is None:
-            return "scl"
         return self._dtype
+
+    @property
+    def size(self):
+        """access size, include preprocessing"""
+        return self._size
 
     @property
     def name(self):
         """access name, include preprocessing"""
         return self.descriptive_name()
 
-    def descriptive_name(self):
+    def descriptive_name(self, short=False):
         """generate a descriptive name from the content"""
+        if short:
+            return self._name
         return f"{self._VAR_IDENTIFIER}{self.dtype}_{self._name}"
 
 
-class LRLocalVar(LRVariable):
+class LibRoutineLocalVar(LibRoutineVariable):
     """A variable that is local to a certain block"""
 
     _VAR_IDENTIFIER = "L"
 
 
-class LRInputVar(LRVariable):
+class LibRoutineInputVar(LibRoutineVariable):
     """Input Variable"""
 
     _VAR_IDENTIFIER = "I"
 
 
-class LROutputVar(LRVariable):
+class LibRoutineOutputVar(LibRoutineVariable):
     """Output Variable"""
 
     _VAR_IDENTIFIER = "O"
 
 
-class LRConstantVar(LRVariable):
+class LibRoutineConstantVar(LibRoutineVariable):
     """A constant that can appear somewhere in the libroutine"""
 
     _VAR_IDENTIFIER = "C"
