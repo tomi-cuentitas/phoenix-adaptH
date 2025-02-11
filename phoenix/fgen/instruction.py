@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/02/2025, 16:24
-# Version:     0.0.1521
+# Last Update: 11/02/2025, 15:45
+# Version:     0.0.1562
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -27,7 +27,7 @@ denominator of instruction types within the group, i.e. how it is to be applied
 to data.
 """
 
-from typing import Self
+from typing import Any
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
@@ -505,7 +505,27 @@ class OffsetInstructionGroup(EnvironmentInstructionGroup, ftype="offset"):
 
     # requires:
     # - value of offset
-    # - offset mapping if names change
+    # - variable mapping if names change
+
+
+###############################################################################
+#
+# SUBROUTINE GROUP
+# ================
+
+
+class SubroutineInstructionGroup(
+    EnvironmentInstructionGroup, ftype="subroutine"
+):
+    """
+    SubroutineGroup
+
+    suggests that upon implementation these instructions are grouped in a
+    subroutine
+    """
+
+    def __init__(self, instructions, inp_names, out_names, itype=None):
+        super().__init__(instructions, itype=itype)
 
 
 ###############################################################################
@@ -546,24 +566,6 @@ class MapInstructionGroup(InstructionGroup, ftype="map"):
 
 ###############################################################################
 #
-# SUBROUTINE GROUP
-# ================
-
-
-# class SubroutineInstructionGroup(InstructionGroup, ftype="subroutine"):
-#     """
-#     SubroutineGroup
-
-#     suggests that upon implementation these instructions are grouped in a
-#     subroutine
-#     """
-
-#     def __init__(self, instructions, inp_names, out_names, itype=None):
-#         super().__init__(instructions, itype=itype)
-
-
-###############################################################################
-#
 # .oPYo.   .oPYo.  .oPYo.  .oPYo.  o   ooooo  o  .oPYo.
 # 8        8    8  8.      8    8  8   8      8  8    8
 # `Yooo.  o8YooP'  `boo    8       8  o8oo    8  8
@@ -588,17 +590,21 @@ class PolynomialInstruction(ExpressionInstruction, ftype="polynomial"):
     y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
     """
 
-    def __init__(self, trg0, src0, *coeffs):
-        params = {}
+    def __init__(self, tgt0: InstructionVar, src0: InstructionVar, *coeffs):
         degree = len(coeffs) - 1
-        assert isinstance(trg0, InstructionVar)
+        assert isinstance(tgt0, InstructionVar)
         assert isinstance(src0, InstructionVar)
-        params["degree"] = degree
-        params["trg0"] = trg0
-        params["src0"] = src0
+        print("Wollollooooo", src0, tgt0)
+        dcoeffs: dict[str, Any] = {}
         for exp, coeff in enumerate(coeffs):
-            params[f"coeff_x{exp}"] = coeff
-        super().__init__(**params, itype=self.ftype)
+            dcoeffs[f"coeff_x{exp}"] = coeff
+        super().__init__(
+            tgt0=tgt0,
+            src0=src0,
+            degree=degree,
+            **dcoeffs,
+            itype=self.ftype,
+        )
 
 
 ###############################################################################
@@ -611,6 +617,8 @@ class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
     """y[key_tgt0] = a * x[key_src] + b type instruction"""
 
     def __init__(self, tgt0, src0, alpha, beta):
+        assert isinstance(tgt0, InstructionVar)
+        assert isinstance(src0, InstructionVar)
         super().__init__(tgt0, src0, beta, alpha)
 
 
@@ -624,6 +632,8 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
     """y[key_tgt0] = a * x[key_src] type instruction"""
 
     def __init__(self, tgt0, src0, alpha):
+        assert isinstance(tgt0, InstructionVar)
+        assert isinstance(src0, InstructionVar)
         super().__init__(tgt0, src0, 0, alpha)
 
 
@@ -631,8 +641,6 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
 #
 # TESTING
 # =======
-
-print("__name__", __name__)
 
 if __name__ == "__main__":
     ltl_km = KeyMap(name="little")
@@ -690,45 +698,61 @@ if __name__ == "__main__":
 
     print(
         """
-    Strategy:
+    Strategy
+    ========
+
+    Comment 25/02/10: partly outdated.
 
     We introduce the variable data type to remember the variable name and the
-    proper way to access it. At the instruction level, this access is not specific
-    to a backend yet.
+    proper way to access it. At the instruction level, this access is not
+    specific to a backend yet.
 
     A variable is represented by its own subclass of the proper parent class.
-    Loops over offset variations can be realized by resolving the accumulated param
-    values that refer to KeyMap Keys in case of a KeyMapInstructionVar.
+    Loops over offset variations can be realized by resolving the accumulated
+    param values that refer to KeyMap Keys in case of a KeyMapInstructionVar.
     They can be translated into an offset. 
 
-    Upon application, this offset can be included into a loop variable, that can be
-    used symbolically.
+    Upon application, this offset can be included into a loop variable, that
+    can be used symbolically.
 
-    This loop variable can be hard coded in the instruction group. For example, the
-    GPU implementation might not need it, and at instruction level I don't want the
-    structure to be too specific.
+    This loop variable can be hard coded in the instruction group. For example,
+    the GPU implementation might not need it, and at instruction level I don't
+    want the structure to be too specific.
 
     My dream-procedure:
-    We introduce a offset-repeat instruction, where a single instructiongroup is
-    repeated for multiple offsets. This instruction group can take offset
-    configurations. Right now I am not sure if these offset configurations should
-    be a list of offsets passed to a special group, or just repetitions of a
-    special apply-offset command and some code magic. Or maybe a special group and
-    a special operation that simply says "repeat".
+    We introduce a offset-repeat instruction, where a single instructiongroup
+    is repeated for multiple offsets. This instruction group can take offset
+    configurations. Right now I am not sure if these offset configurations
+    should be a list of offsets passed to a special group, or just repetitions
+    of a special apply-offset command and some code magic. Or maybe a special
+    group and a special operation that simply says "repeat".
 
-    As of now I think, that an OffsetApplyInstruction in a RepeatGroup is the right
-    way to go. Upon evaluation, the Instruction group to be offsetted will be 
-    recognized by ID once it is repeated a couple times. In this case, OffsetApply
-    should group automatically. At least if the Group is purely made from
-    OffsetApplyInstructions.
+    As of now I think, that an OffsetApplyInstruction in a RepeatGroup is the
+    right way to go. Upon evaluation, the Instruction group to be offsetted
+    will be recognized by ID once it is repeated a couple times. In this case,
+    OffsetApply should group automatically. At least if the Group is purely
+    made from OffsetApplyInstructions.
 
     This might be elegant to implement as an environment, and the repeat group
     would repeat the environment for the instructiongroup to be repeated.
 
-    A potential reason to introduce the RepeatGroup would be external affirmation,
-    that the computation can be done in parallel.
+    A potential reason to introduce the RepeatGroup would be external
+    affirmation, that the computation can be done in parallel.
 
     In this case it would be a ParallelGroup that expects subgroups of type
     environment.
+
+
+    Update 25/02/10
+    ---------------
+
+    Only the flattening of OffsetGroups and -Environments has to consider the
+    entry offset merge. If not unpacked, the libroutine decides how it will be
+    implemented in detail.
+
+    To implement a proper copy, __deepcopy__ should be implemented, that takes
+    a memo dict as extra argument to keep track of all entries that have been
+    copied, with their id as a key. Doing that, references to a single object
+    will be represented by new references to a single new object via lookup.
     """
     )

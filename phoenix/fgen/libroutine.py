@@ -5,115 +5,16 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/02/2025
-# Last Update: 04/02/2025, 15:03
-# Version:     0.0.95
+# Last Update: 11/02/2025, 20:17
+# Version:     0.0.263
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-__doc__ = """
-LibRoutine module description
 
-"""
-
-from phoenix.fgen.lrvariable import (
-    LRVariable,
-    LRLocalVar,
-    LRConstantVar,
-    LRInputVar,
-    LROutputVar,
-)
-
-import warnings
-
-
-class CodeContainer:
-    """
-    A Codecontainer is a fundamental building block in the code that is
-    ultimately generated.
-
-    """
-
-    def __init__(self, instruction):
-        self._instruction = instruction
-        self._container = []
-        self._dependencies = {}  # (identifier, implementation): libroutine
-        #                          (key to be replaced by a hash)
-        self._parent = None
-        self._variables = {}
-
-    def _get_code_container_head_lines(self, indent=0, **_kwargs):
-        return
-        yield
-
-    def _get_code_container_foot_lines(self, indent=0, **_kwargs):
-        return
-        yield
-
-    def _get_code_container_cont_lines(self, indent=0, **kwargs):
-        for content in self._container:
-            yield from content.get_codelines(indent + 1, **kwargs)
-
-    def get_codelines(self, indent=0, **kwargs):
-        """get the codelines from the container"""
-        yield from self._get_code_container_head_lines(indent, **kwargs)
-        yield from self._get_code_container_cont_lines(indent, **kwargs)
-        yield from self._get_code_container_foot_lines(indent, **kwargs)
-
-    @property
-    def parent(self):
-        """access the parent"""
-        return self._parent
-
-    @parent.setter
-    def parent(self, parent):
-        """safe-set parent"""
-        if self._parent is None:
-            if isinstance(parent, CodeContainer):
-                self._parent = parent
-
-    def requires_constant(self, const_name, constant, dtype, size=None):
-        """remember a constant that is required for this block"""
-        if const_name in self._variables:
-            raise KeyError(f"Constant array '{const_name}' already exists")
-        if size is None:
-            self._variables[const_name] = LRConstantVar(constant, dtype, None)
-        elif size > 0:
-            self._variables[const_name] = LRConstantVar(constant, dtype, size)
-        elif size == 0:
-            warnings.warn(f"Ignoring zero-sized constant array '{const_name}'")
-        else:
-            warnings.warn(
-                f"Ignoring negative-sized constant array '{const_name}'"
-            )
-
-    def requires_local(self, local_name, dtype, size=None):
-        """remember a constant that is required for this block"""
-        if local_name in self._variables:
-            raise KeyError(f"Constant array '{local_name}' already exists")
-        if size is None:
-            self._variables[local_name] = LRLocalVar(dtype, size)
-        elif size > 0:
-            self._variables[local_name] = LRLocalVar(dtype, size)
-        elif size == 0:
-            warnings.warn(f"Ignoring zero-sized constant array '{local_name}'")
-        else:
-            warnings.warn(
-                f"Ignoring negative-sized constant array '{local_name}'"
-            )
-
-    def get_variables(self, only=None):
-        """get all variables or filtered by type (inp, outp, const, local)"""
-        if only is None:
-            only = LRVariable
-        for name, var in self._variables.items():
-            if isinstance(var, only):
-                yield name, var
-
-
-class LibRoutine(CodeContainer):
+class LibRoutine:
     """
     LibRoutine collects and manages all information for a routine in a library.
 
@@ -125,31 +26,21 @@ class LibRoutine(CodeContainer):
 
     def __init__(
         self,
-        identifier,
+        identifier: str,
         instruction_group,
         adaa_outp,
         adaa_inps,
         library=None,
-        dependencies=None,
-    ):
-        super().__init__(instruction_group)
+    ) -> None:
         self._identifier = identifier
         self._library = library  # the library the libroutine is attached to
         self._instruction_group = instruction_group  # the instruction group
         self._adaa_inps = adaa_inps  # input ADAAs of the routine
         self._adaa_outs = adaa_outp  # output ADAAs of the routine
-
         self._inp_names = [
             f"src{num}" for num, _ in enumerate(self._adaa_inps)
         ]
         self._outp_name = "outp"
-
-        if dependencies is not None:
-            if isinstance(dependencies, dict):
-                for dep in dependencies.values():
-                    self.add_dependency(dep)
-            else:
-                raise ValueError("dependencies must be a dict")
 
     @property
     def library(self):
@@ -176,20 +67,6 @@ class LibRoutine(CodeContainer):
     def identifier(self):
         """read-only access to attribute identifier"""
         return str(self._identifier)
-
-    def add_dependency(self, libroutine):
-        """add a dependency to a certain libroutine"""
-        ident_impl = (libroutine.identifier, libroutine.implementation)
-        if ident_impl in self._dependencies:
-            return
-        self._dependencies[ident_impl] = libroutine
-
-    @property
-    def dependencies(self):
-        """get all dependencies"""
-        for ident_impl, libroutine in self._dependencies.items():
-            yield ident_impl, libroutine
-            yield from libroutine.dependencies()
 
     def get_meta(self):
         """return meta information on the library"""
