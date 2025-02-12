@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 12/02/2025, 16:38
-# Version:     0.0.1581
+# Last Update: 12/02/2025, 17:23
+# Version:     0.0.1624
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -775,3 +775,59 @@ if __name__ == "__main__":
     will be represented by new references to a single new object via lookup.
     """
     )
+
+
+#
+#
+#
+#
+#
+#
+#
+
+import gc
+import weakref
+
+import psutil
+import os
+
+
+def memory_usage():
+    process = psutil.Process(os.getpid())
+    return process.memory_info().rss / 1024**2  # Convert to MB
+
+
+class LeakyClass:
+    def __init__(self):
+        self.ref = None  # Will hold circular reference
+        self.something_big = ["some string"] * 6000000
+
+    def __del__(self):
+        # print(f"__del__ called for {self}")
+        pass
+
+
+for _ in range(10000):
+    print(f"Memory usage: {memory_usage():.2f} MB")
+
+    # Create objects with cyclic references
+    a = LeakyClass()
+    b = LeakyClass()
+
+    # a.ref = weakref.ref(b)  # Circular reference
+    # b.ref = weakref.ref(a)  # Circular reference
+
+    a.ref = b  # Circular reference
+    b.ref = a  # Circular reference
+
+print("before del")
+del a  # Delete objects
+print("del 1")
+del b
+print("del 2")
+
+print("call gc")
+gc.collect()  # Force garbage collection
+print("called")
+
+print("Garbage objects:", gc.garbage)  # Objects remain in gc.garbage
