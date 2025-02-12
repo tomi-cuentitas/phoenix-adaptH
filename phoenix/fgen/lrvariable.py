@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 11/02/2025, 20:09
-# Version:     0.0.18
+# Last Update: 12/02/2025, 13:26
+# Version:     0.0.21
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,7 +17,7 @@
 class LibRoutineVariable:
     """Any kind of variable used in the library"""
 
-    _VAR_IDENTIFIER = "G"
+    _VAR_IDENTIFIER = "GENERIC"
 
     def __init__(self, name, dtype, size=None):
         self._name = name
@@ -45,29 +45,34 @@ class LibRoutineVariable:
             return self._name
         return f"{self._VAR_IDENTIFIER}{self.dtype}_{self._name}"
 
+    @property
+    def vtype(self):
+        """access variable type"""
+        return self._VAR_IDENTIFIER
+
 
 class LibRoutineLocalVariable(LibRoutineVariable):
     """Any kind of variable used in the library"""
 
-    _VAR_IDENTIFIER = "L"
+    _VAR_IDENTIFIER = "LOCAL"
 
 
 class LibRoutineInputVariable(LibRoutineVariable):
     """Input Variable. Potentially includes Read-Only behaviour"""
 
-    _VAR_IDENTIFIER = "I"
+    _VAR_IDENTIFIER = "INPUT"
 
 
 class LibRoutineOutputVariable(LibRoutineVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
-    _VAR_IDENTIFIER = "O"
+    _VAR_IDENTIFIER = "OUTPUT"
 
 
 class LibRoutineConstant(LibRoutineVariable):
     """A constant that can appear somewhere in the libroutine"""
 
-    _VAR_IDENTIFIER = "C"
+    _VAR_IDENTIFIER = "CONSTANT"
 
     def __init__(self, name, content, dtype, size=None):
         super().__init__(name=name, dtype=dtype, size=size)
@@ -77,4 +82,4 @@ class LibRoutineConstant(LibRoutineVariable):
 class LibRoutineExternal(LibRoutineConstant):
     """An external function or library"""
 
-    _VAR_IDENTIFIER = "E"
+    _VAR_IDENTIFIER = "EXTERNAL"

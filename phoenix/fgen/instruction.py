@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 11/02/2025, 15:45
-# Version:     0.0.1562
+# Last Update: 12/02/2025, 16:38
+# Version:     0.0.1581
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -31,7 +31,10 @@ from typing import Any
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
-from phoenix.fgen.instructionvar import InstructionVar, KeyMapInstructionVar
+from phoenix.fgen.instructionvar import (
+    InstructionVariable,
+    KeyMapInstructionVariable,
+)
 
 # class _PartialFormatDict(dict):
 #     """allows partial formatting of strings"""
@@ -107,8 +110,17 @@ class Instruction:
         # break recursive loop
         yield self
 
+    def _as_seen_in(self, environment=None):
+        """return a copy of the instruction with the environment applied"""
+        raise NotImplementedError("subclasses must implement this method")
+
+    def flatten(self, environment=None):
+        """unpack the instruction"""
+        # break recursive loop
+        yield self._as_seen_in(environment)
+
     # pylint: disable=unused-argument
-    def unpack(self, recursive: bool = True):
+    def unpack(self, recursive: bool = True, environment=None):
         """unpack the instruction"""
         # break recursive loop
         yield self
@@ -313,8 +325,11 @@ class GenericInstruction(Instruction, ftype="generic"):
         raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
 
-class ExpressionInstruction(GenericInstruction, ftype="expr"):
+class KeyMapInstruction(GenericInstruction, ftype="expr"):
     """Represents an Expression"""
+
+    def _as_seen_in(self, environment=None):
+        return self
 
 
 ###############################################################################
@@ -379,17 +394,20 @@ class InstructionGroup(Instruction, ftype="group"):
         """access read-only attribute instructions as generator"""
         yield from self._instructions
 
-    def unpack(self, recursive: bool = True):
+    def unpack(self, recursive: bool = True, environment=None):
         """unpack all instructions, including inner groups"""
         for instr in self.instructions:
             if recursive:
-                yield from instr.unpack(recursive=True)
+                yield from instr.unpack(recursive=True, environment=None)
             else:
                 yield instr
 
-    def flatten(self):
+    def flatten(self, environment=None):
         """flatten instructions, which will unpack all inner groups"""
-        return self.__class__(list(self.unpack()), itype=self._itype)
+        return self.__class__(
+            list(self.unpack(recursive=True, environment=environment)),
+            itype=self._itype,
+        )
 
     def sorted(self, ordering_function=None, sort_function=None):
         """return a sorted version. Sort function is optional. Does not
@@ -584,17 +602,18 @@ class MapInstructionGroup(InstructionGroup, ftype="map"):
 # ======================
 
 
-class PolynomialInstruction(ExpressionInstruction, ftype="polynomial"):
+class PolynomialInstruction(KeyMapInstruction, ftype="polynomial"):
     """
     Base class for polynomial instructions
     y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
     """
 
-    def __init__(self, tgt0: InstructionVar, src0: InstructionVar, *coeffs):
+    def __init__(
+        self, tgt0: InstructionVariable, src0: InstructionVariable, *coeffs
+    ):
         degree = len(coeffs) - 1
-        assert isinstance(tgt0, InstructionVar)
-        assert isinstance(src0, InstructionVar)
-        print("Wollollooooo", src0, tgt0)
+        assert isinstance(tgt0, InstructionVariable)
+        assert isinstance(src0, InstructionVariable)
         dcoeffs: dict[str, Any] = {}
         for exp, coeff in enumerate(coeffs):
             dcoeffs[f"coeff_x{exp}"] = coeff
@@ -617,8 +636,8 @@ class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
     """y[key_tgt0] = a * x[key_src] + b type instruction"""
 
     def __init__(self, tgt0, src0, alpha, beta):
-        assert isinstance(tgt0, InstructionVar)
-        assert isinstance(src0, InstructionVar)
+        assert isinstance(tgt0, InstructionVariable)
+        assert isinstance(src0, InstructionVariable)
         super().__init__(tgt0, src0, beta, alpha)
 
 
@@ -632,8 +651,8 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
     """y[key_tgt0] = a * x[key_src] type instruction"""
 
     def __init__(self, tgt0, src0, alpha):
-        assert isinstance(tgt0, InstructionVar)
-        assert isinstance(src0, InstructionVar)
+        assert isinstance(tgt0, InstructionVariable)
+        assert isinstance(src0, InstructionVariable)
         super().__init__(tgt0, src0, 0, alpha)
 
 
@@ -655,8 +674,8 @@ if __name__ == "__main__":
     big_km.update()
     print(list(big_km.keys()))
 
-    var_inp = KeyMapInstructionVar.new(name="input1", keymap=big_km)
-    var_out = KeyMapInstructionVar.new(name="output1", keymap=big_km)
+    var_inp = KeyMapInstructionVariable.new(name="input1", keymap=big_km)
+    var_out = KeyMapInstructionVariable.new(name="output1", keymap=big_km)
 
     print(var_inp._keymap)
 
@@ -709,8 +728,8 @@ if __name__ == "__main__":
 
     A variable is represented by its own subclass of the proper parent class.
     Loops over offset variations can be realized by resolving the accumulated
-    param values that refer to KeyMap Keys in case of a KeyMapInstructionVar.
-    They can be translated into an offset. 
+    param values that refer to KeyMap Keys in case of a
+    KeyMapInstructionVariable. They can be translated into an offset. 
 
     Upon application, this offset can be included into a loop variable, that
     can be used symbolically.

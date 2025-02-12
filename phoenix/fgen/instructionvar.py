@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 07/02/2025, 15:49
-# Version:     0.0.49
+# Last Update: 12/02/2025, 15:52
+# Version:     0.0.51
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,7 +18,7 @@ from typing import Self
 from phoenix.keymap import KeyMap
 
 
-class InstructionVar:
+class InstructionVariable:
     """Represents a variable in an instruction"""
 
     # every variable is derived as a subclass
@@ -112,7 +112,9 @@ class InstructionVar:
         return self.apply_as_offset_to(other)
 
 
-class KeyMapInstructionVar(InstructionVar, name=None, dtype=None, _exc=False):
+class KeyMapInstructionVariable(
+    InstructionVariable, name=None, dtype=None, _exc=False
+):
     """
     KeyMapInstructionVar
 

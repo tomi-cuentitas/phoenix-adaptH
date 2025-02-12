@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 11/02/2025, 20:36
-# Version:     0.0.54
+# Last Update: 12/02/2025, 16:26
+# Version:     0.0.227
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from typing import Generator, Any, Set
+from typing import Generator, Any, Set, Callable, Dict
 
 from weakref import ref
 
@@ -39,30 +39,63 @@ class CodeContainer:
 
     """
 
+    _IND = "  "
+    _supported_instructions: Dict[type, type] = {}
+    _not_supported_instructions: Set[type] = set()
+
     def __init__(self, instruction: Instruction) -> None:
         self._instruction = instruction
         self._container_head: list[CodeContainer] = []
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
         self._wr_parent: wrReferenceType[CodeContainer] | None = None
-        self._dependencies: Set[LibRoutineVariable] = set()
-        # self._wr_constants: wrWeakSet[LibRoutineConstant] = wrWeakSet()
-        # self._wr_variables: wrWeakSet[LibRoutineVariable] = wrWeakSet()
-        # self._wr_externals: wrWeakSet[LibRoutine] = wrWeakSet()
+        self._requirements: Set[LibRoutineVariable] = set()
 
-    def _get_code_container_head_lines(
+    @classmethod
+    def add_supported_instruction(cls, instruction, target):
+        """add a new instruction class to recognize and assign a proper target"""
+        cls._supported_instructions[instruction] = target
+        if instruction in cls._not_supported_instructions:
+            cls._not_supported_instructions.remove(instruction)
+
+    @classmethod
+    def add_non_supported_instruction(cls, instruction):
+        """remember that this kind of instruction is not supported"""
+        cls._not_supported_instructions.add(instruction)
+        if instruction in cls._supported_instructions:
+            del cls._supported_instructions[instruction]
+
+    @classmethod
+    def from_instruction(cls, instruction):
+        """call the right class from instruction"""
+        closest_match = None
+        try:
+            closest_match = cls._supported_instructions[type(instruction)]
+        except KeyError as exc:
+            for parent in instruction.__class__.__mro__:
+                if parent in cls._not_supported_instructions:
+                    raise ValueError(
+                        "Instruction class not supported"
+                    ) from exc
+                if parent in cls._supported_instructions:
+                    closest_match = cls._supported_instructions[parent]
+        if closest_match is None:
+            raise ValueError("Instruction class not supported")
+        return closest_match(instruction)
+
+    def _get_code_container_lines_head(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         for content in self._container_head:
             yield from content.get_codelines(indent=indent, **kwargs)
 
-    def _get_code_container_body_lines(
+    def _get_code_container_lines_body(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         for content in self._container_body:
             yield from content.get_codelines(indent=indent + 1, **kwargs)
 
-    def _get_code_container_foot_lines(
+    def _get_code_container_lines_foot(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         for content in self._container_foot:
@@ -72,9 +105,9 @@ class CodeContainer:
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
-        yield from self._get_code_container_head_lines(indent, **kwargs)
-        yield from self._get_code_container_body_lines(indent, **kwargs)
-        yield from self._get_code_container_foot_lines(indent, **kwargs)
+        yield from self._get_code_container_lines_head(indent, **kwargs)
+        yield from self._get_code_container_lines_body(indent, **kwargs)
+        yield from self._get_code_container_lines_foot(indent, **kwargs)
 
     @property
     def parent(self) -> CodeContainer | None:
@@ -94,62 +127,128 @@ class CodeContainer:
         else:
             raise ValueError("Parent already set")
 
-    def iterate_dependencies(
+    @property
+    def content(self):
+        """iterate through content"""
+        yield from self._container_head
+        yield from self._container_body
+        yield from self._container_foot
+
+    def update_requirements(
         self,
     ) -> Generator[LibRoutineVariable, None, None]:
-        """iterate over all possible dependencies. Can contain duplicates"""
-        yield from self._dependencies
-        for content in self._container_head:
-            yield from content.iterate_dependencies()
-        for content in self._container_body:
-            yield from content.iterate_dependencies()
-        for content in self._container_foot:
-            yield from content.iterate_dependencies()
+        """iterate over all possible requirements. Eliminate duplicates"""
+        known = set()
+        for content in self.content:
+            for requirement in content.update_requirements():
+                if requirement not in known:
+                    known.add(requirement)
+                    yield requirement
 
-    def iterate_dependencies_unique(
-        self,
-    ) -> Generator[LibRoutineVariable, None, None]:
-        """iterate over all possible dependencies. Eliminate duplicates"""
-        seen = set()
-        for dependency in self.iterate_dependencies():
-            if dependency not in seen:
-                seen.add(dependency)
-                yield dependency
+    def reset_provided_requirements(self) -> None:
+        """reset the provided requirements"""
+        for content in self.content:
+            content.reset_provided_requirements()
 
-    def _append_head(self, *containers: CodeContainer) -> None:
+    def append_head(self, *containers: CodeContainer) -> None:
         """append at head"""
         for container in containers:
             self._container_head.append(container)
 
-    def _append_body(self, *containers: CodeContainer) -> None:
+    def append_body(self, *containers: CodeContainer) -> None:
         """append at body"""
         for container in containers:
             self._container_body.append(container)
 
-    def _append_foot(self, *containers: CodeContainer) -> None:
+    def append_foot(self, *containers: CodeContainer) -> None:
         """append at foot"""
         for container in containers:
             self._container_foot.append(container)
 
-
-class LibraryContainer(CodeContainer):
-    """
-    A Library contains routines, constants and more
-    """
+    def require(self, requirement: LibRoutineVariable) -> None:
+        """add a requirement to the codeblock"""
+        self._requirements.add(requirement)
 
 
-class RoutineDefinition(CodeContainer):
-    """
-    How a routine is defined, with its arguments, definitions, body, ...
-    """
+CodeContainer.add_supported_instruction(Instruction, "ASD")
 
 
 class DefinitionSection(CodeContainer):
     """
     A code container that defines stuff and prevents them from getting passed
-    on during dependency iterator. Supports a filtering function that decides
-    on which type of dependencies are implemented here or passed on.
+    on during requirement iterator. Supports a filtering function that decides
+    on which type of requirements are implemented here or passed on.
     """
+
+    def __init__(
+        self, instruction: Instruction, *filter_args: str | Callable
+    ) -> None:
+        super().__init__(instruction)
+        self._filter_func_customs: Set[Callable] = set()
+        self._filter_func_captures: Set[str] = set()
+        for filter_arg in filter_args:
+            self.add_capture(filter_arg)
+
+        self._provide: Set[LibRoutineVariable] = set()
+
+    def add_capture(self, capture: str | Callable) -> None:
+        """add a type of requirement to capture"""
+        if isinstance(capture, str):
+            self._filter_func_captures.add(capture)
+        elif callable(capture):
+            self._filter_func_customs.add(capture)
+        else:
+            raise ValueError(
+                f"Invalid filter arg {capture}. Must be str|callable."
+            )
+
+    def capture_check(self, requirement):
+        """perform a capture check for the requirement"""
+        for func in self._filter_func_customs:
+            if func(requirement):
+                return True
+        if requirement.vtype in self._filter_func_captures:
+            return True
+        return False
+
+    def reset_provided_requirements(self):
+        for content in self.content:
+            content.reset_provided()
+        self._provide = set()
+
+    def update_requirements(
+        self,
+    ) -> Generator[LibRoutineVariable, None, None]:
+        """As parent, but keep the requirements that the filter catches"""
+        for requirement in super().update_requirements():
+            if self.capture_check(requirement):
+                self._provide.add(requirement)
+            else:
+                yield requirement
+
+
+class RoutineDefinition(DefinitionSection):
+    """
+    How a routine is defined, with its arguments, definitions, body, ...
+    """
+
+    def __init__(self, instruction: Instruction) -> None:
+        super().__init__(instruction=instruction)
+        self.add_capture("INPUT")
+        self.add_capture("OUTPUT")
+
+
+class LibraryContainer(DefinitionSection):
+    """
+    A Library contains routines, constants and more
+    """
+
+    def __init__(self, instruction: Instruction) -> None:
+        super().__init__(instruction=instruction)
+
+    def capture_check(self, requirement):
+        """perform a capture check for the requirement"""
+        return True
 
 
 class StatementLine(CodeContainer):
@@ -157,3 +256,23 @@ class StatementLine(CodeContainer):
     A statement of form outp = somefunction(input). Serves as base class for
     more specific statements
     """
+
+
+if __name__ == "__main__":
+    from phoenix.fgen.lrvariable import (
+        LibRoutineConstant,
+        LibRoutineLocalVariable,
+    )
+
+    foo = DefinitionSection(Instruction())
+    print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # False
+    foo.add_capture("CONSTANT")
+    print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # True
+    print()
+    print(foo.capture_check(LibRoutineLocalVariable("foo", 1337, 42)))  # False
+    foo.add_capture("LOCAL")
+    print(foo.capture_check(LibRoutineLocalVariable("foo", 1337, 42)))  # True
+    print()
+    print(foo.capture_check(LibRoutineVariable("foo", 1337, 42)))  # False
+    foo.add_capture(lambda x: x.size > 1)
+    print(foo.capture_check(LibRoutineVariable("foo", 1337, 42)))  # True
