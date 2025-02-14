@@ -5,15 +5,17 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 12/02/2025, 15:52
-# Version:     0.0.51
+# Last Update: 14/02/2025, 17:42
+# Version:     0.0.107
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from typing import Self
+from __future__ import annotations
+
+from typing import Self, Dict
 
 from phoenix.keymap import KeyMap
 
@@ -160,18 +162,41 @@ class KeyMapInstructionVariable(
     @property
     def keymap(self):
         """access keymap"""
-        return self._kmap_ptr
+        return self._keymap
 
-    def resolve(self, num=None):
+    def resolve(self):
         """resolve num steps in param"""
-        if num is None:
-            num = len(self._pars)
-        for _ in range(num):
-            if self._pars:
-                param = self._pars.pop(0)
-                offset, self._kmap_ptr = self._kmap_ptr.find(param)
-                self._offs.append(offset)
-                self._hist.append(param)
+        assert self._keymap is not None
+        pointer = self._keymap
+        offsets = []
+        for par in self._pars:
+            param = self._pars.pop(0)
+            offset, pointer = pointer.find(param)
+            offsets.append(offset)
+        return (offsets, pointer)
+
+
+class InstructionEnvironment:
+    """Defines an instruction environment where all known variables can be stored"""
+
+    def __init__(self, **variables):
+        self._variables: Dict[str, InstructionVariable] = variables
+
+    def items(self):
+        """iterate through dict-like items"""
+        yield from self._variables.items()
+
+    def merge(
+        self, other_environment: InstructionEnvironment
+    ) -> InstructionEnvironment:
+        """merge an environment with another"""
+        new_environment_dict: Dict[str, InstructionVariable] = {**self.items()}
+        for varname, variable in other_environment.items():
+            if varname in self._variables:
+                new_environment_dict[varname] |= variable
             else:
-                raise ValueError("No more parameters to resolve")
-        return self
+                new_environment_dict[varname] = variable
+        return InstructionEnvironment(**new_environment_dict)
+
+    def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
+        return self.merge(other)

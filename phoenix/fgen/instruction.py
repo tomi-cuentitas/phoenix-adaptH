@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 14/02/2025, 12:59
-# Version:     0.0.1729
+# Last Update: 14/02/2025, 17:46
+# Version:     0.0.1822
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,6 +35,7 @@ from phoenix.keymap import Key, KeyMap
 from phoenix.fgen.instructionvar import (
     InstructionVariable,
     KeyMapInstructionVariable,
+    InstructionEnvironment,
 )
 
 # class _PartialFormatDict(dict):
@@ -114,27 +115,26 @@ class Instruction:
         return test_tuple
 
     @property
+    def identifier(self):
+        return self._obj_id
+
+    @property
     def instructions(self):
         """access instructions"""
         # break recursive loop
         yield self
 
-    def _as_seen_in(self, environment=None):
-        """return a copy of the instruction with the environment applied"""
-        raise NotImplementedError("subclasses must implement this method")
-
-    def flatten(self, environment=None):
-        """unpack the instruction"""
-        # break recursive loop
-        yield self._as_seen_in(environment)
-
     # pylint: disable=unused-argument
     def unpack(self, recursive: bool = True, environment=None):
         """unpack the instruction"""
         # break recursive loop
-        yield self
+        yield self.as_seen_in(environment)
 
     # pylint: enable=unused-argument
+
+    def as_seen_in(self, environment):
+        """see the instruction wrt some environment"""
+        return self
 
     @property
     def itype(self):
@@ -358,7 +358,9 @@ class GenericInstruction(Instruction, ftype="generic"):
 class KeyMapInstruction(GenericInstruction, ftype="expr"):
     """Represents an Expression"""
 
-    def _as_seen_in(self, environment=None):
+    def as_seen_in(self, environment=None):
+        if environment is None:
+            environment = InstructionEnvironment()
         return self
 
 
@@ -443,20 +445,28 @@ class InstructionGroup(Instruction, ftype="group"):
         """access read-only attribute instructions as generator"""
         yield from self._instructions
 
-    def unpack(self, recursive: bool = True, environment=None):
+    def unpack(self, recursive: bool | int = True, environment=None):
         """unpack all instructions, including inner groups"""
-        for instr in self.instructions:
-            if recursive:
-                yield from instr.unpack(recursive=True, environment=None)
-            else:
-                yield instr
+        if environment is None:
+            environment = InstructionEnvironment()
+        if recursive:
+            for instr in self.instructions:
+                if recursive is True:
+                    yield from instr.unpack(
+                        recursive=True, environment=environment
+                    )
+                elif recursive > 0:
+                    yield from instr.unpack(
+                        recursive=recursive - 1, environment=environment
+                    )
+        else:
+            if recursive is False:
+                yield from self.unpack(recursive=1, environment=environment)
+            yield self
 
-    def flatten(self, environment=None):
-        """flatten instructions, which will unpack all inner groups"""
-        return self.__class__(
-            list(self.unpack(recursive=True, environment=environment)),
-            itype=self._itype,
-        )
+    def flatten(self):
+        """replace content by flattened instructions, which will unpack all inner groups"""
+        return self.__class__(list(self.unpack()))
 
     def sorted(self, ordering_function=None, sort_function=None):
         """return a sorted version. Sort function is optional. Does not
@@ -572,6 +582,8 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
     """Within this environment, variables are provided, renamed or offsetted"""
 
     def __init__(self, content, *, environment=None, itype=None, **params):
+        if itype is None:
+            itype = content.itype
         super().__init__(itype=itype)
         if not isinstance(content, InstructionGroup):
             raise TypeError("content must be an InstructionGroup")
@@ -602,6 +614,14 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
             },
             itype=self.itype,
             **self._params,
+        )
+
+    def unpack(self, recursive: bool | int = True, environment=None):
+        """unpack all instructions, including inner groups"""
+        if environment is None:
+            environment = InstructionEnvironment()
+        yield from self._content.unpack(
+            recursive=recursive, environment=environment | self._environment
         )
 
 
@@ -786,59 +806,76 @@ if __name__ == "__main__":
     ltl_km.entry("key3")
 
     big_km = KeyMap(name="big")
+    big_km.link("foo0", ltl_km)
     big_km.link("foo1", ltl_km)
     big_km.link("foo2", ltl_km)
+    big_km.link("foo3", ltl_km)
+    big_km.link("foo4", ltl_km)
 
     big_km.update()
     print(list(big_km.keys()))
 
-    var_inp = KeyMapInstructionVariable.new(name="input1", keymap=big_km)
-    var_out = KeyMapInstructionVariable.new(name="output1", keymap=big_km)
+    VarInp = KeyMapInstructionVariable.new(name="input1", keymap=big_km)
+    VarOut = KeyMapInstructionVariable.new(name="output1", keymap=big_km)
 
-    print(var_inp._keymap)
+    print(VarInp._keymap)
 
-    a = SubroutineEnvironmentInstruction(
-        InstructionGroup(
-            sum(
-                (
-                    [
-                        LinearOperationInstruction(
-                            var_out(foo, "key1"), var_inp(foo, "key3"), 1.0
-                        ),
-                        LinearOperationInstruction(
-                            var_out(foo, "key2"), var_inp(foo, "key2"), 1.0
-                        ),
-                        LinearOperationInstruction(
-                            var_out(foo, "key3"), var_inp(foo, "key1"), 1.0
-                        ),
-                    ]
-                    for foo in ["foo1", "foo2"]
-                ),
-                start=[],
-            )
-        ),
-        None,
-        None,
+    test_instructions_inner = InstructionGroup(
+        [
+            LinearOperationInstruction(VarOut("key1"), VarInp("key3"), 1.0),
+            LinearOperationInstruction(VarOut("key2"), VarInp("key2"), 1.0),
+            LinearOperationInstruction(VarOut("key3"), VarInp("key1"), 1.0),
+        ]
     )
-    for instruction in a.instructions:
+    test_instructions = InstructionGroup(
+        [
+            OffsetEnvironmentInstruction(
+                test_instructions_inner,
+                environment={"input1": f"foo{val}", "output1": f"foo{val}"},
+            )
+            for val in range(5)
+        ]
+    )
+
+    for instruction in test_instructions.instructions:
         print(instruction._obj_id)
-        print(instruction.to_dict())
-    print(a._obj_id)
 
     print(SubroutineEnvironmentInstruction._obj_id_count)
     print(PolynomialInstruction._obj_id_count)
     print(LinearOperationInstruction._obj_id_count)
     print(AffineOperationInstruction._obj_id_count)
 
-    print(var_inp._name)
+    print(VarInp._name)
 
-    print(var_inp("foo1", "key2"))
-    print(var_inp("foo1", "key2").resolve())
+    print(VarInp("foo1", "key2"))
+    print(VarInp("foo1", "key2").resolve())
 
-    print(len(a._content))
-    print(len(a._content.flatten()))
+    print("Distinction")
+
+    print(len(test_instructions))
+    print(len(test_instructions.flatten()))
 
     import sys
+
+    print("unpack, 0 recursive")
+    for el in test_instructions.unpack(recursive=0):
+        print(el.identifier)
+
+    print("unpack, non recursive")
+    for el in test_instructions.unpack(recursive=False):
+        print(el.identifier)
+
+    print("unpack, 1 recursive")
+    for el in test_instructions.unpack(recursive=1):
+        print(el.identifier)
+
+    print("unpack, 2 recursive")
+    for el in test_instructions.unpack(recursive=2):
+        print(el.identifier)
+
+    print("unpack, True recursive")
+    for el in test_instructions.unpack(recursive=True):
+        print(el.identifier)
 
     sys.exit(0)
 
