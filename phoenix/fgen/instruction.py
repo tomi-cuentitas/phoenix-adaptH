@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 12/02/2025, 17:23
-# Version:     0.0.1624
+# Last Update: 14/02/2025, 12:59
+# Version:     0.0.1729
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -27,7 +27,8 @@ denominator of instruction types within the group, i.e. how it is to be applied
 to data.
 """
 
-from typing import Any
+from typing import Any, List, Dict
+import weakref
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
@@ -89,12 +90,20 @@ class Instruction:
         self._sort_key = None
         self._itype = itype
         self._obj_id = self._get_obj_id()
+        self._protected = True
 
     def __init_subclass__(cls, ftype):
         # print("asd", cls._ftype, ftype, cls.__name__)
         ftype = ftype.replace(".", ":")
         cls._obj_id_count = 0
         cls._ftype += f".{ftype}"
+
+    def __enter__(self):
+        self._protected = False
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        self._protected = True
 
     def checksum(self):
         """get a checksum of the instruction"""
@@ -175,6 +184,23 @@ class Instruction:
     def __eq__(self, other):
         return self.itype == other.itype
 
+    def __deepcopy__(self, memo=None):
+        raise NotImplementedError("subclasses must implement this method")
+
+    def deepcopy(self, memo=None):
+        """
+        Create a proper deep copy of the object.
+        To ensure compatibility with traditional copy.copy, I go with a dict of
+        weakref.refs instead of using weakref.WeakValueDictionary. Keep in mind
+        that weakref.ref objects must be called to be properly referenced.
+        """
+        if memo is None:
+            memo = {}
+        # keep the linter happy...
+        # pylint: disable=unnecessary-dunder-call
+        return self.__deepcopy__(memo=memo)
+        # pylint: enable=unnecessary-dunder-call
+
 
 ###############################################################################
 #
@@ -199,17 +225,12 @@ class GenericInstruction(Instruction, ftype="generic"):
 
     _alias: dict[str, str] = {}
 
-    def __init__(self, **params):
-        super().__init__(itype=self.ftype)
+    def __init__(self, itype=None, **params):
+        if itype is None:
+            itype = self.ftype
+        super().__init__(itype=itype)
+        # itype of generic instructions is by default the ftype
         self._params = params
-        self._protected = True
-
-    def __enter__(self):
-        self._protected = False
-        return self
-
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        self._protected = True
 
     def __gt__(self, other):
         return self.sort_key > other.sort_key
@@ -324,6 +345,15 @@ class GenericInstruction(Instruction, ftype="generic"):
             return self[self.__class__._alias[key]]
         raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
+    def __deepcopy__(self, memo=None):
+        if memo is None:
+            memo = {}
+        if id(self) in memo:
+            return memo[id(self)]()  # beware, must be called due to weakref
+        copied = self.__class__(**self._params, itype=self.itype)
+        memo[id(self)] = weakref.ref(copied)
+        return copied
+
 
 class KeyMapInstruction(GenericInstruction, ftype="expr"):
     """Represents an Expression"""
@@ -369,15 +399,34 @@ class InstructionGroup(Instruction, ftype="group"):
     # varied in the implementation step. A single operation parallelization
     # could have a higher level, that we only enable on GPUs.
 
-    def __init__(self, instructions, itype=None):
+    def __init__(self, instructions, itype=None, **params):
         self._instructions = list(instructions)
         self._len = len(self._instructions)
+        self._params = params
         if itype is None:
             itype = InstructionGroup._get_itype_common_root(self._instructions)
         super().__init__(itype=itype)
 
     def __len__(self):
         return sum(len(instr) for instr in self.instructions)
+
+    def __deepcopy__(self, memo=None):
+        if memo is None:
+            memo = {}
+        if id(self) in memo:
+            return memo[id(self)]()  # beware, must be called due to weakref
+        copied_instructions = []
+        for instr in self._instructions:
+            if id(instr) in memo:
+                copied_instr = memo[id(instr)]()
+            else:
+                copied_instr = instr.deepcopy(memo)
+            copied_instructions.append(copied_instr)
+        copied_group = self.__class__(
+            copied_instructions, itype=self.itype, **self._params
+        )
+        memo[id(self)] = weakref.ref(copied_group)
+        return copied_group
 
     @property
     def itype(self):
@@ -432,24 +481,24 @@ class InstructionGroup(Instruction, ftype="group"):
         match (function, size, number):
             case (function, None, None):
                 assert callable(function)
-                return self.group_by_key(function)
+                return self.grouped_by_key(function)
 
             case (None, size, None):
                 assert isinstance(size, int)
-                return self.group_to_size(size)
+                return self.grouped_to_size(size)
 
             case (None, None, number):
                 assert isinstance(number, int)
-                return self.group_to_batches
+                return self.grouped_to_batches
 
             case _:
                 raise ValueError(
                     "only one of 'function', 'size' and 'number' can be set"
                 )
 
-    def group_by_key(self, function, group_type=None):
+    def grouped_by_key(self, function, group_type=None, subgroup_type=None):
         """generate groups by a key generating function"""
-        groups = {}
+        groups: Dict[Any, List[Instruction]] = {}
         for instr in self.instructions:
             group_id = function(instr)
             if group_id not in groups:
@@ -457,53 +506,103 @@ class InstructionGroup(Instruction, ftype="group"):
             groups[group_id].append(instr)
         if group_type is None:
             group_type = self.__class__
-        return self.__class__(
+        if subgroup_type is None:
+            subgroup_type = self.__class__
+        return group_type(
             [
-                group_type(group, itype=self._itype)
+                subgroup_type(group, itype=self._itype)
                 for group in groups.values()
             ],
             itype=self._itype,
         )
 
-    def group_to_batches(self, num_batches, group_type=None):
+    def grouped_to_batches(self, batches, group_type=None, subgroup_type=None):
         """subdivide the group into a number of batches.
         Does not conserve continuousity of data"""
-        groups = [[] for _ in num_batches]
+        groups: List[List[Instruction]] = [[] for _ in range(batches)]
         if group_type is None:
             group_type = self.__class__
+        if subgroup_type is None:
+            subgroup_type = self.__class__
         for num, instr in enumerate(self.instructions):
-            groups[num % num_batches].append(instr)
-        return self.__class__(
-            [group_type(group) for group in groups], itype=self._itype
+            groups[num % batches].append(instr)
+        return group_type(
+            [subgroup_type(group) for group in groups], itype=self._itype
         )
 
-    def group_to_size(self, max_size, group_type=None):
+    def grouped_to_size(self, max_size, group_type=None, subgroup_type=None):
         """split the instructions into groups of a certain (maximum) size"""
-        group = []
-        collect = []
+        group: List[Instruction] = []
+        collect: List[List[Instruction]] = []
         if group_type is None:
             group_type = self.__class__
+        if subgroup_type is None:
+            subgroup_type = self.__class__
         for instr in self.instructions:
             if len(group) >= max_size:
-                collect.append(group_type(group, itype=self._itype))
+                collect.append(subgroup_type(group, itype=self._itype))
                 group = []
             group.append(instr)
         if group:
-            collect.append(group_type(group, itype=self._itype))
-        return self.__class__(collect, itype=self._itype)
+            collect.append(subgroup_type(group, itype=self._itype))
+        return group_type(collect, itype=self._itype)
 
 
 ###############################################################################
 #
-# ENVIRONMENT BASE CLASS
-# ======================
+# .oPYo.  o    o  o     o  o   .oPYo.  .oPYo.  o    o  o     o  .oPYo.  o    o  ooooo
+# 8.      8b   8  8     8  8   8   `8  8    8  8b   8  8b   d8  8.      8b   8    8
+# `boo    8`b  8  8     8  8  o8YooP'  8    8  8`b  8  8`b d'8  `boo    8`b  8    8
+# .P      8 `b 8  `b   d'  8   8   `b  8    8  8 `b 8  8 `o' 8  .P      8 `b 8    8
+# 8       8  `b8   `b d'   8   8    8  8    8  8  `b8  8     8  8       8  `b8    8
+# `YooP'  8   `8    `8'    8   8    8  `YooP'  8   `8  8     8  `YooP'  8   `8    8
+# :.....: ..:::.. :::..::: .. :..:::.. :.....: ..:::.. ..::::.. :.....: ..:::.. ::..::
+# ::::::: ::::::: :::::::: :: :::::::: ::::::: ::::::: :::::::: ::::::: ::::::: ::::::
+# ::::::: ::::::: :::::::: :: :::::::: ::::::: ::::::: :::::::: ::::::: ::::::: ::::::
+###############################################################################
 
 
-class EnvironmentInstructionGroup(InstructionGroup, ftype="environment"):
-    """Within this environment, variables are provided"""
+###############################################################################
+#
+# PARENT CLASS ENVIRONMENT
+# ========================
 
-    # TODO
-    # provides variables
+
+class EnvironmentInstruction(Instruction, ftype="environment"):
+    """Within this environment, variables are provided, renamed or offsetted"""
+
+    def __init__(self, content, *, environment=None, itype=None, **params):
+        super().__init__(itype=itype)
+        if not isinstance(content, InstructionGroup):
+            raise TypeError("content must be an InstructionGroup")
+        self._content = content
+        self._environment = {}
+        if environment is not None:
+            self._environment.update(environment)
+        self._params = params
+
+    @property
+    def instructions(self):
+        """access instructions"""
+        yield from self._content.instructions
+
+    def __deepcopy__(self, memo=None):
+        if memo is None:
+            memo = {}
+        copied_content = self._content.deepcopy(memo=memo)
+        return self.__class__(
+            copied_content,
+            environment={
+                key: (
+                    val.deepcopy(memo=memo)
+                    if isinstance(val, Instruction)
+                    else val
+                )
+                for key, val in self._environment.items()
+            },
+            itype=self.itype,
+            **self._params,
+        )
 
 
 ###############################################################################
@@ -512,7 +611,7 @@ class EnvironmentInstructionGroup(InstructionGroup, ftype="environment"):
 # ==================
 
 
-class OffsetInstructionGroup(EnvironmentInstructionGroup, ftype="offset"):
+class OffsetEnvironmentInstruction(EnvironmentInstruction, ftype="offset"):
     """Within this environment, variables are offsetted"""
 
     # TODO
@@ -528,12 +627,12 @@ class OffsetInstructionGroup(EnvironmentInstructionGroup, ftype="offset"):
 
 ###############################################################################
 #
-# SUBROUTINE GROUP
-# ================
+# SUBROUTINE ENVIRONMENT
+# ======================
 
 
-class SubroutineInstructionGroup(
-    EnvironmentInstructionGroup, ftype="subroutine"
+class SubroutineEnvironmentInstruction(
+    EnvironmentInstruction, ftype="subroutine"
 ):
     """
     SubroutineGroup
@@ -542,8 +641,23 @@ class SubroutineInstructionGroup(
     subroutine
     """
 
-    def __init__(self, instructions, inp_names, out_names, itype=None):
-        super().__init__(instructions, itype=itype)
+    def __init__(self, operations, inp_variables, out_variables, itype=None):
+        super().__init__(operations, itype=itype)
+        self._inp_variables = inp_variables
+        self._out_variables = out_variables
+
+    @property
+    def inp_variables(self):
+        return tuple(self._inp_variables)
+
+    @property
+    def out_variables(self):
+        return tuple(self._out_variables)
+
+    def __deepcopy__(self, memo=None):
+        copied_environment = super().__deepcopy__(memo=memo)
+        copied_environment._inp_variables = tuple(self.inp_variables)
+        copied_environment._inp_variables = tuple(self.inp_variables)
 
 
 ###############################################################################
@@ -561,6 +675,10 @@ class MapInstructionGroup(InstructionGroup, ftype="map"):
     # TODO
     # Decide what happens to instructions in environment when map is applied
     # consider pre-map and post-map operations
+
+    def __init__(self, environments, mapped, itype=None):
+        super().__init__(environments, itype=itype)
+        self._mapped = mapped
 
 
 ###############################################################################
@@ -679,23 +797,25 @@ if __name__ == "__main__":
 
     print(var_inp._keymap)
 
-    a = SubroutineInstructionGroup(
-        sum(
-            (
-                [
-                    LinearOperationInstruction(
-                        var_out(foo, "key1"), var_inp(foo, "key3"), 1.0
-                    ),
-                    LinearOperationInstruction(
-                        var_out(foo, "key2"), var_inp(foo, "key2"), 1.0
-                    ),
-                    LinearOperationInstruction(
-                        var_out(foo, "key3"), var_inp(foo, "key1"), 1.0
-                    ),
-                ]
-                for foo in ["foo1", "foo2"]
-            ),
-            start=[],
+    a = SubroutineEnvironmentInstruction(
+        InstructionGroup(
+            sum(
+                (
+                    [
+                        LinearOperationInstruction(
+                            var_out(foo, "key1"), var_inp(foo, "key3"), 1.0
+                        ),
+                        LinearOperationInstruction(
+                            var_out(foo, "key2"), var_inp(foo, "key2"), 1.0
+                        ),
+                        LinearOperationInstruction(
+                            var_out(foo, "key3"), var_inp(foo, "key1"), 1.0
+                        ),
+                    ]
+                    for foo in ["foo1", "foo2"]
+                ),
+                start=[],
+            )
         ),
         None,
         None,
@@ -705,7 +825,7 @@ if __name__ == "__main__":
         print(instruction.to_dict())
     print(a._obj_id)
 
-    print(SubroutineInstructionGroup._obj_id_count)
+    print(SubroutineEnvironmentInstruction._obj_id_count)
     print(PolynomialInstruction._obj_id_count)
     print(LinearOperationInstruction._obj_id_count)
     print(AffineOperationInstruction._obj_id_count)
@@ -714,6 +834,13 @@ if __name__ == "__main__":
 
     print(var_inp("foo1", "key2"))
     print(var_inp("foo1", "key2").resolve())
+
+    print(len(a._content))
+    print(len(a._content.flatten()))
+
+    import sys
+
+    sys.exit(0)
 
     print(
         """
@@ -784,50 +911,47 @@ if __name__ == "__main__":
 #
 #
 #
+if __name__ == "__nothing__":
+    import gc
+    import weakref
 
-import gc
-import weakref
+    import psutil
+    import os
 
-import psutil
-import os
+    def memory_usage():
+        process = psutil.Process(os.getpid())
+        return process.memory_info().rss / 1024**2  # Convert to MB
 
+    class LeakyClass:
+        def __init__(self):
+            self.ref = None  # Will hold circular reference
+            self.something_big = ["some string"] * 60000000
 
-def memory_usage():
-    process = psutil.Process(os.getpid())
-    return process.memory_info().rss / 1024**2  # Convert to MB
+        def __del__(self):
+            # print(f"__del__ called for {self}")
+            pass
 
+    for _ in range(4):
+        print(f"Memory usage: {memory_usage():.2f} MB")
 
-class LeakyClass:
-    def __init__(self):
-        self.ref = None  # Will hold circular reference
-        self.something_big = ["some string"] * 6000000
+        # Create objects with cyclic references
+        a = LeakyClass()
+        b = LeakyClass()
 
-    def __del__(self):
-        # print(f"__del__ called for {self}")
-        pass
+        a.ref = weakref.ref(b)  # Circular reference
+        b.ref = weakref.ref(a)  # Circular reference
 
+        a.ref = b  # Circular reference
+        b.ref = a  # Circular reference
 
-for _ in range(10000):
-    print(f"Memory usage: {memory_usage():.2f} MB")
+    print("before del")
+    del a  # Delete objects
+    print("del 1")
+    del b
+    print("del 2")
 
-    # Create objects with cyclic references
-    a = LeakyClass()
-    b = LeakyClass()
+    print("call gc")
+    gc.collect()  # Force garbage collection
+    print("called")
 
-    # a.ref = weakref.ref(b)  # Circular reference
-    # b.ref = weakref.ref(a)  # Circular reference
-
-    a.ref = b  # Circular reference
-    b.ref = a  # Circular reference
-
-print("before del")
-del a  # Delete objects
-print("del 1")
-del b
-print("del 2")
-
-print("call gc")
-gc.collect()  # Force garbage collection
-print("called")
-
-print("Garbage objects:", gc.garbage)  # Objects remain in gc.garbage
+    print("Garbage objects:", gc.garbage)  # Objects remain in gc.garbage
