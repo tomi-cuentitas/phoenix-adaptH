@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 14/02/2025, 17:42
-# Version:     0.0.107
+# Last Update: 14/02/2025, 18:34
+# Version:     0.0.206
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,6 +17,7 @@ from __future__ import annotations
 
 from typing import Self, Dict
 
+import weakref
 from phoenix.keymap import KeyMap
 
 
@@ -35,10 +36,10 @@ class InstructionVariable:
             offsets = []
         if history is None:
             history = []
-        self._offs = offsets
-        self._hist = history
-        self._pars = list(params)
-        self.progress()
+        self._offsets = offsets
+        self._history = history
+        self._params = []
+        self.progress(*params)
 
     def __str__(self):
         dtype = self._dtype or "?"
@@ -74,31 +75,33 @@ class InstructionVariable:
     @property
     def offsets(self):
         """access offsets"""
-        return list(self._offs)
+        return list(self._offsets)
 
     @property
     def history(self):
         """access offsets"""
-        return list(self._hist)
+        return list(self._history)
 
     @property
     def params(self):
         """access params"""
-        return list(self._pars)
+        return list(self._params)
 
     def copy(self):
         """return a copy"""
         return self.__class__(
-            *self.params, offsets=self.offsets, history=self.history
+            *self.params,
+            offsets=list(self.offsets),
+            history=list(self.history),
         )
 
     def progress(self, *params) -> Self:
         """progress params"""
         for param in params:
-            self._pars.append(param)
+            self._params.append(param)
         return self
 
-    def resolve(self, num=None) -> Self:
+    def resolve(self) -> Self:
         """resolve num steps in param"""
         raise NotImplementedError("Must be implemented in subclass")
 
@@ -110,8 +113,32 @@ class InstructionVariable:
         """combine two variables"""
         return self.resolved().progress(*other.history, *other.params)
 
-    def __xor__(self, other):
+    def __or__(self, other):
         return self.apply_as_offset_to(other)
+
+
+class InstructionParameter(InstructionVariable):
+    """A parameter is overwritten instead of extended"""
+
+    def progress(self, *params) -> Self:
+        """progress params"""
+        if len(params) != 1:
+            raise ValueError("Only one parameter allowed")
+        self._history.extend(self._params)
+        self._params = [params[0]]
+        return self
+
+    def resolve(self) -> Self:
+        """resolve num steps in param"""
+        return self.params[0]
+
+    def resolved(self):
+        """return a resolved copy of self"""
+        return self.copy().resolve()
+
+    def apply_as_offset_to(self, other):
+        """combine two variables"""
+        return self.resolved().progress(*other.params)
 
 
 class KeyMapInstructionVariable(
@@ -134,7 +161,7 @@ class KeyMapInstructionVariable(
     _keymap: None | KeyMap = None
 
     def __init__(self, *params, offsets=None, history=None):
-        self._kmap_ptr = self._keymap
+        self._pointer = weakref.ref(self._keymap)
         super().__init__(*params, offsets=offsets, history=history)
         # will resolve the key sequence params as seen from keymap
 
@@ -166,14 +193,15 @@ class KeyMapInstructionVariable(
 
     def resolve(self):
         """resolve num steps in param"""
-        assert self._keymap is not None
-        pointer = self._keymap
-        offsets = []
-        for par in self._pars:
-            param = self._pars.pop(0)
-            offset, pointer = pointer.find(param)
-            offsets.append(offset)
-        return (offsets, pointer)
+        newpointer = self._pointer()
+        for param in self._params:
+            param = self._params.pop(0)
+            assert newpointer is not None
+            offset, newpointer = newpointer.find(param)
+            self._pointer = weakref.ref(newpointer)
+            self._offsets.append(offset)
+        self._pointer = weakref.ref(newpointer)
+        return self._offsets
 
 
 class InstructionEnvironment:
@@ -186,17 +214,39 @@ class InstructionEnvironment:
         """iterate through dict-like items"""
         yield from self._variables.items()
 
+    def as_dict(self):
+        """display as a dictionary"""
+        return {key: val for key, val in self.items()}
+
+    def copy(self) -> InstructionEnvironment:
+        """make a proper copy"""
+        return self.__class__(
+            **{key: var.copy() for key, var in self._variables.items()}
+        )
+
     def merge(
         self, other_environment: InstructionEnvironment
     ) -> InstructionEnvironment:
         """merge an environment with another"""
-        new_environment_dict: Dict[str, InstructionVariable] = {**self.items()}
-        for varname, variable in other_environment.items():
-            if varname in self._variables:
-                new_environment_dict[varname] |= variable
-            else:
-                new_environment_dict[varname] = variable
-        return InstructionEnvironment(**new_environment_dict)
+        new_environment = self.copy()
+        new_environment.update(**other_environment.as_dict())
+        return new_environment
 
     def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
         return self.merge(other)
+
+    def update(self, **kwargs):
+        """update the internal dictionary. Extend if possible"""
+        for varname, variable in kwargs.items():
+            if varname in self._variables:
+                self._variables[varname] |= variable
+            else:
+                self._variables[varname] = variable
+        return self
+
+    def keys(self):
+        """access keys of inner dict"""
+        return self._variables.keys()
+
+    def __getitem__(self, key):
+        return self._variables[key]

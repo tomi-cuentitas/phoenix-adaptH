@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 14/02/2025, 17:46
-# Version:     0.0.1822
+# Last Update: 14/02/2025, 18:38
+# Version:     0.0.1845
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -134,6 +134,7 @@ class Instruction:
 
     def as_seen_in(self, environment):
         """see the instruction wrt some environment"""
+        print("environment:", environment)
         return self
 
     @property
@@ -359,8 +360,7 @@ class KeyMapInstruction(GenericInstruction, ftype="expr"):
     """Represents an Expression"""
 
     def as_seen_in(self, environment=None):
-        if environment is None:
-            environment = InstructionEnvironment()
+        print("environment:", environment)
         return self
 
 
@@ -462,7 +462,7 @@ class InstructionGroup(Instruction, ftype="group"):
         else:
             if recursive is False:
                 yield from self.unpack(recursive=1, environment=environment)
-            yield self
+            yield self.as_seen_in(environment)
 
     def flatten(self):
         """replace content by flattened instructions, which will unpack all inner groups"""
@@ -558,7 +558,7 @@ class InstructionGroup(Instruction, ftype="group"):
         return group_type(collect, itype=self._itype)
 
 
-###############################################################################
+######################################################################################
 #
 # .oPYo.  o    o  o     o  o   .oPYo.  .oPYo.  o    o  o     o  .oPYo.  o    o  ooooo
 # 8.      8b   8  8     8  8   8   `8  8    8  8b   8  8b   d8  8.      8b   8    8
@@ -569,7 +569,7 @@ class InstructionGroup(Instruction, ftype="group"):
 # :.....: ..:::.. :::..::: .. :..:::.. :.....: ..:::.. ..::::.. :.....: ..:::.. ::..::
 # ::::::: ::::::: :::::::: :: :::::::: ::::::: ::::::: :::::::: ::::::: ::::::: ::::::
 # ::::::: ::::::: :::::::: :: :::::::: ::::::: ::::::: :::::::: ::::::: ::::::: ::::::
-###############################################################################
+######################################################################################
 
 
 ###############################################################################
@@ -588,9 +588,9 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
         if not isinstance(content, InstructionGroup):
             raise TypeError("content must be an InstructionGroup")
         self._content = content
-        self._environment = {}
+        self._environment = InstructionEnvironment()
         if environment is not None:
-            self._environment.update(environment)
+            self._environment.update(**environment)
         self._params = params
 
     @property
@@ -818,13 +818,20 @@ if __name__ == "__main__":
     VarInp = KeyMapInstructionVariable.new(name="input1", keymap=big_km)
     VarOut = KeyMapInstructionVariable.new(name="output1", keymap=big_km)
 
-    print(VarInp._keymap)
+    VarInpInner = KeyMapInstructionVariable.new(name="input1", keymap=ltl_km)
+    VarOutInner = KeyMapInstructionVariable.new(name="output1", keymap=ltl_km)
 
     test_instructions_inner = InstructionGroup(
         [
-            LinearOperationInstruction(VarOut("key1"), VarInp("key3"), 1.0),
-            LinearOperationInstruction(VarOut("key2"), VarInp("key2"), 1.0),
-            LinearOperationInstruction(VarOut("key3"), VarInp("key1"), 1.0),
+            LinearOperationInstruction(
+                VarOutInner("key1"), VarInpInner("key3"), 1.0
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key2"), VarInpInner("key2"), 1.0
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key3"), VarInpInner("key1"), 1.0
+            ),
         ]
     )
     test_instructions = InstructionGroup(
