@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 14/02/2025, 18:34
-# Version:     0.0.206
+# Last Update: 21/02/2025, 13:38
+# Version:     0.0.210
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -52,7 +52,7 @@ class InstructionVariable:
         return f"<{self._name}>"
 
     @classmethod
-    def new(cls, name, dtype=None):
+    def new(cls, name, *, dtype=None):
         """create a new subclass from the name"""
         return type(name, (cls,), {"_name": name, "_dtype": dtype})
 
@@ -174,7 +174,7 @@ class KeyMapInstructionVariable(
 
     # this simply repeats so the linter knows what's going on
     @classmethod
-    def new(cls, name, keymap=None, dtype=None):
+    def new(cls, name, keymap=None, *, dtype=None):
         """create a new subclass from the name"""
         return type(
             name,

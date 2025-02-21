@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 05/02/2025, 18:53
-# Version:     0.0.3043
+# Last Update: 21/02/2025, 13:31
+# Version:     0.0.3055
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -203,7 +203,7 @@ class Key:
                     parent._tagged_keyseg(label)
                     if parent
                     else _KeySegment(label)
-                    for parent, label in tkey._as_list(tagged=True)
+                    for parent, label in tkey._unchain(tagged=True)
                 ]
             else:
                 self._key_segments += [_KeySegment(tkey)]
@@ -222,7 +222,7 @@ class Key:
         return tuple(kseg.label for kseg in self._key_segments)
 
     @property
-    def parents(self) -> Tuple[KeyMap]:
+    def parents(self) -> Tuple[Domain | None, ...]:
         """
         Access the classes parent attribute.
 
