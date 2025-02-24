@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/02/2025, 13:31
-# Version:     0.0.3055
+# Last Update: 24/02/2025, 10:55
+# Version:     0.1.0
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,22 +20,26 @@ import warnings
 
 __doc__ = """
 
-The keymap module builds around two main classes: Key and KeyMap.
-While a keymap represents a tree-like datastructure, keys are used to select
-branches within that map.
-Domain is the KeyMaps parent class and is used to illustrate generalization.
-However, only KeyMaps are indexed by keys and are the center of
-attention within this module.
+The KeyMap module provides the KeyMap, Keys and all relevant parents and 
+subclasses around it.
 
-Keys can be based on anything that a hash can be generated from. They can be
-chained into longer keys to summarize multiple branching decisions in a multi
-level tree.
+The KeyMap is a tree-like data structure, that stores links to KeyMaps via Keys.
+It provides routines to linearize the keymap and compute the offset locations of
+the various domains in the linearized system.
 
-The KeyMap provides multiple routines to add new domains to it. The routine
-link(key, domain) appends the domain at 'key'. The routine extend(domain)
-derives the key automatically from the name of the extending keymap object.
-The routine entry(label) appends an Entry object at key Key(label).
+Keys are internally made from KeySegments. These segments can be aware of their
+parents. That is referred to as a tagged. Tagged keys only fit into the proper
+system of KeyMaps that they are associated with. To the outside, KeySegments are
+not supposed to be used. 
 
+The KeyMaps parent class is called Domain. Domains are a generalization of any
+however managed region in memory. Right now, there is no sibling class to the
+KeyMap, but an early introduction of a potential common parent simplifies later
+additions.
+
+A special case of KeyMaps is the Region. A Region is a KeyMap, where the keys are
+simple integers, so most literally a region of data. A Subclass of a Region is
+a special Length-1 Region, the Entry. An entry cannot be further subdivided.
 """
 
 
@@ -461,11 +465,13 @@ class Domain:
         :raises: RuntimeError if the update call did not succeed.
         """
         dom = None
-        dom = pickle.load(open(filename, "rb"))
-        dom.flag_ud()
-        dom.__class__._enum += 1
-        if not dom.update():
-            raise RuntimeError("update did not succeed")
+        with open(filename, "rb") as handle:
+            dom = pickle.load(handle)
+            dom.flag_ud()
+            dom.__class__._enum += 1
+            if not dom.update():
+                raise RuntimeError("Critical: Update did not succeed")
+        assert dom is not None
         return dom
 
     def to_file(self, filename) -> Self:
@@ -590,9 +596,9 @@ class KeyMap(Domain):
         super().__init__(name=name)
 
         # lookup tables
-        self._pos2dom = []  # translate from pos to key dom
-        self._pos2key = []  # translate from pos to key
-        self._key2pos = {}  # translate the key to its position
+        self._off2dom = []  # translate from offset to dom and remaining offset
+        self._off2key = []  # translate from offset to key
+        self._key2off = {}  # translate the key to its offset
         self._key2dom = {}  # key objects are keys to doms
 
         # reset
@@ -605,9 +611,9 @@ class KeyMap(Domain):
         assert not self.is_locked
         self._is_ud_flag = False
         self._size = 0
-        self._pos2dom = []
-        self._pos2key = []
-        self._key2pos = {}
+        self._off2dom = []
+        self._off2key = []
+        self._key2off = {}
         self._key2dom = {}
 
     def key(self, keylike, /):
@@ -707,7 +713,7 @@ class KeyMap(Domain):
 
     def link(self, keylike, /, domain, no_override=True):
         """
-        Append a domain object at a key.
+        Create a link to domain object via a key in the keymap.
         The key is either given or generated from the domains name.
         If no domain is given, an entry is generated at the key location.
         The key object is copied when applied.
@@ -720,7 +726,7 @@ class KeyMap(Domain):
         """
 
         if self.is_locked:
-            raise ValueError("Cannot add to a locked domain")
+            raise ValueError("Cannot add to a locked keymap")
 
         # use a kseg from this map
         kseg = self._to_tagged_keyseg(keylike)
@@ -775,17 +781,17 @@ class KeyMap(Domain):
 
             # move into the selected domain
             self._key2dom[tkey] = domain
-            self._key2pos[tkey] = offset_pointer
+            self._key2off[tkey] = offset_pointer
             for offset in range(len(domain)):
-                self._pos2dom.append((domain, offset))
-                self._pos2key.append((tkey))
+                self._off2dom.append((domain, offset))
+                self._off2key.append((tkey))
                 offset_pointer += 1
-        assert len(self._pos2dom) == offset_pointer
+        assert len(self._off2dom) == offset_pointer
         self._size = offset_pointer
         return True
 
     def __getitem__(self, key):
-        _, entry = self.find(key)
+        _, entry = self.goto(key)
         return entry
 
     def __contains__(self, keylike):
@@ -863,9 +869,9 @@ class KeyMap(Domain):
             else:
                 yield dom
 
-    def find(self, *keys, _gen=None):
+    def _key2offdom(self, *keys):
         """
-        Find a key and return position and entry.
+        Get position and domain from key
 
         :param keys: keys to find
         :returns: a tuple of (position, Domain)"""
@@ -879,18 +885,18 @@ class KeyMap(Domain):
                     raise KeyError(
                         f"Tagged key {kseg.label} not from keymap {current_obj}"
                     )
-            if kseg not in current_obj._key2pos:
+            if kseg not in current_obj._key2off:
                 raise KeyError(
                     f"Cannot find key {kseg} in domain '{current_obj}'"
                 )
-            current_pos += current_obj._key2pos[kseg]
+            current_pos += current_obj._key2off[kseg]
             current_obj = current_obj._key2dom[kseg]
 
         return current_pos, current_obj
 
-    def at(self, offset: int, _collect=None):
+    def _off2keydom(self, offset: int, *, _collect=None):
         """
-        Find what is at a certain position.
+        Get key and domain from position
 
         :param offset: the position to find
         :returns: (Domain, Key)
@@ -900,9 +906,42 @@ class KeyMap(Domain):
         if isinstance(self, Entry) or not self._key2dom:
             assert isinstance(_collect, Key)
             return _collect, self  # RETURN
-        key = self._pos2key[offset]
-        domain, offset = self._pos2dom[offset]
-        return domain.at(offset, Key(_collect, key))
+        this_key = self._off2key[offset]
+        next_domain, remaining_offset = self._off2dom[offset]
+        return next_domain._off2keydom(
+            remaining_offset, _collect=Key(_collect, this_key)
+        )
+
+    # public routines
+    # ===============
+
+    def key2off(self, *keys):
+        """key to offset"""
+        off, _ = self._key2offdom(*keys)
+        return off
+
+    def key2dom(self, *keys):
+        """key to domain"""
+        _, domain = self._key2offdom(*keys)
+        return domain
+
+    def goto(self, *keys):
+        """goto a key and find both offset and domain"""
+        return self._key2offdom(*keys)
+
+    def off2key(self, offs: int):
+        """offset to key"""
+        key, _ = self._off2keydom(offs, _collect=Key())
+        return key
+
+    def off2dom(self, offs: int):
+        """offset to domain"""
+        _, domain = self._off2keydom(offs, _collect=Key())
+        return domain
+
+    def proceed(self, offs: int):
+        """proceed by an offset and find key and domain"""
+        return self._off2keydom(offs, _collect=Key())
 
 
 ###############################################################################
@@ -947,7 +986,7 @@ class Region(KeyMap):
 
     def extend(self, domain, autorename=False):
         """
-        Regions are internally managed, so this will raise an Exception.
+        Regions are internally managed, so this may raise an Exception.
 
         :params domain: must be an entry to extend the region with.
         :raises: ValueError, if the domain is not an Entry.
