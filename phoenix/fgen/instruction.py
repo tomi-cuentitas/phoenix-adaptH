@@ -5,13 +5,16 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 14/02/2025, 18:38
-# Version:     0.0.1845
+# Last Update: 24/02/2025, 16:12
+# Version:     0.0.2031
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+
+from __future__ import annotations
 
 __doc__ = """
 Instruction module description
@@ -27,7 +30,7 @@ denominator of instruction types within the group, i.e. how it is to be applied
 to data.
 """
 
-from typing import Any, List, Dict
+from typing import Any, List, Dict, Tuple
 import weakref
 
 from phoenix._aux import segment_overlap
@@ -76,15 +79,35 @@ class Instruction:
         self.__class__._obj_id_count += 1
         return f"{self._ftype}#{self.__class__._obj_id_count}"
 
+    def _instruction_hash(self, generating) -> int:
+        """
+        generate a hash from the generating input
+
+        :param generating: something hashable
+        :returns: a valid hash
+        """
+        return hash(generating)
+
     @staticmethod
-    def _get_itype_common_root(instruction_list):
+    def _get_itype_common_root(instruction_list: List[Instruction]) -> str:
+        """
+        get the common root amongst string that are subdividable by '.'
+
+        :param instruction_list: a list of instructions to be processed
+        :returns: the greatest common root amongst all instructions.
+        """
         if len(instruction_list) == 0:
-            return None
+            return ""
         segments_list = [instr.itype.split(".") for instr in instruction_list]
         latest_parent_itype = ".".join(segment_overlap(*segments_list))
         return latest_parent_itype
 
-    def __len__(self):
+    def __len__(self) -> int:
+        """
+        Return the length of the instruction
+
+        :returns: instruction length
+        """
         return 1
 
     def __init__(self, *, itype=None):
@@ -93,49 +116,77 @@ class Instruction:
         self._obj_id = self._get_obj_id()
         self._protected = True
 
-    def __init_subclass__(cls, ftype):
-        # print("asd", cls._ftype, ftype, cls.__name__)
+    def __init_subclass__(cls, ftype: str):
+        """
+        init the subclass.
+
+        :param ftype: the functional type of the subclass
+        """
         ftype = ftype.replace(".", ":")
         cls._obj_id_count = 0
         cls._ftype += f".{ftype}"
 
     def __enter__(self):
+        """
+        enter an environment, where the write-protection is lifted
+        """
         self._protected = False
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
+        """
+        exit the environment for write access, protection reenabled
+        """
         self._protected = True
 
-    def checksum(self):
-        """get a checksum of the instruction"""
+    def checksum(self) -> int:
+        """
+        Get a checksum object that can be fed to a hash function.
+        Used to identify instructions being identical.
+        """
         test_tuple = (
+            self.identifier,
             self._itype,
             self._ftype,
         )
-        return test_tuple
+        return self._instruction_hash(test_tuple)
 
     @property
-    def identifier(self):
+    def identifier(self) -> str:
+        """
+        get a unique identifier for the instruction.
+
+        This identifier is typically composed from the ftype and a
+        number that increases within the subclass
+        :returns: identifier
+        """
         return self._obj_id
 
     @property
     def instructions(self):
-        """access instructions"""
-        # break recursive loop
+        """
+        Iterate among the instructions. No offsets or anything applied, not recursion.
+        """
+        return
         yield self
 
     # pylint: disable=unused-argument
-    def unpack(self, recursive: bool = True, environment=None):
-        """unpack the instruction"""
-        # break recursive loop
-        yield self.as_seen_in(environment)
+    def unpack(self, recursive: bool | int = True, environment=None):
+        """
+        Unpacking goes through the instructions but interprets them wrt an environment.
+
+        If recursive is set to an integer, this is the level of recursion (0=no unpacking, only
+        self). If recursive is set to true, there is no level assumed an infinite unpacking is
+        performed (default).
+        Environments provide offsets, local definitions and special groupings.
+
+        :param recursive: recursion flag or depth.
+        :param environment: optional environment.
+
+        """
+        yield self.apply_environment(environment)  # break recursive loop
 
     # pylint: enable=unused-argument
-
-    def as_seen_in(self, environment):
-        """see the instruction wrt some environment"""
-        print("environment:", environment)
-        return self
 
     @property
     def itype(self):
@@ -201,6 +252,34 @@ class Instruction:
         # pylint: disable=unnecessary-dunder-call
         return self.__deepcopy__(memo=memo)
         # pylint: enable=unnecessary-dunder-call
+
+    def _apply_environment(
+        self,
+        environment: InstructionEnvironment,
+        memo: dict,
+    ) -> Instruction:
+        """actually apply the environment"""
+        return self.__class__(itype=self._itype)
+
+    def apply_environment(
+        self,
+        environment: InstructionEnvironment | None = None,
+        *,
+        memo=None,
+    ) -> Instruction:
+        """
+        Apply an environment to the instruction. User call, handles memo and environment initialization.
+        """
+        if environment is None:
+            environment = InstructionEnvironment()
+        if memo is None:
+            memo = {}
+        if (id(environment), id(self)) in memo:
+            if (memorized := memo[(id(environment), id(self))]()) is not None:
+                return memorized
+        env_applied = self._apply_environment(environment, memo=memo)
+        memo[(id(environment), id(self))] = weakref.ref(env_applied)
+        return env_applied
 
 
 ###############################################################################
@@ -312,19 +391,19 @@ class GenericInstruction(Instruction, ftype="generic"):
         if defaults is None:
             defaults = {}
         # check params first, then check defaults, return None for miss
-        pfd = {}  # _PartialFormatDict
+        data_dict = {}  # _PartialFormatDict
         if keys:
-            pfd.update(
+            data_dict.update(
                 {key: self.get(key, defaults.get(key, None)) for key in keys}
             )
         else:
-            pfd.update(
+            data_dict.update(
                 {
                     key: self.get(key, defaults.get(key, None))
                     for key in self.keys()
                 }
             )
-        return pfd
+        return data_dict
 
     def to_tuple(self, *keys, defaults: dict | None = None):
         """get a data tuple from keys in the order the keys are requested"""
@@ -351,17 +430,38 @@ class GenericInstruction(Instruction, ftype="generic"):
             memo = {}
         if id(self) in memo:
             return memo[id(self)]()  # beware, must be called due to weakref
-        copied = self.__class__(**self._params, itype=self.itype)
+        copied = self.__class__.from_dict(self._params)
         memo[id(self)] = weakref.ref(copied)
         return copied
 
+    @classmethod
+    def from_dict(cls, params):
+        """
+        generate a new class instance from a dictionary.
+        Consider renaming here
+        """
+        return cls(**params)
 
-class KeyMapInstruction(GenericInstruction, ftype="expr"):
+
+class KeyMapInstruction(GenericInstruction, ftype="kmap"):
     """Represents an Expression"""
 
-    def as_seen_in(self, environment=None):
-        print("environment:", environment)
-        return self
+    def _apply_environment(
+        self,
+        environment: InstructionEnvironment,
+        memo: dict,
+    ) -> Instruction:
+        """actually apply the environment"""
+        modified_params = {}
+        for key, val in self._params.items():
+            if isinstance(val, InstructionVariable):
+                if val.name in environment:
+                    modified_params[key] = environment[val.name] | val
+                else:
+                    modified_params[key] = val
+            else:
+                modified_params[key] = val
+        return self.__class__.from_dict(modified_params)
 
 
 ###############################################################################
@@ -434,12 +534,6 @@ class InstructionGroup(Instruction, ftype="group"):
     def itype(self):
         return self._itype
 
-    # def _update(self):
-    #     self._len = len(self._instructions)
-    #     self._itype = InstructionGroup._get_itype_common_root(
-    #         self._instructions
-    #     )
-
     @property
     def instructions(self):
         """access read-only attribute instructions as generator"""
@@ -462,7 +556,8 @@ class InstructionGroup(Instruction, ftype="group"):
         else:
             if recursive is False:
                 yield from self.unpack(recursive=1, environment=environment)
-            yield self.as_seen_in(environment)
+            else:
+                return self.apply_environment(environment)
 
     def flatten(self):
         """replace content by flattened instructions, which will unpack all inner groups"""
@@ -557,6 +652,17 @@ class InstructionGroup(Instruction, ftype="group"):
             collect.append(subgroup_type(group, itype=self._itype))
         return group_type(collect, itype=self._itype)
 
+    def _apply_environment(
+        self, environment: InstructionEnvironment, memo: dict
+    ) -> Instruction:
+        return self.__class__(
+            [
+                instr.apply_environment(environment, memo=memo)
+                for instr in self.instructions
+            ],
+            itype=self.itype,
+        )
+
 
 ######################################################################################
 #
@@ -615,6 +721,19 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
             itype=self.itype,
             **self._params,
         )
+
+    def _apply_environment(
+        self, environment: InstructionEnvironment, memo: dict
+    ) -> Instruction:
+        content = (
+            [
+                instr.apply_environment(
+                    environment.merge(self._environment), memo=memo
+                )
+                for instr in self.instructions
+            ],
+        )
+        return InstructionGroup(content, itype=self.itype)
 
     def unpack(self, recursive: bool | int = True, environment=None):
         """unpack all instructions, including inner groups"""
@@ -747,7 +866,11 @@ class PolynomialInstruction(KeyMapInstruction, ftype="polynomial"):
     """
 
     def __init__(
-        self, tgt0: InstructionVariable, src0: InstructionVariable, *coeffs
+        self,
+        tgt0: InstructionVariable,
+        src0: InstructionVariable,
+        *coeffs,
+        **other,
     ):
         degree = len(coeffs) - 1
         assert isinstance(tgt0, InstructionVariable)
@@ -778,6 +901,19 @@ class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
         assert isinstance(src0, InstructionVariable)
         super().__init__(tgt0, src0, beta, alpha)
 
+    @classmethod
+    def from_dict(cls, params):
+        """
+        generate a new class instance from a dictionary.
+        Consider renaming here
+        """
+        return cls(
+            params["tgt0"],
+            params["src0"],
+            params["coeff_x1"],
+            params["coeff_x0"],
+        )
+
 
 ###############################################################################
 #
@@ -792,6 +928,18 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
         assert isinstance(tgt0, InstructionVariable)
         assert isinstance(src0, InstructionVariable)
         super().__init__(tgt0, src0, 0, alpha)
+
+    @classmethod
+    def from_dict(cls, params):
+        """
+        generate a new class instance from a dictionary.
+        Consider renaming here
+        """
+        return cls(
+            params["tgt0"],
+            params["src0"],
+            params["coeff_x1"],
+        )
 
 
 ###############################################################################
@@ -838,7 +986,10 @@ if __name__ == "__main__":
         [
             OffsetEnvironmentInstruction(
                 test_instructions_inner,
-                environment={"input1": f"foo{val}", "output1": f"foo{val}"},
+                environment={
+                    "input1": VarInp(f"foo{val}"),
+                    "output1": VarOut(f"foo{val}"),
+                },
             )
             for val in range(5)
         ]
@@ -855,7 +1006,7 @@ if __name__ == "__main__":
     print(VarInp._name)
 
     print(VarInp("foo1", "key2"))
-    print(VarInp("foo1", "key2").resolve())
+    # print(VarInp("foo1", "key2").resolve())
 
     print("Distinction")
 
@@ -866,23 +1017,23 @@ if __name__ == "__main__":
 
     print("unpack, 0 recursive")
     for el in test_instructions.unpack(recursive=0):
-        print(el.identifier)
+        print(el.identifier, el["tgt0"])
 
     print("unpack, non recursive")
     for el in test_instructions.unpack(recursive=False):
-        print(el.identifier)
+        print(el.identifier, el["tgt0"])
 
     print("unpack, 1 recursive")
     for el in test_instructions.unpack(recursive=1):
-        print(el.identifier)
+        print(el.identifier, el["tgt0"])
 
     print("unpack, 2 recursive")
     for el in test_instructions.unpack(recursive=2):
-        print(el.identifier)
+        print(el.identifier, el["tgt0"])
 
     print("unpack, True recursive")
     for el in test_instructions.unpack(recursive=True):
-        print(el.identifier)
+        print(el.identifier, el["tgt0"])
 
     sys.exit(0)
 

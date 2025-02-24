@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 21/02/2025, 13:38
-# Version:     0.0.210
+# Last Update: 24/02/2025, 16:14
+# Version:     0.0.224
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -111,7 +111,7 @@ class InstructionVariable:
 
     def apply_as_offset_to(self, other):
         """combine two variables"""
-        return self.resolved().progress(*other.history, *other.params)
+        return self.copy().progress(*other.history, *other.params)
 
     def __or__(self, other):
         return self.apply_as_offset_to(other)
@@ -129,8 +129,8 @@ class InstructionParameter(InstructionVariable):
         return self
 
     def resolve(self) -> Self:
-        """resolve num steps in param"""
-        return self.params[0]
+        """resolve"""
+        return self
 
     def resolved(self):
         """return a resolved copy of self"""
@@ -197,11 +197,11 @@ class KeyMapInstructionVariable(
         for param in self._params:
             param = self._params.pop(0)
             assert newpointer is not None
-            offset, newpointer = newpointer.find(param)
+            offset, newpointer = newpointer.goto(param)
             self._pointer = weakref.ref(newpointer)
             self._offsets.append(offset)
         self._pointer = weakref.ref(newpointer)
-        return self._offsets
+        return self
 
 
 class InstructionEnvironment:
@@ -250,3 +250,6 @@ class InstructionEnvironment:
 
     def __getitem__(self, key):
         return self._variables[key]
+
+    def __contains__(self, key):
+        return key in self._variables
