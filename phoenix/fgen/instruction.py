@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 24/02/2025, 16:12
-# Version:     0.0.2031
+# Last Update: 24/02/2025, 17:49
+# Version:     0.0.2065
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -274,11 +274,11 @@ class Instruction:
             environment = InstructionEnvironment()
         if memo is None:
             memo = {}
-        if (id(environment), id(self)) in memo:
-            if (memorized := memo[(id(environment), id(self))]()) is not None:
-                return memorized
+        # if (id(environment), id(self)) in memo:
+        #     if (memorized := memo[(id(environment), id(self))]()) is not None:
+        #         return memorized
         env_applied = self._apply_environment(environment, memo=memo)
-        memo[(id(environment), id(self))] = weakref.ref(env_applied)
+        # memo[(id(environment), id(self))] = weakref.ref(env_applied)
         return env_applied
 
 
@@ -927,7 +927,7 @@ class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
     def __init__(self, tgt0, src0, alpha):
         assert isinstance(tgt0, InstructionVariable)
         assert isinstance(src0, InstructionVariable)
-        super().__init__(tgt0, src0, 0, alpha)
+        super().__init__(tgt0, src0, alpha, 0.0)
 
     @classmethod
     def from_dict(cls, params):
@@ -1017,23 +1017,33 @@ if __name__ == "__main__":
 
     print("unpack, 0 recursive")
     for el in test_instructions.unpack(recursive=0):
-        print(el.identifier, el["tgt0"])
+        print(
+            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
+        )
 
     print("unpack, non recursive")
     for el in test_instructions.unpack(recursive=False):
-        print(el.identifier, el["tgt0"])
+        print(
+            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
+        )
 
     print("unpack, 1 recursive")
     for el in test_instructions.unpack(recursive=1):
-        print(el.identifier, el["tgt0"])
+        print(
+            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
+        )
 
     print("unpack, 2 recursive")
     for el in test_instructions.unpack(recursive=2):
-        print(el.identifier, el["tgt0"])
+        print(
+            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
+        )
 
     print("unpack, True recursive")
     for el in test_instructions.unpack(recursive=True):
-        print(el.identifier, el["tgt0"])
+        print(
+            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
+        )
 
     sys.exit(0)
 

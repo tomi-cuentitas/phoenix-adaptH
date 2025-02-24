@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 24/02/2025, 16:14
-# Version:     0.0.224
+# Last Update: 24/02/2025, 17:40
+# Version:     0.0.262
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -75,7 +75,17 @@ class InstructionVariable:
     @property
     def offsets(self):
         """access offsets"""
+        if self._params:
+            print(self._params)
+            return self.resolved().offsets
         return list(self._offsets)
+
+    @property
+    def offset(self):
+        """access total offset"""
+        if self._params:
+            return self.resolved().offset
+        return sum(self._offsets)
 
     @property
     def history(self):
@@ -91,8 +101,8 @@ class InstructionVariable:
         """return a copy"""
         return self.__class__(
             *self.params,
-            offsets=list(self.offsets),
-            history=list(self.history),
+            offsets=list(self._offsets),
+            history=list(self._history),
         )
 
     def progress(self, *params) -> Self:
@@ -195,12 +205,12 @@ class KeyMapInstructionVariable(
         """resolve num steps in param"""
         newpointer = self._pointer()
         for param in self._params:
-            param = self._params.pop(0)
             assert newpointer is not None
             offset, newpointer = newpointer.goto(param)
             self._pointer = weakref.ref(newpointer)
             self._offsets.append(offset)
         self._pointer = weakref.ref(newpointer)
+        self._params = []
         return self
 
 
