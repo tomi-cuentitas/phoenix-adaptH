@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 27/01/2025, 14:37
-# Version:     0.0.1823
+# Last Update: 06/02/2025, 13:43
+# Version:     0.0.1977
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -49,7 +49,7 @@ factually wrong.
 """
 
 
-from typing import Type
+from typing import Type, Any
 import numpy as np
 
 from phoenix.coeffbackend import CoeffBackend
@@ -59,7 +59,7 @@ from phoenix.keymap import KeyMap
 ZERO_TOL = 1e-14
 
 
-class ADAA:
+class GenericADAA:
     """
     ADAA is an acronym for Aligned Data Access Array.
     This data type is intended for the systematic distribution of data into
@@ -73,62 +73,36 @@ class ADAA:
     arithmetic operations.
     """
 
-    _IDENTIFIER = "COMPLEX_ARRAY"
-    BACKEND: CoeffBackend = None
-    KEYMAP: KeyMap = None
-    FIXED_SIZE = None
-
-    _type_r = "f64"
-    _type_i = "f64"
+    _IDENTIFIER = ""
+    _BACKEND: CoeffBackend
+    _KEYMAP: KeyMap | None = None
+    _FIXED_SIZE = None
+    _DATATYPES: dict[str, str] = {}
 
     def __init__(self, size: int | None = None, init_zeros=True):
-        self._data_r = None
-        self._data_i = None
+        self._data: dict[str, Any] = {}
+        for identifier in self._DATATYPES:
+            self._data[identifier] = None
         self._size = 0
-        if self.FIXED_SIZE is None and self.KEYMAP is None:
+        if self._FIXED_SIZE is None and self._KEYMAP is None:
             if not size:
                 raise ValueError("Size must be given or fixed.")
-        if self.FIXED_SIZE:
+        if self._FIXED_SIZE:
             if size is None:
-                size = self.FIXED_SIZE
+                size = self._FIXED_SIZE
             else:
-                if size != self.FIXED_SIZE:
-                    raise ValueError(f"Size is fixed ({self.FIXED_SIZE})")
-        if self.KEYMAP:
+                if size != self._FIXED_SIZE:
+                    raise ValueError(f"Size is fixed ({self._FIXED_SIZE})")
+        if self._KEYMAP:
             if size is None:
-                size = self.KEYMAP.size
+                size = self._KEYMAP.size
             else:
-                if size != self.KEYMAP.size:
-                    raise ValueError(f"Size is fixed by keymap {self.KEYMAP}")
+                if size != self._KEYMAP.size:
+                    raise ValueError(f"Size is fixed by keymap {self._KEYMAP}")
         assert size is not None
         self.reinit(size)
         if init_zeros:
             self.to_zero()  # should probably be forced anyways.
-
-    def _access_pattern(self, prefix):
-        return self.BACKEND.access_pattern(prefix)
-
-    @property
-    def real(self):
-        """Access protected attribute real."""
-        return self._data_r
-
-    @real.setter
-    def real(self, arr):
-        """Set the data for real part."""
-        # self._set_data(real=arr)
-        raise ValueError("Real part of the data cannot be set directly.")
-
-    @property
-    def imag(self):
-        """Access protected attribute imag."""
-        return self._data_i
-
-    @imag.setter
-    def imag(self, arr):
-        """Set the data for imag part."""
-        # self._set_data(imag=arr)
-        raise ValueError("Imag part of the data cannot be set directly.")
 
     @property
     def identifier(self) -> str:
@@ -140,127 +114,54 @@ class ADAA:
         """Access write-protected property 'size'"""
         return self._size
 
+    @property
+    def data(self) -> dict[str, Any]:
+        """Access to ideally write-protexted property _data"""
+        # TODO
+        return self._data
+
+    @classmethod
+    def datatypes(cls):
+        """access the data type pattern"""
+        yield from [
+            (identifier, thisdtype)
+            for identifier, thisdtype in cls._DATATYPES.items()
+        ]
+
+    def unpack(self):
+        """unpack the references and the size"""
+        for identifier in self._DATATYPES:
+            yield self._data[identifier]
+        yield self.size
+
     def to_zero(self):
         """Set the coefficient data to zero."""
-        self.BACKEND.coeff_to_zero(
-            self._data_r, size=self.size, dtype=self._type_r
-        )
-        self.BACKEND.coeff_to_zero(
-            self._data_i, size=self.size, dtype=self._type_i
-        )
+        for identifier, thisdtype in self._DATATYPES.items():
+            self._BACKEND.coeff_to_zero(
+                self._data[identifier],
+                size=self.size,
+                dtype=thisdtype,
+            )
         return self
 
-    @classmethod
-    def from_numpy(cls, arr: np.ndarray) -> ADAA:
-        """Import data from numpy array."""
-        size = len(arr)
-        obj = cls(size)
-        cls.BACKEND.coeff_from_numpy(
-            obj.real, arr.real, size=size, dtype=cls._type_r
-        )
-        cls.BACKEND.coeff_from_numpy(
-            obj.imag, arr.imag, size=size, dtype=cls._type_i
-        )
-        return obj
-
-    def to_numpy(self) -> np.ndarray:
-        """Export data as numpy array."""
-        real_part = self.BACKEND.coeff_to_numpy(
-            self.real, size=self.size, dtype=self._type_r
-        )
-        imag_part = self.BACKEND.coeff_to_numpy(
-            self.imag, size=self.size, dtype=self._type_i
-        )
-        return real_part + 1j * imag_part
-
-    def unpack(self) -> tuple:
-        """Unpack the layer into a tuple to apply it to functions."""
-        return (self._data_r, self._data_i, self.size)
-
-    def copy(self) -> ADAA:
+    def copy(self) -> GenericADAA:
         """Creates a real copy of self."""
         copy = self.__class__(self.size)
-        self.BACKEND.coeff_copy_data(
-            copy.real, self.real, size=self.size, dtype=self._type_r
-        )
-        self.BACKEND.coeff_copy_data(
-            copy.imag, self.imag, size=self.size, dtype=self._type_i
-        )
+        for identifier, thisdtype in self._DATATYPES.items():
+            self._BACKEND.coeff_copy_data(
+                copy.data[identifier],
+                self.data[identifier],
+                size=self.size,
+                dtype=thisdtype,
+            )
         return copy
-
-    @classmethod
-    def allclose(cls, op_a, op_b, rtol: float = 1e-05, atol: float = 1e-8):
-        """
-        Check if the values are all sufficiently close by checking, if
-        |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
-        is fulfilled for all coefficients.
-        """
-        if op_a.size != op_b.size:
-            raise ValueError("Compared operators must have the same size.")
-        real_all_close = cls.BACKEND.coeff_allclose(
-            op_a.real, op_b.real, rtol, atol, size=op_a.size, dtype=cls._type_r
-        )
-        imag_all_close = cls.BACKEND.coeff_allclose(
-            op_a.imag, op_b.imag, rtol, atol, size=op_a.size, dtype=cls._type_i
-        )
-        return real_all_close and imag_all_close
-
-    @classmethod
-    def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
-        """evaluates operator_r += operator_a + scalar_b * operator_c"""
-
-        assert op_c is not None
-        assert op_r is not None
-
-        if size is not None:
-            if size != op_r.size:
-                raise ValueError("Invalid size parameter.")
-        size = op_r.size
-
-        if op_a is None:
-            zero = cls(size).to_zero()
-            oar, oai = zero.real, zero.imag
-        else:
-            oar = op_a.real
-            oai = op_a.imag
-
-        ocr = op_c.real
-        oci = op_c.imag
-
-        if sc_b is None:
-            sbr, sbi = (1.0, 0.0)
-        else:
-            sbr, sbi = (complex(sc_b).real, complex(sc_b).imag)
-
-        aux_r = cls.BACKEND.coeff_new_array(size, dtype=cls._type_r)
-        aux_i = cls.BACKEND.coeff_new_array(size, dtype=cls._type_i)
-
-        # sbr * ocr - sbi * oci -> aux_r
-        cls.BACKEND.coeff_linop(
-            aux_r, sbr, ocr, -1 * sbi, oci, size=size, dtype=cls._type_r
-        )
-        # sbi * ocr + sbr * oci -> aux_i
-        cls.BACKEND.coeff_linop(
-            aux_i, sbi, ocr, sbr, oci, size=size, dtype=cls._type_i
-        )
-
-        # bracket + oar -> op_r.real
-        cls.BACKEND.coeff_add(
-            op_r.real, aux_r, oar, size=size, dtype=cls._type_r
-        )
-        # bracket + oai -> op_r.imag
-        cls.BACKEND.coeff_add(
-            op_r.imag, aux_i, oai, size=size, dtype=cls._type_i
-        )
 
     def free_memory(self):
         """free the occupied memory"""
-        self._data_r = self.BACKEND.coeff_free(
-            self._data_r, size=self.size, dtype=self._type_r
-        )
-        self._data_i = self.BACKEND.coeff_free(
-            self._data_i, size=self.size, dtype=self._type_i
-        )
+        for identifier, thisdtype in self._DATATYPES.items():
+            self._data[identifier] = self._BACKEND.coeff_free(
+                self._data[identifier], size=self.size, dtype=thisdtype
+            )
 
     def _reinit(self, size=None):
         """Reinitialize the data for a certain size"""
@@ -274,8 +175,10 @@ class ADAA:
     def reinit(self, size):
         """Actual reinitialization. Forced."""
         self.free_memory()
-        self._data_r = self.BACKEND.coeff_new_array(size, dtype=self._type_r)
-        self._data_i = self.BACKEND.coeff_new_array(size, dtype=self._type_i)
+        for identifier, thisdtype in self._DATATYPES.items():
+            self._data[identifier] = self._BACKEND.coeff_new_array(
+                size, dtype=thisdtype
+            )
         self._size = size
 
     def __init_subclass__(
@@ -286,53 +189,76 @@ class ADAA:
         variable _IDENTIFIER.
         """
         if backend is None:
-            if cls.BACKEND is None:
-                raise ValueError("No backend specified.")
+            if cls._IDENTIFIER != "":
+                if cls._BACKEND is None:
+                    raise ValueError("No backend specified.")
         else:
-            cls.BACKEND = backend
-        if identifier is None:
-            identifier = cls.__name__  # get default
-        cls._IDENTIFIER = identifier
+            cls._BACKEND = backend
+        if identifier is not None:
+            if cls._IDENTIFIER != "":
+                cls._IDENTIFIER = cls._IDENTIFIER + "." + identifier
+            else:
+                cls._IDENTIFIER = identifier
         if size is not None and keymap is not None:
             raise ValueError("Size and keymap cannot be set simultaneously.")
         if keymap is not None:
-            cls.KEYMAP = keymap  # get default
+            cls._KEYMAP = keymap  # get default
         if size is not None:
             if size >= 0:
-                cls.FIXED_SIZE = size
+                cls._FIXED_SIZE = size
             else:
                 raise ValueError("Size must be a non-negative integer.")
 
     @classmethod
-    def set_keymap(cls, keymap: KeyMap) -> Type[ADAA]:
+    def allclose(cls, op_a, op_b, rtol: float = 1e-05, atol: float = 1e-8):
+        """
+        Check if the values are all sufficiently close by checking, if
+        |a - b|² <= atol² + rtol² (|a|² + |b|²) / 4
+        is fulfilled for all coefficients.
+        """
+        if op_a.size != op_b.size:
+            raise ValueError("Compared operators must have the same size.")
+        for identifier, thisdtype in cls._DATATYPES.items():
+            this_all_close = cls._BACKEND.coeff_allclose(
+                op_a.data[identifier],
+                op_b.data[identifier],
+                rtol,
+                atol,
+                size=op_a.size,
+                dtype=thisdtype,
+            )
+            if not this_all_close:
+                return False
+        return True
+
+    @classmethod
+    def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
+        """evaluates operator_r += operator_a + scalar_b * operator_c"""
+        raise NotImplementedError("Must be implemented in subclass")
+
+    @classmethod
+    def set_keymap(cls, keymap: KeyMap) -> Type[GenericADAA]:
         """derive a type with given keymap"""
-        if cls.FIXED_SIZE:
+        if cls._FIXED_SIZE:
             raise ValueError("Cannot set keymap when fixed size is given.")
-        if cls.KEYMAP is not None:
-            raise ValueError(f"KeyMap {cls.KEYMAP} already set.")
+        if cls._KEYMAP is not None:
+            raise ValueError(f"KeyMap {cls._KEYMAP} already set.")
         return type(cls._IDENTIFIER + f"<{keymap}>", (cls,), {}, keymap=keymap)
 
     @classmethod
-    def fix_size(cls, size: int) -> Type[ADAA]:
+    def fix_size(cls, size: int) -> Type[GenericADAA]:
         """derive a fixed size type"""
-        if cls.KEYMAP:
+        if cls._KEYMAP:
             raise ValueError("Cannot derive fixed size when keymap is given.")
-        if cls.FIXED_SIZE:
-            raise ValueError(f"Fixed size {cls.FIXED_SIZE} already set.")
+        if cls._FIXED_SIZE:
+            raise ValueError(f"Fixed size {cls._FIXED_SIZE} already set.")
 
         return type(cls._IDENTIFIER + f"[{size}]", (cls,), {}, size=size)
 
     @classmethod
-    def ones(cls, size=None):
-        """return an ADAA made from ones"""
-        if size is None:
-            size = cls.FIXED_SIZE
-        return cls.from_numpy(np.ones(size))
-
-    @classmethod
     def mul(cls, first, other, target=None, **_kwargs):
         """multiplication slot routine"""
-        if isinstance(other, ADAA):
+        if isinstance(other, GenericADAA):
             raise ValueError(
                 "Multiplication by other operator is not supported"
             )
@@ -344,7 +270,7 @@ class ADAA:
     @classmethod
     def div(cls, first, other, target=None, **_kwargs):
         """division slot routine"""
-        if isinstance(other, ADAA):
+        if isinstance(other, GenericADAA):
             raise ValueError("Division by other operator is not supported")
         if target is None:
             target = cls(first.size)
@@ -354,7 +280,7 @@ class ADAA:
     @classmethod
     def add(cls, first, other, target=None, **_kwargs):
         """addition slot routine"""
-        if isinstance(other, ADAA):
+        if isinstance(other, GenericADAA):
             assert first.size == other.size
             assert first.identifier == other.identifier
         else:
@@ -367,7 +293,7 @@ class ADAA:
     @classmethod
     def sub(cls, first, other, target=None, **_kwargs):
         """subtraction slot routine"""
-        if isinstance(other, ADAA):
+        if isinstance(other, GenericADAA):
             assert first.size == other.size
             assert first.identifier == other.identifier
         else:
@@ -436,20 +362,108 @@ class ADAA:
 ###############################################################################
 
 
-#
+class ComplexArrayADAA(
+    GenericADAA, identifier="COMPLEXARRAY", backend=CoeffBackend
+):
+    "implement a complex array as default"
 
+    _DATATYPES: dict[str, str] = {"real": "f64", "imag": "f64"}
 
-# class TestADAA(PurePyADAA, identifier="test"):
-#     pass
+    @property
+    def real(self):
+        """Access protected attribute real."""
+        return self._data["real"]
 
+    @real.setter
+    def real(self, arr):
+        """Set the data for real part."""
+        # self._set_data(real=arr)
+        raise ValueError("Real part of the data cannot be set directly.")
 
-# print(
-#     test[0],
-# )
+    @property
+    def imag(self):
+        """Access protected attribute imag."""
+        return self._data["imag"]
 
-# FixedSizeTest = TestADAA.fix_size(42)
+    @imag.setter
+    def imag(self, arr):
+        """Set the data for imag part."""
+        # self._set_data(imag=arr)
+        raise ValueError("Imag part of the data cannot be set directly.")
 
-# foo_object = FixedSizeTest()
+    @classmethod
+    def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
+        """evaluates operator_r += operator_a + scalar_b * operator_c"""
 
-# print(foo_object.identifier)
-# print(len(foo_object))
+        assert op_c is not None
+        assert op_r is not None
+
+        if size is not None:
+            if size != op_r.size:
+                raise ValueError("Invalid size parameter.")
+        size = op_r.size
+
+        if op_a is None:
+            zero = cls(size).to_zero()
+            oar, oai = zero.real, zero.imag
+        else:
+            oar = op_a.real
+            oai = op_a.imag
+
+        ocr = op_c.real
+        oci = op_c.imag
+
+        if sc_b is None:
+            sbr, sbi = (1.0, 0.0)
+        else:
+            sbr, sbi = (complex(sc_b).real, complex(sc_b).imag)
+
+        aux_r = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["real"])
+        aux_i = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["imag"])
+
+        # sbr * ocr - sbi * oci -> aux_r
+        cls._BACKEND.coeff_linop(
+            aux_r,
+            sbr,
+            ocr,
+            -1 * sbi,
+            oci,
+            size=size,
+            dtype=cls._DATATYPES["real"],
+        )
+        # sbi * ocr + sbr * oci -> aux_i
+        cls._BACKEND.coeff_linop(
+            aux_i, sbi, ocr, sbr, oci, size=size, dtype=cls._DATATYPES["imag"]
+        )
+
+        # bracket + oar -> op_r.real
+        cls._BACKEND.coeff_add(
+            op_r.real, aux_r, oar, size=size, dtype=cls._DATATYPES["real"]
+        )
+        # bracket + oai -> op_r.imag
+        cls._BACKEND.coeff_add(
+            op_r.imag, aux_i, oai, size=size, dtype=cls._DATATYPES["imag"]
+        )
+
+    @classmethod
+    def from_numpy(cls, arr: np.ndarray) -> ComplexArrayADAA:
+        """Import data from numpy array."""
+        size = len(arr)
+        obj = cls(size)
+        cls._BACKEND.coeff_from_numpy(
+            obj.real, arr.real, size=size, dtype=cls._DATATYPES["real"]
+        )
+        cls._BACKEND.coeff_from_numpy(
+            obj.imag, arr.imag, size=size, dtype=cls._DATATYPES["imag"]
+        )
+        return obj
+
+    def to_numpy(self) -> np.ndarray:
+        """Export data as numpy array."""
+        real_part = self._BACKEND.coeff_to_numpy(
+            self.real, size=self.size, dtype=self._DATATYPES["real"]
+        )
+        imag_part = self._BACKEND.coeff_to_numpy(
+            self.imag, size=self.size, dtype=self._DATATYPES["imag"]
+        )
+        return real_part + 1j * imag_part
