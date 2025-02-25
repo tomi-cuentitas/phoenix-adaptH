@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 12/02/2025, 16:28
-# Version:     0.0.87
+# Last Update: 25/02/2025, 16:56
+# Version:     0.0.102
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,7 +18,7 @@ from typing import Set, Dict
 from phoenix.fgen.codecontainer import CodeContainer, StatementLine
 from phoenix.fgen.instruction import (
     InstructionGroup,
-    OffsetInstructionGroup,
+    OffsetEnvironmentInstruction,
     LinearOperationInstruction,
     PolynomialInstruction,
 )
@@ -44,6 +44,10 @@ class TestTextContainerGroup(TextCodeContainer, StatementLine):
     """a test class"""
 
 
+class TestTextContainerEnvironment(TextCodeContainer):
+    """a test class"""
+
+
 TextCodeContainer.add_supported_instruction(
     InstructionGroup, TestTextContainerGroup
 )
@@ -54,20 +58,24 @@ TextCodeContainer.add_supported_instruction(
     LinearOperationInstruction, TestTextContainerLinear
 )
 
-# TextCodeContainer.add_non_supported_instruction(OffsetInstructionGroup)
+TextCodeContainer.add_supported_instruction(
+    OffsetEnvironmentInstruction, TestTextContainerEnvironment
+)
 
 
 variable_out = InstructionVariable.new("output")
 variable_inp = InstructionVariable.new("input")
 
-instructions = OffsetInstructionGroup(
-    "testgroup",
-    [
-        LinearOperationInstruction(
-            variable_out(num), variable_inp(10 - num), 1.0
-        )
-        for num in range(10)
-    ],
+instructions = OffsetEnvironmentInstruction(
+    InstructionGroup(
+        [
+            LinearOperationInstruction(
+                variable_out(num), variable_inp(10 - num), 1.0
+            )
+            for num in range(10)
+        ]
+    ),
+    environment=None,
 )
 
 mytestinstruction = LinearOperationInstruction(

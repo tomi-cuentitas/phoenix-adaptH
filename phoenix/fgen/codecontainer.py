@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 12/02/2025, 16:26
-# Version:     0.0.227
+# Last Update: 25/02/2025, 16:38
+# Version:     0.0.229
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -22,7 +22,7 @@ from weakref import ref
 from weakref import ReferenceType as wrReferenceType
 
 from phoenix.fgen.instruction import Instruction
-from phoenix.fgen.lrvariable import LibRoutineVariable
+from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 
 __doc__ = """
@@ -74,9 +74,7 @@ class CodeContainer:
         except KeyError as exc:
             for parent in instruction.__class__.__mro__:
                 if parent in cls._not_supported_instructions:
-                    raise ValueError(
-                        "Instruction class not supported"
-                    ) from exc
+                    raise ValueError("Instruction class not supported") from exc
                 if parent in cls._supported_instructions:
                     closest_match = cls._supported_instructions[parent]
         if closest_match is None:
@@ -259,7 +257,7 @@ class StatementLine(CodeContainer):
 
 
 if __name__ == "__main__":
-    from phoenix.fgen.lrvariable import (
+    from phoenix.fgen.libroutinevar import (
         LibRoutineConstant,
         LibRoutineLocalVariable,
     )
