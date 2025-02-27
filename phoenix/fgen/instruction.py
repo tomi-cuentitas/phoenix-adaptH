@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 24/02/2025, 17:49
-# Version:     0.0.2065
+# Last Update: 27/02/2025, 14:01
+# Version:     0.0.2089
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -39,6 +39,7 @@ from phoenix.fgen.instructionvar import (
     InstructionVariable,
     KeyMapInstructionVariable,
     InstructionEnvironment,
+    SymbolicInstructionVariable,
 )
 
 # class _PartialFormatDict(dict):
@@ -963,11 +964,11 @@ if __name__ == "__main__":
     big_km.update()
     print(list(big_km.keys()))
 
-    VarInp = KeyMapInstructionVariable.new(name="input1", keymap=big_km)
-    VarOut = KeyMapInstructionVariable.new(name="output1", keymap=big_km)
+    VarInp = KeyMapInstructionVariable("input1", keymap=big_km)
+    VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
 
-    VarInpInner = KeyMapInstructionVariable.new(name="input1", keymap=ltl_km)
-    VarOutInner = KeyMapInstructionVariable.new(name="output1", keymap=ltl_km)
+    VarInpInner = KeyMapInstructionVariable("input1", keymap=ltl_km)
+    VarOutInner = KeyMapInstructionVariable("output1", keymap=ltl_km)
 
     test_instructions_inner = InstructionGroup(
         [
@@ -1044,6 +1045,13 @@ if __name__ == "__main__":
         print(
             el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
         )
+
+    some_value_x = SymbolicInstructionVariable("offset")
+    some_value_x.associate_variable("x")
+
+    print("unpack, True recursive, extra tests")
+    for el in test_instructions.unpack(recursive=True):
+        print(el["tgt0"] | some_value_x)
 
     sys.exit(0)
 

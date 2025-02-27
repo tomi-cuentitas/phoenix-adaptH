@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 24/02/2025, 17:40
-# Version:     0.0.262
+# Last Update: 27/02/2025, 14:02
+# Version:     0.0.576
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,54 +18,47 @@ from __future__ import annotations
 from typing import Self, Dict
 
 import weakref
-from phoenix.keymap import KeyMap
+from phoenix.keymap import KeyMap, Key
 
 
 class InstructionVariable:
-    """Represents a variable in an instruction"""
+    """Represents the offset of a variable in an instruction"""
 
     # every variable is derived as a subclass
     # every instance represents a certain entry in that class
 
-    _name: None | str = None
-    _dtype: None | str = None
     _count: int = 0
 
-    def __init__(self, *params, offsets=None, history=None):
+    def __init__(
+        self,
+        name,
+        *params,
+        history=None,
+        offsets=None,
+        input_config=None,
+        output_config=None,
+    ):
         if offsets is None:
             offsets = []
         if history is None:
             history = []
-        self._offsets = offsets
+        self._name = name
         self._history = history
-        self._params = []
+        self._offsets = offsets
+        self._inp_config = None
+        self._out_config = None
+        self.input_config = input_config
+        self.output_config = output_config
         self.progress(*params)
 
     def __str__(self):
-        dtype = self._dtype or "?"
         offset = (
             f"({'|'.join(map(str, self.offsets))})" if self.offsets else "O"
         )
-        return f"<{self._name}({dtype})@{offset}{self.params}>"
+        return f"<{self._name}+{offset}>"
 
     def __repr__(self):
         return f"<{self._name}>"
-
-    @classmethod
-    def new(cls, name, *, dtype=None):
-        """create a new subclass from the name"""
-        return type(name, (cls,), {"_name": name, "_dtype": dtype})
-
-    def __init_subclass__(cls, name=None, dtype=None, **kwargs):
-        cls._count += 1
-        if name is not None:
-            cls._name = name
-        if dtype is not None:
-            cls._dtype = dtype
-        if cls._name is None:
-            cls._name = f"ivar{cls._count}"
-        if cls._dtype is None:
-            cls._dtype = "f64"
 
     @property
     def name(self):
@@ -75,85 +68,91 @@ class InstructionVariable:
     @property
     def offsets(self):
         """access offsets"""
-        if self._params:
-            print(self._params)
-            return self.resolved().offsets
         return list(self._offsets)
 
     @property
     def offset(self):
         """access total offset"""
-        if self._params:
-            return self.resolved().offset
-        return sum(self._offsets)
+        return "(" + "+".join(str(offs) for offs in self._offsets) + ")"
+
+    @property
+    def input_config(self):
+        """access read-only attribute input_config"""
+        if self._inp_config is None:
+            return None
+        return self._inp_config()
+
+    @input_config.setter
+    def input_config(self, target):
+        if target is None:
+            self._inp_config = None
+            return
+        self._inp_config = weakref.ref(target)
+
+    @property
+    def output_config(self):
+        """access read-only attribute output_config"""
+        if self._out_config is None:
+            return None
+        return self._out_config()
+
+    @output_config.setter
+    def output_config(self, target):
+        if target is None:
+            self._out_config = None
+            return
+        self._out_config = weakref.ref(target)
 
     @property
     def history(self):
         """access offsets"""
         return list(self._history)
 
-    @property
-    def params(self):
-        """access params"""
-        return list(self._params)
-
     def copy(self):
         """return a copy"""
         return self.__class__(
-            *self.params,
+            name=self._name,
             offsets=list(self._offsets),
             history=list(self._history),
+            input_config=self.input_config,
+            output_config=self.output_config,
         )
 
-    def progress(self, *params) -> Self:
-        """progress params"""
+    def combine(self, other):
+        """combine two variables"""
+        if not self.is_compatible_before(other):
+            raise ValueError("Incompatible Variables cannot be combined")
+        return InstructionVariable(
+            name=self.name,
+            history=self.history + other.history,
+            offsets=self.offsets + other.offsets,
+            input_config=self.input_config,
+            output_config=other.output_config,
+        )
+
+    def progress(self, *params):
+        """progress the position of the variable in memory"""
         for param in params:
-            self._params.append(param)
+            self._offsets.append(param)
+            self._history.append(param)
         return self
 
-    def resolve(self) -> Self:
-        """resolve num steps in param"""
-        raise NotImplementedError("Must be implemented in subclass")
-
-    def resolved(self):
-        """return a resolved copy of self"""
-        return self.copy().resolve()
-
-    def apply_as_offset_to(self, other):
-        """combine two variables"""
-        return self.copy().progress(*other.history, *other.params)
+    def __call__(self, *params):
+        return self.copy().progress(*params)
 
     def __or__(self, other):
-        return self.apply_as_offset_to(other)
+        return self.combine(other)
+
+    def is_compatible_before(self, other):
+        """check if the variables fit together"""
+        if self.output_config is not None:
+            if other.input_config is not None:
+                if self.output_config != other.input_config:
+                    return False
+        return True
 
 
-class InstructionParameter(InstructionVariable):
-    """A parameter is overwritten instead of extended"""
-
-    def progress(self, *params) -> Self:
-        """progress params"""
-        if len(params) != 1:
-            raise ValueError("Only one parameter allowed")
-        self._history.extend(self._params)
-        self._params = [params[0]]
-        return self
-
-    def resolve(self) -> Self:
-        """resolve"""
-        return self
-
-    def resolved(self):
-        """return a resolved copy of self"""
-        return self.copy().resolve()
-
-    def apply_as_offset_to(self, other):
-        """combine two variables"""
-        return self.resolved().progress(*other.params)
-
-
-class KeyMapInstructionVariable(
-    InstructionVariable, name=None, dtype=None, _exc=False
-):
+class KeyMapInstructionVariable(InstructionVariable):
     """
     KeyMapInstructionVar
 
@@ -168,50 +167,103 @@ class KeyMapInstructionVariable(
 
     """
 
-    _keymap: None | KeyMap = None
-
-    def __init__(self, *params, offsets=None, history=None):
-        self._pointer = weakref.ref(self._keymap)
-        super().__init__(*params, offsets=offsets, history=history)
+    def __init__(
+        self,
+        name,
+        *params,
+        offsets=None,
+        history=None,
+        input_config=None,
+        output_config=None,
+        keymap=None,
+    ):
+        if keymap is not None:
+            output_config = keymap
+        if not offsets:
+            if input_config is None:
+                input_config = output_config
+        super().__init__(
+            name,
+            *params,
+            offsets=offsets,
+            history=history,
+            input_config=input_config,
+            output_config=output_config,
+        )
         # will resolve the key sequence params as seen from keymap
 
-    def __init_subclass__(cls, keymap=None, **kwargs):
-        super().__init_subclass__(**kwargs)
-        if keymap is not None:
-            cls._keymap = keymap
-        if cls._keymap is None:
-            raise ValueError("No keymap provided")
-
-    # this simply repeats so the linter knows what's going on
-    @classmethod
-    def new(cls, name, keymap=None, *, dtype=None):
-        """create a new subclass from the name"""
-        return type(
-            name,
-            (cls,),
-            {
-                "_name": name,
-                "_dtype": dtype,
-                "_keymap": keymap,
-            },
+    def copy(self):
+        """return a copy"""
+        return self.__class__(
+            name=self._name,
+            offsets=list(self._offsets),
+            history=list(self._history),
+            input_config=self.input_config,
+            output_config=self.output_config,
         )
 
-    @property
-    def keymap(self):
-        """access keymap"""
-        return self._keymap
-
-    def resolve(self):
+    def progress(self, *params):
         """resolve num steps in param"""
-        newpointer = self._pointer()
-        for param in self._params:
+        newpointer = self.output_config
+        for param in params:
             assert newpointer is not None
             offset, newpointer = newpointer.goto(param)
-            self._pointer = weakref.ref(newpointer)
+            self._history.append(param)
+            self.output_config = newpointer
             self._offsets.append(offset)
-        self._pointer = weakref.ref(newpointer)
-        self._params = []
+        self.output_config = newpointer
         return self
+
+
+class SymbolicInstructionVariable(InstructionVariable):
+    """A symbolic variable that supports the use of local LibVars"""
+
+    def __init__(
+        self,
+        name,
+        variable=None,
+        offsets=None,
+        history=None,
+        input_config=None,
+        output_config=None,
+    ):
+        self._variable = variable
+        super().__init__(
+            name=name,
+            offsets=[variable or "?"],
+            history=history,
+            input_config=input_config,
+            output_config=output_config,
+        )
+
+    def associate_variable(self, variable):
+        """associate a variable"""
+        if self._variable is not None:
+            raise ValueError("Variable already associated")
+        self._variable = variable
+        self.progress()
+
+    def progress(self, *values):
+        if values:
+            raise ValueError("Cannot progress symbolic variable")
+        if self._variable is None:
+            self._offsets = ["?"]
+            self._history = []
+        else:
+            self._offsets = [self._variable]
+            self._history = [self._variable]
+        return self
+
+    def copy(self):
+        """return a copy"""
+        return self.__class__(
+            name=self.name,
+            variable=self._variable,
+            offsets=list(self._offsets),
+            history=list(self._history),
+            input_config=self._inp_config,
+            output_config=self._out_config,
+        )
 
 
 class InstructionEnvironment:
