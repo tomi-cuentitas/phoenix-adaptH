@@ -5,21 +5,23 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 12/02/2025, 13:26
-# Version:     0.0.21
+# Last Update: 27/02/2025, 15:23
+# Version:     0.0.144
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
+from __future__ import annotations
 
-class LibRoutineVariable:
-    """Any kind of variable used in the library"""
+from typing import Set
 
-    _VAR_IDENTIFIER = "GENERIC"
 
-    def __init__(self, name, dtype, size=None):
+class LanguageFeature:
+    """Language feature base class"""
+
+    def __init__(self, name, size=None, dtype=None):
         self._name = name
         self._dtype = dtype
         self._size = size
@@ -37,13 +39,57 @@ class LibRoutineVariable:
     @property
     def name(self):
         """access name, include preprocessing"""
-        return self.descriptive_name()
-
-    def descriptive_name(self, short=False):
-        """generate a descriptive name from the content"""
-        if short:
+        if self.size is None:
             return self._name
-        return f"{self._VAR_IDENTIFIER}{self.dtype}_{self._name}"
+        return f"{self._dtype}[{self._size}] {self._name}"
+
+    def name_access(self):
+        """name-like access"""
+        return f"{self._name}[]"
+
+    def array_access(self, index):
+        """array-like access"""
+        if self.size is None:
+            raise TypeError("Cannot access Scalar as Array type")
+        return f"{self.name}[{index}]"
+
+    def scalar_access(self):
+        """array-like access"""
+        if self.size is not None:
+            raise TypeError("Cannot access Array as Scalar type")
+        return f"{self.name}"
+
+    def assign(self, expression):
+        """assign to the constant somewhere in the code"""
+        return f"{self.name} = {expression}"
+
+    def initialize(self):
+        """initialization line"""
+
+
+class LibRoutineVariable:
+    """Any kind of variable used in the library"""
+
+    _VAR_IDENTIFIER = "GENERIC"
+
+    def __init__(self, name, size):
+        self._name = name
+        self._size = size
+
+    def __str__(self):
+        if self._size is None:
+            return f"{self._name}"
+        return f"{self._name}[{self._size}]"
+
+    @property
+    def name(self):
+        """access name attribute"""
+        return self._name
+
+    @property
+    def size(self):
+        """access size attribute"""
+        return self._name
 
     @property
     def vtype(self):
@@ -55,6 +101,52 @@ class LibRoutineLocalVariable(LibRoutineVariable):
     """Any kind of variable used in the library"""
 
     _VAR_IDENTIFIER = "LOCAL"
+
+    # if this ever becomes a dict, it must be weak!
+    _class_namepool: Set[str] = set()
+
+    @staticmethod
+    def autoname(namepool=None, prefix=""):
+        """autogenerate a name"""
+        num = 0
+        while True:
+            name = f"{prefix}tmp{num}"
+            if name not in namepool:
+                break
+            num += 1
+        namepool.add(name)
+        return name
+
+    def __init__(self, size=None, namepool=None, prefix=""):
+        if namepool is None:
+            namepool = self.__class__._class_namepool
+        self._namepool = namepool
+        super().__init__(
+            name=self.autoname(namepool=namepool, prefix=prefix), size=size
+        )
+
+    def discard_name(self):
+        """discard the name in the namepool"""
+        try:
+            self._namepool.remove(self._name)
+        except KeyError:
+            pass
+
+    def __del__(self):
+        self.discard_name()
+
+    def __init_subclass__(cls, namepool=None):
+        if namepool is None:
+            namepool = set()
+        cls._class_namepool = namepool
+
+
+class LibRoutineCounter(LibRoutineLocalVariable):
+    """An integer type variable made for iterating through an array"""
+
+    _VAR_IDENTIFIER = "COUNTER"
+
+    # it can be associated with a source, such as a loop or the grid/block ID on GPUs
 
 
 class LibRoutineInputVariable(LibRoutineVariable):
@@ -74,12 +166,114 @@ class LibRoutineConstant(LibRoutineVariable):
 
     _VAR_IDENTIFIER = "CONSTANT"
 
-    def __init__(self, name, content, dtype, size=None):
-        super().__init__(name=name, dtype=dtype, size=size)
-        self.content = content
+    def __init__(self, name, *content, size=None):
+        super().__init__(name=name, size=size)
+        self._content = list(content)
+
+    @property
+    def content(self):
+        """access content"""
+        if self._size is None:
+            return self._content[0]
+        return list(self._content)
+
+    def append(self, value):
+        """append a value"""
+        if self._size is None:
+            raise ValueError("Cannot append to a scalar")
+        self._content.append(value)
+        self._size = len(self._content)
 
 
-class LibRoutineExternal(LibRoutineConstant):
-    """An external function or library"""
+# class LibRoutineExternal(LibRoutineConstant):
+#     """An external function or library"""
 
-    _VAR_IDENTIFIER = "EXTERNAL"
+#     _VAR_IDENTIFIER = "EXTERNAL"
+
+
+if __name__ == "__main__":
+    othernamepool: Set[str] = set()
+    a = None
+    b = None
+    c = None
+    d = None
+    a = LibRoutineLocalVariable(1)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    b = LibRoutineLocalVariable(2)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    c = LibRoutineLocalVariable()
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    a = None
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    a = LibRoutineLocalVariable(1)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    d = LibRoutineLocalVariable(1)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    a = None
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    c = None
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    y = LibRoutineLocalVariable(8, namepool=othernamepool)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    x = LibRoutineLocalVariable(8, namepool=othernamepool)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )

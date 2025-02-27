@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 25/02/2025, 16:38
-# Version:     0.0.229
+# Last Update: 27/02/2025, 14:14
+# Version:     0.0.230
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -74,7 +74,9 @@ class CodeContainer:
         except KeyError as exc:
             for parent in instruction.__class__.__mro__:
                 if parent in cls._not_supported_instructions:
-                    raise ValueError("Instruction class not supported") from exc
+                    raise ValueError(
+                        "Instruction class not supported"
+                    ) from exc
                 if parent in cls._supported_instructions:
                     closest_match = cls._supported_instructions[parent]
         if closest_match is None:
@@ -163,7 +165,7 @@ class CodeContainer:
         for container in containers:
             self._container_foot.append(container)
 
-    def require(self, requirement: LibRoutineVariable) -> None:
+    def requires(self, requirement: LibRoutineVariable) -> None:
         """add a requirement to the codeblock"""
         self._requirements.add(requirement)
 
