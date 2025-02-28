@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 27/02/2025, 15:23
-# Version:     0.0.144
+# Last Update: 28/02/2025, 14:14
+# Version:     0.0.172
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,6 +16,7 @@
 from __future__ import annotations
 
 from typing import Set
+import weakref
 
 
 class LanguageFeature:
@@ -106,18 +107,18 @@ class LibRoutineLocalVariable(LibRoutineVariable):
     _class_namepool: Set[str] = set()
 
     @staticmethod
-    def autoname(namepool=None, prefix=""):
+    def autoname(namepool: Set[str], prefix="tmp"):
         """autogenerate a name"""
         num = 0
         while True:
-            name = f"{prefix}tmp{num}"
+            name = f"{prefix}{num}"
             if name not in namepool:
                 break
             num += 1
         namepool.add(name)
         return name
 
-    def __init__(self, size=None, namepool=None, prefix=""):
+    def __init__(self, size=None, namepool=None, prefix="tmp"):
         if namepool is None:
             namepool = self.__class__._class_namepool
         self._namepool = namepool
@@ -146,7 +147,16 @@ class LibRoutineCounter(LibRoutineLocalVariable):
 
     _VAR_IDENTIFIER = "COUNTER"
 
-    # it can be associated with a source, such as a loop or the grid/block ID on GPUs
+    # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
+    # maybe let it rise like other variables and introduce a "handled" flag that is true once the
+    # looping structure has been enabled, which may still require proper initialization.
+
+    # i need to make sure, that there cannot be a situation, where the counter rises from multiple
+    # blocks but is handled within only one of them. Maybe keep track of the to be handled counters
+    # in the CodeSegments rather than the variables?
+    # I could think of a pointer that remembers the last segment where the counter was actually
+    # needed and places it one segment above, once the counter is finally initialized even further
+    # up.
 
 
 class LibRoutineInputVariable(LibRoutineVariable):
@@ -154,15 +164,29 @@ class LibRoutineInputVariable(LibRoutineVariable):
 
     _VAR_IDENTIFIER = "INPUT"
 
+    # in some languages, input variables are treated differently than output.
+    # inputs are assumed constant
+
 
 class LibRoutineOutputVariable(LibRoutineVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "OUTPUT"
 
+    # in some languages, output variables are treated differently than input.
+    # outputs are assumed read-write, or inout and not constant
+
 
 class LibRoutineConstant(LibRoutineVariable):
     """A constant that can appear somewhere in the libroutine"""
+
+    # the idea of a constant is that this representative class also contains the associated values
+    # and the constant is initialized somewhere
+
+    # maybe introduce the is_set flag? -> no, instead set constants right within the same header
+    # that they are defined in!
+    # Also, some ideas of counters transfer, they have to be both initialized and handled in potentially
+    # differnt places.
 
     _VAR_IDENTIFIER = "CONSTANT"
 
