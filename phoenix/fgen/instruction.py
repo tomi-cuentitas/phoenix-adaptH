@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 27/02/2025, 14:01
-# Version:     0.0.2089
+# Last Update: 03/03/2025, 11:28
+# Version:     0.0.2253
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -103,6 +103,12 @@ class Instruction:
         latest_parent_itype = ".".join(segment_overlap(*segments_list))
         return latest_parent_itype
 
+    def __str__(self):
+        return f"<{self.identifier}>"
+
+    def __repr__(self):
+        return f"<{self.identifier}>"
+
     def __len__(self) -> int:
         """
         Return the length of the instruction
@@ -168,7 +174,6 @@ class Instruction:
         """
         Iterate among the instructions. No offsets or anything applied, not recursion.
         """
-        return
         yield self
 
     # pylint: disable=unused-argument
@@ -181,11 +186,32 @@ class Instruction:
         performed (default).
         Environments provide offsets, local definitions and special groupings.
 
-        :param recursive: recursion flag or depth.
         :param environment: optional environment.
-
         """
-        yield self.apply_environment(environment)  # break recursive loop
+        for is_leaf, ref, ref_env in self.walk(
+            recursive=recursive,
+            environment=environment,
+            include_groups=False,
+        ):
+            if is_leaf:
+                yield ref.apply_environment(ref_env)
+
+    def walk(
+        self,
+        environment=None,
+        recursive: bool | int = True,
+        include_groups=True,
+    ):
+        """
+        walk the instruction tree. A generator that yields information on
+        self, the environment and a flag whether it is a leaf
+        """
+        if environment is None:
+            environment = InstructionEnvironment()
+        if isinstance(recursive, int):
+            if recursive == 0:
+                return
+        yield True, self, environment
 
     # pylint: enable=unused-argument
 
@@ -260,7 +286,7 @@ class Instruction:
         memo: dict,
     ) -> Instruction:
         """actually apply the environment"""
-        return self.__class__(itype=self._itype)
+        raise NotImplementedError("Must be implemented in subclass")
 
     def apply_environment(
         self,
@@ -275,11 +301,11 @@ class Instruction:
             environment = InstructionEnvironment()
         if memo is None:
             memo = {}
-        # if (id(environment), id(self)) in memo:
-        #     if (memorized := memo[(id(environment), id(self))]()) is not None:
-        #         return memorized
+        if (id(environment), id(self)) in memo:
+            if (memorized := memo[(id(environment), id(self))]()) is not None:
+                return memorized
         env_applied = self._apply_environment(environment, memo=memo)
-        # memo[(id(environment), id(self))] = weakref.ref(env_applied)
+        memo[(id(environment), id(self))] = weakref.ref(env_applied)
         return env_applied
 
 
@@ -540,25 +566,35 @@ class InstructionGroup(Instruction, ftype="group"):
         """access read-only attribute instructions as generator"""
         yield from self._instructions
 
-    def unpack(self, recursive: bool | int = True, environment=None):
-        """unpack all instructions, including inner groups"""
+    def walk(
+        self,
+        environment=None,
+        recursive: bool | int = True,
+        include_groups=True,
+    ):
+        """
+        walk the instruction tree. A generator that yields information on
+        self, the environment and a flag whether it is a leaf
+        """
         if environment is None:
             environment = InstructionEnvironment()
-        if recursive:
+        if include_groups:
+            if recursive is False or recursive:
+                yield False, self, environment
+        if recursive is True:
             for instr in self.instructions:
-                if recursive is True:
-                    yield from instr.unpack(
-                        recursive=True, environment=environment
-                    )
-                elif recursive > 0:
-                    yield from instr.unpack(
-                        recursive=recursive - 1, environment=environment
-                    )
-        else:
-            if recursive is False:
-                yield from self.unpack(recursive=1, environment=environment)
-            else:
-                return self.apply_environment(environment)
+                yield from instr.walk(
+                    environment=environment,
+                    recursive=True,
+                    include_groups=include_groups,
+                )
+        elif recursive >= 1:
+            for instr in self.instructions:
+                yield from instr.walk(
+                    environment=environment,
+                    recursive=recursive - int(include_groups),
+                    include_groups=include_groups,
+                )
 
     def flatten(self):
         """replace content by flattened instructions, which will unpack all inner groups"""
@@ -694,6 +730,10 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
         super().__init__(itype=itype)
         if not isinstance(content, InstructionGroup):
             raise TypeError("content must be an InstructionGroup")
+        if not isinstance(content, Instruction):
+            raise TypeError(
+                "content of environment must be of type instruction"
+            )
         self._content = content
         self._environment = InstructionEnvironment()
         if environment is not None:
@@ -726,22 +766,28 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
     def _apply_environment(
         self, environment: InstructionEnvironment, memo: dict
     ) -> Instruction:
-        content = (
-            [
-                instr.apply_environment(
-                    environment.merge(self._environment), memo=memo
-                )
-                for instr in self.instructions
-            ],
-        )
-        return InstructionGroup(content, itype=self.itype)
+        combined_environment = environment.merge(self._environment)
+        # environments are replaced by their transformed content
+        return self._content.apply_environment(combined_environment, memo=memo)
 
-    def unpack(self, recursive: bool | int = True, environment=None):
-        """unpack all instructions, including inner groups"""
+    def walk(
+        self,
+        environment=None,
+        recursive: bool | int = True,
+        include_groups=True,
+    ):
+        """
+        walk the instruction tree. A generator that yields information on
+        self, the environment and a flag whether it is a leaf
+        """
+        # an environment does not count as recursive step!!
         if environment is None:
             environment = InstructionEnvironment()
-        yield from self._content.unpack(
-            recursive=recursive, environment=environment | self._environment
+        combined_environment = environment.merge(self._environment)
+        yield from self._content.walk(
+            environment=combined_environment,
+            recursive=recursive,
+            include_groups=include_groups,
         )
 
 
@@ -1017,41 +1063,81 @@ if __name__ == "__main__":
     import sys
 
     print("unpack, 0 recursive")
-    for el in test_instructions.unpack(recursive=0):
-        print(
-            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
-        )
+    for isleaf, el, env in test_instructions.walk(recursive=0):
+        if isleaf:
+            env_el = el.apply_environment(env)
+            print(
+                "\t",
+                env_el.identifier,
+                env_el["tgt0"].offset,
+                env_el["src0"].offset,
+                env_el["coeff_x1"],
+            )
+        else:
+            print("\t", el, env)
 
     print("unpack, non recursive")
-    for el in test_instructions.unpack(recursive=False):
-        print(
-            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
-        )
+    for isleaf, el, env in test_instructions.walk(recursive=False):
+        if isleaf:
+            env_el = el.apply_environment(env)
+            print(
+                "\t",
+                env_el.identifier,
+                env_el["tgt0"].offset,
+                env_el["src0"].offset,
+                env_el["coeff_x1"],
+            )
+        else:
+            print("\t", el, env)
 
     print("unpack, 1 recursive")
-    for el in test_instructions.unpack(recursive=1):
-        print(
-            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
-        )
+    for isleaf, el, env in test_instructions.walk(recursive=1):
+        if isleaf:
+            env_el = el.apply_environment(env)
+            print(
+                "\t",
+                env_el.identifier,
+                env_el["tgt0"].offset,
+                env_el["src0"].offset,
+                env_el["coeff_x1"],
+            )
+        else:
+            print("\t", el, env)
 
     print("unpack, 2 recursive")
-    for el in test_instructions.unpack(recursive=2):
-        print(
-            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
-        )
+    for isleaf, el, env in test_instructions.walk(recursive=2):
+        if isleaf:
+            env_el = el.apply_environment(env)
+            print(
+                "\t",
+                env_el.identifier,
+                env_el["tgt0"].offset,
+                env_el["src0"].offset,
+                env_el["coeff_x1"],
+            )
+        else:
+            print("\t", el, env)
 
     print("unpack, True recursive")
-    for el in test_instructions.unpack(recursive=True):
-        print(
-            el.identifier, el["tgt0"].offset, el["src0"].offset, el["coeff_x1"]
-        )
+    for isleaf, el, env in test_instructions.walk(recursive=True):
+        if isleaf:
+            env_el = el.apply_environment(env)
+            print(
+                "\t",
+                env_el.identifier,
+                env_el["tgt0"].offset,
+                env_el["src0"].offset,
+                env_el["coeff_x1"],
+            )
+        else:
+            print("\t", el, env)
 
     some_value_x = SymbolicInstructionVariable("offset")
     some_value_x.associate_variable("x")
 
-    print("unpack, True recursive, extra tests")
+    print("unpack, True recursive, extra tests on variable variables")
     for el in test_instructions.unpack(recursive=True):
-        print(el["tgt0"] | some_value_x)
+        print("\t", el["tgt0"] | some_value_x)
 
     sys.exit(0)
 

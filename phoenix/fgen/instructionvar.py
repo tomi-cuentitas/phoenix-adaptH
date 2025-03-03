@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 27/02/2025, 14:02
-# Version:     0.0.576
+# Last Update: 03/03/2025, 11:14
+# Version:     0.0.585
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -58,7 +58,8 @@ class InstructionVariable:
         return f"<{self._name}+{offset}>"
 
     def __repr__(self):
-        return f"<{self._name}>"
+        return str(self)
+        # return f"<{self._name}>"
 
     @property
     def name(self):
@@ -285,6 +286,10 @@ class InstructionEnvironment:
         return self.__class__(
             **{key: var.copy() for key, var in self._variables.items()}
         )
+
+    def __str__(self):
+        content_as_string = [val for val in self._variables.values()]
+        return f"<Env{content_as_string}>"
 
     def merge(
         self, other_environment: InstructionEnvironment
