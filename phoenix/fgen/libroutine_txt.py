@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 25/02/2025, 16:56
-# Version:     0.0.102
+# Last Update: 03/03/2025, 16:38
+# Version:     0.0.104
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -63,8 +63,8 @@ TextCodeContainer.add_supported_instruction(
 )
 
 
-variable_out = InstructionVariable.new("output")
-variable_inp = InstructionVariable.new("input")
+variable_out = InstructionVariable("output")
+variable_inp = InstructionVariable("input")
 
 instructions = OffsetEnvironmentInstruction(
     InstructionGroup(

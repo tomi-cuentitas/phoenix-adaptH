@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 27/02/2025, 14:14
-# Version:     0.0.230
+# Last Update: 03/03/2025, 17:32
+# Version:     0.0.258
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from typing import Generator, Any, Set, Callable, Dict
+from typing import Generator, Any, Set, Callable
 
 from weakref import ref
 
@@ -40,48 +40,14 @@ class CodeContainer:
     """
 
     _IND = "  "
-    _supported_instructions: Dict[type, type] = {}
-    _not_supported_instructions: Set[type] = set()
 
-    def __init__(self, instruction: Instruction) -> None:
-        self._instruction = instruction
+    def __init__(self, **params) -> None:
+        self._params = params
         self._container_head: list[CodeContainer] = []
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
         self._wr_parent: wrReferenceType[CodeContainer] | None = None
         self._requirements: Set[LibRoutineVariable] = set()
-
-    @classmethod
-    def add_supported_instruction(cls, instruction, target):
-        """add a new instruction class to recognize and assign a proper target"""
-        cls._supported_instructions[instruction] = target
-        if instruction in cls._not_supported_instructions:
-            cls._not_supported_instructions.remove(instruction)
-
-    @classmethod
-    def add_non_supported_instruction(cls, instruction):
-        """remember that this kind of instruction is not supported"""
-        cls._not_supported_instructions.add(instruction)
-        if instruction in cls._supported_instructions:
-            del cls._supported_instructions[instruction]
-
-    @classmethod
-    def from_instruction(cls, instruction):
-        """call the right class from instruction"""
-        closest_match = None
-        try:
-            closest_match = cls._supported_instructions[type(instruction)]
-        except KeyError as exc:
-            for parent in instruction.__class__.__mro__:
-                if parent in cls._not_supported_instructions:
-                    raise ValueError(
-                        "Instruction class not supported"
-                    ) from exc
-                if parent in cls._supported_instructions:
-                    closest_match = cls._supported_instructions[parent]
-        if closest_match is None:
-            raise ValueError("Instruction class not supported")
-        return closest_match(instruction)
 
     def _get_code_container_lines_head(
         self, indent: int = 0, **kwargs: Any
@@ -134,13 +100,18 @@ class CodeContainer:
         yield from self._container_body
         yield from self._container_foot
 
+    @property
+    def body(self):
+        """iterate through body content only"""
+        yield from self._container_body
+
     def update_requirements(
         self,
     ) -> Generator[LibRoutineVariable, None, None]:
         """iterate over all possible requirements. Eliminate duplicates"""
         known = set()
-        for content in self.content:
-            for requirement in content.update_requirements():
+        for cont in self.content:
+            for requirement in cont.update_requirements():
                 if requirement not in known:
                     known.add(requirement)
                     yield requirement
@@ -169,8 +140,10 @@ class CodeContainer:
         """add a requirement to the codeblock"""
         self._requirements.add(requirement)
 
-
-CodeContainer.add_supported_instruction(Instruction, "ASD")
+    def capture_check(self, requirement):
+        """perform a capture check for the requirement"""
+        # if not overwritten, generic CodeContainers do not captere anything
+        return False
 
 
 class DefinitionSection(CodeContainer):
@@ -180,15 +153,10 @@ class DefinitionSection(CodeContainer):
     on which type of requirements are implemented here or passed on.
     """
 
-    def __init__(
-        self, instruction: Instruction, *filter_args: str | Callable
-    ) -> None:
-        super().__init__(instruction)
+    def __init__(self, **params) -> None:
+        super().__init__(**params)
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
-        for filter_arg in filter_args:
-            self.add_capture(filter_arg)
-
         self._provide: Set[LibRoutineVariable] = set()
 
     def add_capture(self, capture: str | Callable) -> None:
@@ -232,8 +200,8 @@ class RoutineDefinition(DefinitionSection):
     How a routine is defined, with its arguments, definitions, body, ...
     """
 
-    def __init__(self, instruction: Instruction) -> None:
-        super().__init__(instruction=instruction)
+    def __init__(self, **params) -> None:
+        super().__init__(**params)
         self.add_capture("INPUT")
         self.add_capture("OUTPUT")
 
@@ -243,18 +211,32 @@ class LibraryContainer(DefinitionSection):
     A Library contains routines, constants and more
     """
 
-    def __init__(self, instruction: Instruction) -> None:
-        super().__init__(instruction=instruction)
+    def __init__(self, **params) -> None:
+        super().__init__(**params)
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
+        # library level must capture all required variables!
+        if not requirement.vtype == "CONSTANT":
+            raise ValueError(
+                "only constants are allowed to traverse to library definition level"
+            )
         return True
 
 
-class StatementLine(CodeContainer):
+class CodeLine(CodeContainer):
+    """Recursion-Breaking."""
+
+
+class StatementLine(CodeLine):
     """
-    A statement of form outp = somefunction(input). Serves as base class for
-    more specific statements
+    A statement of form
+      output = somefunction(input1, ...)
+      output = input[index]
+      output = input
+      output = input1 some_operator input2
+
+    Serves as base class for more specific statements
     """
 
 
@@ -264,15 +246,35 @@ if __name__ == "__main__":
         LibRoutineLocalVariable,
     )
 
-    foo = DefinitionSection(Instruction())
+    foo = DefinitionSection()
     print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # False
     foo.add_capture("CONSTANT")
     print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # True
     print()
-    print(foo.capture_check(LibRoutineLocalVariable("foo", 1337, 42)))  # False
+    print(foo.capture_check(LibRoutineLocalVariable("foo")))  # False
     foo.add_capture("LOCAL")
-    print(foo.capture_check(LibRoutineLocalVariable("foo", 1337, 42)))  # True
+    print(foo.capture_check(LibRoutineLocalVariable("foo")))  # True
     print()
-    print(foo.capture_check(LibRoutineVariable("foo", 1337, 42)))  # False
+    print(foo.capture_check(LibRoutineVariable("foo", 1337)))  # False
     foo.add_capture(lambda x: x.size > 1)
-    print(foo.capture_check(LibRoutineVariable("foo", 1337, 42)))  # True
+    print(foo.capture_check(LibRoutineVariable("foo", 1337)))  # True
+    print()
+    print(foo.capture_check(LibRoutineVariable("foo", 1)))  # False
+    foo.add_capture(lambda x: "f" in x.name)
+    print(foo.capture_check(LibRoutineVariable("foo", 1)))  # True
+
+
+SUMMARY = """
+Definition section provides capture capability.
+Builder has mapping from instruction type to class. CRO is analyzed to find
+most specific fit among supported codecontainers.
+
+CodeLines do not contain other containers and break any recursion. In the end,
+anything is broken down into codelines, where indentation is handled.
+
+I give up on the idea, that code containers are made from instruction. The
+assignment between instruction types and codecontainer subclasses is made by
+the Builder instance and only preceding Optimizers can influence the ultimate
+instruction tree.
+"""
+print(SUMMARY)

@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 31/01/2025, 12:01
-# Version:     0.0.57
+# Last Update: 03/03/2025, 17:03
+# Version:     0.0.58
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.adaa2 import ComplexArrayADAA
+from phoenix.adaa import ComplexArrayADAA
 from phoenix.coeffbackend_derived import RawPyCoeffBackend
 from phoenix.coeffbackend_derived import NumPyCoeffBackend
 from phoenix.coeffbackend_derived import FortranCoeffBackend

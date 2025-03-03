@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 28/02/2025, 14:14
-# Version:     0.0.172
+# Last Update: 03/03/2025, 17:38
+# Version:     0.0.179
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,56 +16,57 @@
 from __future__ import annotations
 
 from typing import Set
-import weakref
+
+# import weakref
 
 
-class LanguageFeature:
-    """Language feature base class"""
+# class LanguageFeature:
+#     """Language feature base class"""
 
-    def __init__(self, name, size=None, dtype=None):
-        self._name = name
-        self._dtype = dtype
-        self._size = size
+#     def __init__(self, name, size=None, dtype=None):
+#         self._name = name
+#         self._dtype = dtype
+#         self._size = size
 
-    @property
-    def dtype(self):
-        """access dtype, include preprocessing"""
-        return self._dtype
+#     @property
+#     def dtype(self):
+#         """access dtype, include preprocessing"""
+#         return self._dtype
 
-    @property
-    def size(self):
-        """access size, include preprocessing"""
-        return self._size
+#     @property
+#     def size(self):
+#         """access size, include preprocessing"""
+#         return self._size
 
-    @property
-    def name(self):
-        """access name, include preprocessing"""
-        if self.size is None:
-            return self._name
-        return f"{self._dtype}[{self._size}] {self._name}"
+#     @property
+#     def name(self):
+#         """access name, include preprocessing"""
+#         if self.size is None:
+#             return self._name
+#         return f"{self._dtype}[{self._size}] {self._name}"
 
-    def name_access(self):
-        """name-like access"""
-        return f"{self._name}[]"
+#     def name_access(self):
+#         """name-like access"""
+#         return f"{self._name}[]"
 
-    def array_access(self, index):
-        """array-like access"""
-        if self.size is None:
-            raise TypeError("Cannot access Scalar as Array type")
-        return f"{self.name}[{index}]"
+#     def array_access(self, index):
+#         """array-like access"""
+#         if self.size is None:
+#             raise TypeError("Cannot access Scalar as Array type")
+#         return f"{self.name}[{index}]"
 
-    def scalar_access(self):
-        """array-like access"""
-        if self.size is not None:
-            raise TypeError("Cannot access Array as Scalar type")
-        return f"{self.name}"
+#     def scalar_access(self):
+#         """array-like access"""
+#         if self.size is not None:
+#             raise TypeError("Cannot access Array as Scalar type")
+#         return f"{self.name}"
 
-    def assign(self, expression):
-        """assign to the constant somewhere in the code"""
-        return f"{self.name} = {expression}"
+#     def assign(self, expression):
+#         """assign to the constant somewhere in the code"""
+#         return f"{self.name} = {expression}"
 
-    def initialize(self):
-        """initialization line"""
+#     def initialize(self):
+#         """initialization line"""
 
 
 class LibRoutineVariable:
@@ -90,7 +91,7 @@ class LibRoutineVariable:
     @property
     def size(self):
         """access size attribute"""
-        return self._name
+        return self._size
 
     @property
     def vtype(self):
@@ -157,6 +158,12 @@ class LibRoutineCounter(LibRoutineLocalVariable):
     # I could think of a pointer that remembers the last segment where the counter was actually
     # needed and places it one segment above, once the counter is finally initialized even further
     # up.
+
+    def __init__(self, origin=None, size=None, namepool=None, prefix="tmp"):
+        super().__init__(size=size, namepool=namepool, prefix=prefix)
+        if origin is None:
+            raise ValueError("Counter requires origin.")
+        self._origin = origin
 
 
 class LibRoutineInputVariable(LibRoutineVariable):
