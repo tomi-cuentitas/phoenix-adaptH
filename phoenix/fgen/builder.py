@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 03/03/2025, 17:00
-# Version:     0.0.33
+# Last Update: 04/03/2025, 11:30
+# Version:     0.0.34
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -79,7 +79,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             del cls._supported_instruction_classes[instruction_cls]
 
     @classmethod
-    def from_instruction(cls, instruction):
+    def from_instruction(cls, instruction, **kwargs):
         """call the right class from instruction"""
         closest_match = None
         try:
@@ -96,7 +96,7 @@ class Builder(Optimizer, identifier="GENERIC"):
                     closest_match = cls._supported_instruction_classes[parent]
         if closest_match is None:
             raise ValueError("Instruction class not supported")
-        return closest_match(instruction)
+        return closest_match(**kwargs).from_instruction(instruction)
 
     def build(self, instruction_tree):
         """build the code from the instruction tree"""

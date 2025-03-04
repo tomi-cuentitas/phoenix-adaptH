@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 03/03/2025, 11:28
-# Version:     0.0.2253
+# Last Update: 04/03/2025, 11:52
+# Version:     0.0.2256
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -212,6 +212,10 @@ class Instruction:
             if recursive == 0:
                 return
         yield True, self, environment
+
+    def to_dict(self, *keys, defaults: dict | None = None):
+        """get a dictionary from keys, filled with the values"""
+        raise NotImplementedError("Must be implemented in subclass")
 
     # pylint: enable=unused-argument
 

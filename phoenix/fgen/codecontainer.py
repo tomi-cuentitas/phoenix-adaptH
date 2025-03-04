@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 03/03/2025, 17:32
-# Version:     0.0.258
+# Last Update: 04/03/2025, 16:12
+# Version:     0.0.381
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from typing import Generator, Any, Set, Callable
+from typing import Generator, Any, Set, Callable, List, Dict
 
 from weakref import ref
 
@@ -30,6 +30,9 @@ CodeContainer module description
 
 """
 
+# you cannot change your parents once you're born
+ALLOW_FOSTER_PARENTING = False
+
 
 class CodeContainer:
     """
@@ -40,14 +43,47 @@ class CodeContainer:
     """
 
     _IND = "  "
+    _REQUEST_KEYS: List[str] = []
+    _KEY_DEFAULTS: Dict[str, Any] = {}
 
-    def __init__(self, **params) -> None:
+    def __init__(self, parent=None, **params) -> None:
+        # all content that may or may not be useful
         self._params = params
+
+        # collect variables that are used here
+        self._requirements: Set[LibRoutineVariable] = set()
+
+        # content, divided in three sections, head, body, foot
         self._container_head: list[CodeContainer] = []
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
+
+        # parent link
         self._wr_parent: wrReferenceType[CodeContainer] | None = None
-        self._requirements: Set[LibRoutineVariable] = set()
+        self._set_parent(parent)  # manage parent reference, might be weak
+
+        # hierarchy level
+        if self.parent is None:
+            level = 0
+        else:
+            level = self.parent.level
+        self._level = level
+
+    @classmethod
+    def from_instruction(cls, instruction: Instruction, level=0, parent=None):
+        """request data from instruction, supplement with defaults if valid"""
+        return cls(
+            level=level,
+            parent=parent,
+            **instruction.to_dict(*cls._REQUEST_KEYS, cls._KEY_DEFAULTS),
+        )
+
+    def _set_parent(self, parent):
+        """private method to manage the parent reference"""
+        if parent is None:
+            self._wr_parent = None
+        else:
+            self._wr_parent = ref(parent)
 
     def _get_code_container_lines_head(
         self, indent: int = 0, **kwargs: Any
@@ -76,17 +112,24 @@ class CodeContainer:
         yield from self._get_code_container_lines_foot(indent, **kwargs)
 
     @property
+    def level(self):
+        """access the level but prohibit setting it manually"""
+        return self._level
+
+    @property
     def parent(self) -> CodeContainer | None:
         """access the parent"""
         if self._wr_parent is None:
-            raise ValueError("Parent not set")
+            return None
         if (parent := self._wr_parent()) is None:
             raise ValueError("Parent has been garbage collected")
         return parent
 
     @parent.setter
     def parent(self, parent: CodeContainer) -> None:
-        """safe-set parent"""
+        """safe-set parent, IF ALLOWED"""
+        if not ALLOW_FOSTER_PARENTING:
+            raise RuntimeError("The Lord does not allow that!")
         if self._wr_parent is None:
             if isinstance(parent, CodeContainer):
                 self._wr_parent = ref(parent)
@@ -138,12 +181,84 @@ class CodeContainer:
 
     def requires(self, requirement: LibRoutineVariable) -> None:
         """add a requirement to the codeblock"""
+        if not isinstance(requirement, LibRoutineVariable):
+            raise TypeError("Dependencies must be LibRoutineVariables")
         self._requirements.add(requirement)
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
         # if not overwritten, generic CodeContainers do not captere anything
         return False
+
+    # provide routines for multiline comments and lists
+    @staticmethod
+    def multiline_list(
+        list_of_strings,
+        separator=", ",
+        max_line_length=100,
+        indent="",
+        extra_indent="  ",
+        linebreak="",
+        lbracket="[",
+        rbracket="]",
+        separate_brackets=False,
+    ):
+        """create a multiline list for nice output"""
+        lines = []
+        string_line = ""
+        is_first = True
+        if separate_brackets:
+            if lbracket:
+                lines.append(indent + lbracket)
+        for string in list_of_strings:
+            if separate_brackets:
+                if lbracket:
+                    extra = extra_indent
+            else:
+                extra = lbracket if is_first else extra_indent
+            if is_first:
+                if len(indent + extra + string) <= (max_line_length):
+                    string_line = indent + extra + string
+                    is_first = False
+                else:
+                    raise ValueError("line too long!")
+            else:
+                if len(string_line + separator + string) <= max_line_length:
+                    string_line += separator + string
+
+                else:
+                    lines.append(string_line + separator)
+                    string_line = indent + extra + string
+                    is_first = False
+
+        if separate_brackets:
+            if string_line:
+                lines.append(string_line)
+            if rbracket:
+                lines.append(indent + rbracket)
+        else:
+            if rbracket:
+                if len(string_line + rbracket) <= max_line_length:
+                    lines.append(string_line + rbracket)
+                else:
+                    lines.append(string_line)
+                    lines.append(indent + extra + rbracket)
+            else:
+                if string_line:
+                    lines.append(string_line)
+
+        return f"{linebreak}\n".join(lines)
+
+    @staticmethod
+    def multiline_text(
+        large_text,
+        max_line_length=80,
+        indent="",
+        extra_indent="  ",
+        linebreak="",
+    ):
+        """create multiline text"""
+        return CodeContainer.multiline_list(large_text.split(" "), " ")
 
 
 class DefinitionSection(CodeContainer):
@@ -240,6 +355,18 @@ class StatementLine(CodeLine):
     """
 
 
+class CommentLine(CodeLine):
+    """
+    A statement of form
+      output = somefunction(input1, ...)
+      output = input[index]
+      output = input
+      output = input1 some_operator input2
+
+    Serves as base class for more specific statements
+    """
+
+
 if __name__ == "__main__":
     from phoenix.fgen.libroutinevar import (
         LibRoutineConstant,
@@ -278,3 +405,13 @@ the Builder instance and only preceding Optimizers can influence the ultimate
 instruction tree.
 """
 print(SUMMARY)
+
+
+print(
+    CodeContainer.multiline_list(
+        ["Hello", "World!", "Foo", "Bar", "Baz"],
+        "|",
+        max_line_length=13,
+        indent="    ",
+    )
+)
