@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 03/03/2025, 16:38
-# Version:     0.0.104
+# Last Update: 05/03/2025, 16:37
+# Version:     0.0.106
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,78 +18,12 @@ from typing import Set, Dict
 from phoenix.fgen.codecontainer import CodeContainer, StatementLine
 from phoenix.fgen.instruction import (
     InstructionGroup,
-    OffsetEnvironmentInstruction,
-    LinearOperationInstruction,
-    PolynomialInstruction,
+    GenericInstruction,
+    EnvironmentInstruction,
+    MapInstruction,
 )
 from phoenix.fgen.instructionvar import InstructionVariable
 
 
 class TextCodeContainer(CodeContainer):
     """a text base code container for debugging purposes"""
-
-    _supported_instructions: Dict[type, type] = {}
-    _not_supported_instructions: Set[type] = set()
-
-
-class TestTextContainerPoly(TextCodeContainer):
-    """a test class"""
-
-
-class TestTextContainerLinear(TextCodeContainer):
-    """a test class"""
-
-
-class TestTextContainerGroup(TextCodeContainer, StatementLine):
-    """a test class"""
-
-
-class TestTextContainerEnvironment(TextCodeContainer):
-    """a test class"""
-
-
-TextCodeContainer.add_supported_instruction(
-    InstructionGroup, TestTextContainerGroup
-)
-TextCodeContainer.add_supported_instruction(
-    PolynomialInstruction, TestTextContainerPoly
-)
-TextCodeContainer.add_supported_instruction(
-    LinearOperationInstruction, TestTextContainerLinear
-)
-
-TextCodeContainer.add_supported_instruction(
-    OffsetEnvironmentInstruction, TestTextContainerEnvironment
-)
-
-
-variable_out = InstructionVariable("output")
-variable_inp = InstructionVariable("input")
-
-instructions = OffsetEnvironmentInstruction(
-    InstructionGroup(
-        [
-            LinearOperationInstruction(
-                variable_out(num), variable_inp(10 - num), 1.0
-            )
-            for num in range(10)
-        ]
-    ),
-    environment=None,
-)
-
-mytestinstruction = LinearOperationInstruction(
-    variable_out(2), variable_inp(10), 1.0
-)
-
-print(TextCodeContainer.from_instruction(instructions))
-
-print(TestTextContainerGroup._supported_instructions)
-print(StatementLine._supported_instructions)
-
-print("--------------------------")
-print(id(TextCodeContainer._supported_instructions))
-print(id(TestTextContainerPoly._supported_instructions))
-print(id(TestTextContainerLinear._supported_instructions))
-print(id(TestTextContainerGroup._supported_instructions))
-print(id(StatementLine._supported_instructions))
