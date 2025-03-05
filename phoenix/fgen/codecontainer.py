@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 04/03/2025, 16:12
-# Version:     0.0.381
+# Last Update: 05/03/2025, 13:59
+# Version:     0.0.477
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,6 +32,126 @@ CodeContainer module description
 
 # you cannot change your parents once you're born
 ALLOW_FOSTER_PARENTING = False
+
+
+def multiline_iterable(
+    iterable,
+    separator=", ",
+    max_line_length=100,
+    indent="",
+    extra_indent="  ",
+    linebreak="",
+    prefix="[",
+    suffix="]",
+    prefix_suffix_lines=True,
+):
+    """
+    Generate the lines of a written representation of a list-like object.
+
+    :param iterable: the iterable to be translated to text
+    :param separator: separator that connects elements, e.g. ", "
+    :param max_line_length: maximum line length before line break comes
+    :param indent: indentation to be included in every line
+    :param extra_indent: extra indent after the first line
+    :param linebreak: a linebreak character, required by some languages
+    :param prefix: before list starts
+    :param suffix: after list ends
+    :param head_tail_lines: head_tail_lines
+
+    """
+
+    # prepare the data, copy, make list, ...
+    listlike = list(iterable)
+    not_empty = len(listlike) > 0
+
+    # the first element is treated differently, as it does not require a separator in front
+    is_first = True
+
+    # if prefix and suffix are in separate lines, start here
+    if prefix_suffix_lines:
+        # yield extra head line, then prepare next. No size check here!
+        line = indent + prefix
+        fill = max(0, (max_line_length - len(line) - len(linebreak))) * " "
+        if prefix:
+            yield line + fill + linebreak
+            line = indent + extra_indent
+        else:
+            line = indent
+    else:
+        # start with indented and headed line but don't yield yet
+        line = indent + prefix
+
+    # go through listlike
+    while listlike:
+        # pop first in list
+        string = str(listlike.pop(0))
+
+        # check if can be appended or new line required
+        if (
+            len(line + separator + string + separator + linebreak)
+            <= max_line_length
+        ):
+            # can be appended: append (w/ or w/o separator)
+            if is_first:
+                line += string
+                is_first = False
+            else:
+                line += separator + string
+        else:
+            # can not be appended. Append only separator, space-pad and yield
+            line += separator
+            fill = (max_line_length - len(line) - len(linebreak)) * " "
+            yield line + fill + linebreak
+            # and put in next line
+            line = indent + extra_indent + string
+
+    # if prefix and suffix are in separate lines, treat here
+    if prefix_suffix_lines:
+        # first, handle not yet yielded lines.
+        if line and not_empty:
+            # not empty check: empty list would get create an extra emtpy line only with indent!
+            fill = (max_line_length - len(line) - len(linebreak)) * " "
+            yield line + fill + linebreak
+        if suffix:
+            # extra suffix line
+            yield indent + suffix
+    else:
+        # again, take care of leftover line, but attempt to append suffix.
+        if len(line + suffix) <= max_line_length:
+            yield line + suffix
+        else:
+            yield line + linebreak
+            if suffix:
+                yield indent + suffix
+
+
+def multiline_text(
+    large_text,
+    max_line_length=80,
+    indent="",
+    apply_strip=True,
+):
+    """
+    Create multiline text. Special wrapper call for multiline_iterator.
+
+
+    """
+    if apply_strip:
+        large_text = large_text.strip()
+    for section in large_text.split("\n"):
+        if apply_strip:
+            section = section.strip()
+        words = list(section.split(" "))
+        yield from multiline_iterable(
+            words,
+            separator=" ",
+            max_line_length=max_line_length,
+            indent=indent,
+            extra_indent="",
+            prefix="",
+            suffix="",
+            prefix_suffix_lines=False,
+        )
 
 
 class CodeContainer:
@@ -190,76 +310,6 @@ class CodeContainer:
         # if not overwritten, generic CodeContainers do not captere anything
         return False
 
-    # provide routines for multiline comments and lists
-    @staticmethod
-    def multiline_list(
-        list_of_strings,
-        separator=", ",
-        max_line_length=100,
-        indent="",
-        extra_indent="  ",
-        linebreak="",
-        lbracket="[",
-        rbracket="]",
-        separate_brackets=False,
-    ):
-        """create a multiline list for nice output"""
-        lines = []
-        string_line = ""
-        is_first = True
-        if separate_brackets:
-            if lbracket:
-                lines.append(indent + lbracket)
-        for string in list_of_strings:
-            if separate_brackets:
-                if lbracket:
-                    extra = extra_indent
-            else:
-                extra = lbracket if is_first else extra_indent
-            if is_first:
-                if len(indent + extra + string) <= (max_line_length):
-                    string_line = indent + extra + string
-                    is_first = False
-                else:
-                    raise ValueError("line too long!")
-            else:
-                if len(string_line + separator + string) <= max_line_length:
-                    string_line += separator + string
-
-                else:
-                    lines.append(string_line + separator)
-                    string_line = indent + extra + string
-                    is_first = False
-
-        if separate_brackets:
-            if string_line:
-                lines.append(string_line)
-            if rbracket:
-                lines.append(indent + rbracket)
-        else:
-            if rbracket:
-                if len(string_line + rbracket) <= max_line_length:
-                    lines.append(string_line + rbracket)
-                else:
-                    lines.append(string_line)
-                    lines.append(indent + extra + rbracket)
-            else:
-                if string_line:
-                    lines.append(string_line)
-
-        return f"{linebreak}\n".join(lines)
-
-    @staticmethod
-    def multiline_text(
-        large_text,
-        max_line_length=80,
-        indent="",
-        extra_indent="  ",
-        linebreak="",
-    ):
-        """create multiline text"""
-        return CodeContainer.multiline_list(large_text.split(" "), " ")
-
 
 class DefinitionSection(CodeContainer):
     """
@@ -357,13 +407,7 @@ class StatementLine(CodeLine):
 
 class CommentLine(CodeLine):
     """
-    A statement of form
-      output = somefunction(input1, ...)
-      output = input[index]
-      output = input
-      output = input1 some_operator input2
-
-    Serves as base class for more specific statements
+    This line represents a comment
     """
 
 
@@ -392,26 +436,32 @@ if __name__ == "__main__":
 
 
 SUMMARY = """
-Definition section provides capture capability.
-Builder has mapping from instruction type to class. CRO is analyzed to find
-most specific fit among supported codecontainers.
+Definition section provides capture capability. Builder has mapping from instruction type to class. CRO is analyzed to find most specific fit among supported codecontainers. 
 
-CodeLines do not contain other containers and break any recursion. In the end,
-anything is broken down into codelines, where indentation is handled.
+CodeLines do not contain other containers and break any recursion. In the end, anything is broken down into codelines, where indentation is handled.
 
-I give up on the idea, that code containers are made from instruction. The
-assignment between instruction types and codecontainer subclasses is made by
-the Builder instance and only preceding Optimizers can influence the ultimate
-instruction tree.
+I give up on the idea, that code containers are made from instruction. The assignment between instruction types and codecontainer subclasses is made by the Builder instance and only preceding Optimizers can influence the ultimate instruction tree.
 """
 print(SUMMARY)
 
 
-print(
-    CodeContainer.multiline_list(
-        ["Hello", "World!", "Foo", "Bar", "Baz"],
-        "|",
-        max_line_length=13,
-        indent="    ",
-    )
-)
+for tline in multiline_iterable(
+    ["Hello", "World", "Foo", "Bar", "Baz"],
+    # [],
+    ", ",
+    max_line_length=22,
+    indent="    ",
+    prefix="[",
+    suffix="]",
+    prefix_suffix_lines=True,
+    linebreak=" //",
+):
+    print(tline)
+
+
+for tline in multiline_text(
+    SUMMARY,
+    max_line_length=30,
+    indent="# ",
+):
+    print(tline)
