@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 04/03/2025, 11:52
-# Version:     0.0.2256
+# Last Update: 06/03/2025, 13:03
+# Version:     0.0.2259
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -802,7 +802,36 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
 
 
 class OffsetEnvironmentInstruction(EnvironmentInstruction, ftype="offset"):
-    """Within this environment, variables are offsetted"""
+    """
+    Within this environment, variables are offsetted
+    """
+
+    # TODO
+    # Unpack (and therefore indirectly flatten) needs to consider offsets!
+
+    # Contains
+    # - Instructions to be offsetted
+
+    # requires:
+    # - value of offset
+    # - variable mapping if names change
+
+
+###############################################################################
+#
+# VARIATION ENVIRONMENT
+# =====================
+
+
+class VariationEnvironmentInstruction(
+    OffsetEnvironmentInstruction, ftype="variation"
+):
+    """
+    A variation is a special kind of offset that implies, that data contains copies
+    that are addressable via offsets and independent and non-overlapping. E.g. a state
+    operator interacts with several different sets of dynamic, but these different
+    versions do not interact anywhere, implying some wiggle room for safe parallelization
+    """
 
     # TODO
     # Unpack (and therefore indirectly flatten) needs to consider offsets!

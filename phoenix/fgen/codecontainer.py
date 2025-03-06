@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 05/03/2025, 13:59
-# Version:     0.0.477
+# Last Update: 06/03/2025, 13:24
+# Version:     0.0.508
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -182,6 +182,9 @@ class CodeContainer:
         self._wr_parent: wrReferenceType[CodeContainer] | None = None
         self._set_parent(parent)  # manage parent reference, might be weak
 
+        # indent body?
+        self._body_indent = False
+
         # hierarchy level
         if self.parent is None:
             level = 0
@@ -208,20 +211,24 @@ class CodeContainer:
     def _get_code_container_lines_head(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
-        for content in self._container_head:
-            yield from content.get_codelines(indent=indent, **kwargs)
+        if self._container_head is not None:
+            for content in self._container_head:
+                yield from content.get_codelines(indent=indent, **kwargs)
 
     def _get_code_container_lines_body(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
-        for content in self._container_body:
-            yield from content.get_codelines(indent=indent + 1, **kwargs)
+        if self._container_body is not None:
+            indent += 1 if self._body_indent else 0
+            for content in self._container_body:
+                yield from content.get_codelines(indent=indent, **kwargs)
 
     def _get_code_container_lines_foot(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
-        for content in self._container_foot:
-            yield from content.get_codelines(indent=indent, **kwargs)
+        if self._container_foot is not None:
+            for content in self._container_foot:
+                yield from content.get_codelines(indent=indent, **kwargs)
 
     def get_codelines(
         self, indent: int = 0, **kwargs: Any
@@ -257,16 +264,26 @@ class CodeContainer:
             raise ValueError("Parent already set")
 
     @property
-    def content(self):
-        """iterate through content"""
-        yield from self._container_head
-        yield from self._container_body
-        yield from self._container_foot
-
-    @property
     def body(self):
         """iterate through body content only"""
         yield from self._container_body
+
+    @property
+    def head(self):
+        """iterate through head content only"""
+        yield from self._container_head
+
+    @property
+    def foot(self):
+        """iterate through foot content only"""
+        yield from self._container_foot
+
+    @property
+    def content(self):
+        """iterate through foot content only"""
+        yield from self.head
+        yield from self.body
+        yield from self.foot
 
     def update_requirements(
         self,
@@ -309,6 +326,30 @@ class CodeContainer:
         """perform a capture check for the requirement"""
         # if not overwritten, generic CodeContainers do not captere anything
         return False
+
+
+class GroupContainer(CodeContainer):
+    """
+    A GroupContainer is made from a group instruction and potentially holds
+    several other containers inside. The grouping might only be symbolically.
+    Head and Foot are not occupyable by anything other than formal block
+    delimiters and comments.
+    """
+
+
+class LoopContainer(CodeContainer):
+    """
+    A LoopContainer provides basic loop control capabilities. It can derive into
+    different versions depending on the architecture.
+    """
+
+
+class KernelContainer(CodeContainer):
+    """
+    A KernelContainer represents a piece of code that is supposed to be called
+    in various memory locations, potentially simultaneously. KernelContainers
+    might map to parametrized auxilliary functions or actual kernels on GPUs.
+    """
 
 
 class DefinitionSection(CodeContainer):
@@ -389,8 +430,22 @@ class LibraryContainer(DefinitionSection):
         return True
 
 
+class ConditionalContainer(CodeContainer):
+    """Conditionals. If, then, else. You know what."""
+
+
+class CodeBlock(GroupContainer):
+    """A block of code that can only contain codelines but no control structures"""
+
+
 class CodeLine(CodeContainer):
     """Recursion-Breaking."""
+
+
+class Brackets(GroupContainer):
+    """A Brackets block. Opening and closing brackets, indent optional.
+    Brackets in brackets are treated, ignored or combined.
+    """
 
 
 class StatementLine(CodeLine):
