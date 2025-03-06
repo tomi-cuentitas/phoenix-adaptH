@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 06/03/2025, 13:24
-# Version:     0.0.508
+# Last Update: 06/03/2025, 15:04
+# Version:     0.0.510
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -403,13 +403,17 @@ class DefinitionSection(CodeContainer):
 
 class RoutineDefinition(DefinitionSection):
     """
-    How a routine is defined, with its arguments, definitions, body, ...
+    How a routine is defined, especially handles the section where the arguments
+    are passed and opening/enclosing statements.
     """
 
     def __init__(self, **params) -> None:
         super().__init__(**params)
-        self.add_capture("INPUT")
-        self.add_capture("OUTPUT")
+        # instead: generate definition section for inputs and outputs.
+        # self.add_capture("INPUT")
+        # self.add_capture("OUTPUT")
+        # Routines come from a routine environment, where input and output
+        # variables are assigned to local roles in the instructions.
 
 
 class LibraryContainer(DefinitionSection):

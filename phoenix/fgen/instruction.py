@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 06/03/2025, 13:03
-# Version:     0.0.2259
+# Last Update: 06/03/2025, 17:54
+# Version:     0.0.2339
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,11 +35,11 @@ import weakref
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
-from phoenix.fgen.instructionvar import (
+from phoenix.fgen.instructionvar2 import (
     InstructionVariable,
-    KeyMapInstructionVariable,
+    # KeyMapOffset,
+    # SymbolicOffset,
     InstructionEnvironment,
-    SymbolicInstructionVariable,
 )
 
 # class _PartialFormatDict(dict):
@@ -1043,11 +1043,15 @@ if __name__ == "__main__":
     big_km.update()
     print(list(big_km.keys()))
 
-    VarInp = KeyMapInstructionVariable("input1", keymap=big_km)
-    VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
+    VarInp = InstructionVariable.new(name="input1")
+    VarOut = InstructionVariable.new(name="output1")
+    # VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
+    # KeyMapInstructionVariable("input1", keymap=big_km)
 
-    VarInpInner = KeyMapInstructionVariable("input1", keymap=ltl_km)
-    VarOutInner = KeyMapInstructionVariable("output1", keymap=ltl_km)
+    VarInpInner = InstructionVariable.new("inner_input1")
+    VarOutInner = InstructionVariable.new("inner_output1")
+
+    print(InstructionVariable().name)
 
     test_instructions_inner = InstructionGroup(
         [
