@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 06/03/2025, 18:50
-# Version:     0.0.864
+# Last Update: 06/03/2025, 18:53
+# Version:     0.0.868
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -219,6 +219,19 @@ As there are various ways how an offset can be expressed, there is an offset
 class to cover the possible ways to finally render the value.
 
 Entering offsets should be easy though, so I am not completely happy yet...
+
+
+   THIS!
+   =====
+
+Maybe any merge should get an InstructionVar class with proper offset classes
+but there can still be KeyMapInstructionVariables etc that have a simplified 
+way of entering offsets. 
+
+
+--------------------------------
+
+Alternatively I could make a "from_key" function, but that's bulky again...
 """
 print(STRATEGY)
 
