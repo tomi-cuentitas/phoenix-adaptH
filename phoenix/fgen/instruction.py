@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/03/2025, 14:49
-# Version:     0.0.2650
+# Last Update: 07/03/2025, 15:13
+# Version:     0.0.2651
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1133,7 +1133,7 @@ if __name__ == "__main__":
     test_instructions3 = OffsetEnvironmentInstruction(
         test_instructions1,
         offsets={
-            # VarOut: VarFancy(),
+            VarOut: VarFancy(),
         },
     )
 

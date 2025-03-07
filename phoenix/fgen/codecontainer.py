@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 06/03/2025, 15:04
-# Version:     0.0.510
+# Last Update: 07/03/2025, 15:28
+# Version:     0.0.516
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -306,7 +306,7 @@ class CodeContainer:
         for container in containers:
             self._container_head.append(container)
 
-    def append_body(self, *containers: CodeContainer) -> None:
+def append_body(self, *containers: CodeContainer) -> None:
         """append at body"""
         for container in containers:
             self._container_body.append(container)
@@ -337,22 +337,35 @@ class GroupContainer(CodeContainer):
     """
 
 
-class LoopContainer(CodeContainer):
+class EnvironmentContainer(GroupContainer):
+    """
+    An Environment block. Opening and closing operators so pairs always match.
+    Indent optional. Made for brackets, parenthesis, definitions, ...
+    Brackets in brackets are treated, ignored or combined.
+    As the group container requires, head and foot are defined by the Environment
+    class and are not occupied
+    """
+
+
+class LoopContainer(EnvironmentContainer):
     """
     A LoopContainer provides basic loop control capabilities. It can derive into
     different versions depending on the architecture.
     """
 
 
-class KernelContainer(CodeContainer):
+class KernelContainer(EnvironmentContainer):
     """
     A KernelContainer represents a piece of code that is supposed to be called
     in various memory locations, potentially simultaneously. KernelContainers
     might map to parametrized auxilliary functions or actual kernels on GPUs.
+
+    An instruction block from a map instruction is preferably rendered into a
+    kernel
     """
 
 
-class DefinitionSection(CodeContainer):
+class DefinitionSection(EnvironmentContainer):
     """
     A code container that defines stuff and prevents them from getting passed
     on during requirement iterator. Supports a filtering function that decides
@@ -407,22 +420,11 @@ class RoutineDefinition(DefinitionSection):
     are passed and opening/enclosing statements.
     """
 
-    def __init__(self, **params) -> None:
-        super().__init__(**params)
-        # instead: generate definition section for inputs and outputs.
-        # self.add_capture("INPUT")
-        # self.add_capture("OUTPUT")
-        # Routines come from a routine environment, where input and output
-        # variables are assigned to local roles in the instructions.
-
 
 class LibraryContainer(DefinitionSection):
     """
-    A Library contains routines, constants and more
+    A Library contains routines, constants and more.
     """
-
-    def __init__(self, **params) -> None:
-        super().__init__(**params)
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
@@ -434,7 +436,7 @@ class LibraryContainer(DefinitionSection):
         return True
 
 
-class ConditionalContainer(CodeContainer):
+class ConditionalContainer(EnvironmentContainer):
     """Conditionals. If, then, else. You know what."""
 
 
@@ -443,13 +445,7 @@ class CodeBlock(GroupContainer):
 
 
 class CodeLine(CodeContainer):
-    """Recursion-Breaking."""
-
-
-class Brackets(GroupContainer):
-    """A Brackets block. Opening and closing brackets, indent optional.
-    Brackets in brackets are treated, ignored or combined.
-    """
+    """Recursion-Breaking. Literally a single line."""
 
 
 class StatementLine(CodeLine):
@@ -460,7 +456,8 @@ class StatementLine(CodeLine):
       output = input
       output = input1 some_operator input2
 
-    Serves as base class for more specific statements
+    Serves as base class for more specific statements, but handles the variable
+    dependencies
     """
 
 
