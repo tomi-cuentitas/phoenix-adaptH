@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 04/03/2025, 11:30
-# Version:     0.0.34
+# Last Update: 07/03/2025, 10:38
+# Version:     0.0.47
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 
 from typing import Dict, Set
-
+from instructionvar2 import InstructionEnvironment
 
 class Optimizer:
     """Optimize the instruction tree w.r.t. certain aspects"""
@@ -54,7 +54,19 @@ class Optimizer:
 
 
 class Builder(Optimizer, identifier="GENERIC"):
-    """Make codecontainer from instruction tree"""
+    """Make codecontainer from instruction tree
+
+    TODO:
+    Builder needs to recognize input ADAA structure, such as COMPLX, ...
+    and carry that along the variables to select the proper codeblock to
+    get.
+    In the future, either:
+      - supported instructions or not supported instruction dictionary keys
+        might be expanded
+      - (preferred): As codeblocks are classes anyways, let them do the work.
+        Requesting code for an unsopported structure can still lead to an
+        exception and the next potentially supporting block can be checked
+    """
 
     _CLSNAME_PREFIX = "Builder"
     _supported_instruction_classes: Dict[type, type] = {}
@@ -78,22 +90,23 @@ class Builder(Optimizer, identifier="GENERIC"):
         if instruction_cls in cls._supported_instruction_classes:
             del cls._supported_instruction_classes[instruction_cls]
 
-    @classmethod
-    def from_instruction(cls, instruction, **kwargs):
+    def from_instruction(self, instruction, environment=None, **kwargs):
         """call the right class from instruction"""
+        if environment is None:
+            environment = InstructionEnvironment()
         closest_match = None
-        try:
-            closest_match = cls._supported_instruction_classes[
-                type(instruction)
-            ]
-        except KeyError as exc:
-            for parent in instruction.__class__.__mro__:
-                if parent in cls._not_supported_instruction_classes:
-                    raise ValueError(
-                        "Instruction class not supported"
-                    ) from exc
-                if parent in cls._supported_instruction_classes:
-                    closest_match = cls._supported_instruction_classes[parent]
+        # note: mro contains self.__class__ and then all parents
+        for potential_fit in instruction.__class__.__mro__:
+            try:
+                if potential_fit in cls._not_supported_instruction_classes:
+                    raise ValueError("Instruction class not supported")
+                if potential_fit in cls._supported_instruction_classes:
+                    potential_fit.compatibility_check()
+                    closest_match = cls._supported_instruction_classes[
+                        potential_fit
+                    ]
+
+                    break
         if closest_match is None:
             raise ValueError("Instruction class not supported")
         return closest_match(**kwargs).from_instruction(instruction)

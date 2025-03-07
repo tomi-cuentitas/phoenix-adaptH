@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 06/03/2025, 18:53
-# Version:     0.0.868
+# Last Update: 07/03/2025, 12:07
+# Version:     0.0.1027
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -98,33 +98,66 @@ class InstructionVariable(_Chainable):
     """Instruction Variable is a chainable"""
 
     _name = "DEFAULT"
+    _offset_handle = "AUTO"
+    _default_config = None
 
-    def __init__(self, offsets=None, input_config=None, output_config=None):
-        if offsets is None:
+    def __init__(
+        self,
+        *offsets,
+        input_config=None,
+        output_config=None,
+        _pure_copy=False,
+    ):
+        if input_config is None:
+            input_config = self.__class__._default_config
+        if not offsets:
             output_config = input_config
         super().__init__(
             input_config=input_config, output_config=output_config
         )
-        if offsets is None:
-            offsets = []
-        self._offsets = offsets
+        self._offsets = []
+        if _pure_copy:
+            self._offsets = list(offsets)
+        else:
+            self.progress(*offsets)
 
-    def __init_subclass__(cls, name=None):
+    def __init_subclass__(cls, name=None, offset="AUTO", config=None):
         if name is None:
             name = cls.__name__
         cls._name = name
+        if config is not None:
+            cls._default_config = config
+        cls._offset_handle = offset
 
     @classmethod
-    def new(cls, name):
-        """generate a new class"""
+    def set_offset_handle(cls, offset_type="AUTO"):
+        """set the offset handle"""
+        cls._offset_handle = offset_type
+
+    @classmethod
+    def set_default_config(cls, config=None):
+        """set the default config"""
+        cls._default_config = config
+
+    @classmethod
+    def _new_bare(cls, name):
         if not isinstance(name, str):
             raise ValueError("Name must be a string")
-        newclass = type(name, (InstructionVariable,), {})
+        return type(name, (InstructionVariable,), {})
+
+    @classmethod
+    def new(cls, name, offset_type="AUTO", config=None):
+        """generate a new class"""
+        newclass = cls._new_bare(name)
+        newclass.set_offset_handle(offset_type)
+        newclass.set_default_config(config)
         return newclass
 
     def __str__(self):
         offset = (
-            f"({'|'.join(map(str, self.offsets))})" if self.offsets else "O"
+            f"({':'.join(map(str, self.plain_offsets))})"
+            if self.plain_offsets
+            else "O"
         )
         return f"<{self.name}+{offset}>"
 
@@ -132,25 +165,68 @@ class InstructionVariable(_Chainable):
         return str(self)
         # return f"<{self._name}>"
 
+    def copy(self):
+        """get a copy. Does what it says, nothing special."""
+        return self.__class__(
+            *self.plain_offsets,
+            input_config=self.input_config,
+            output_config=self.output_config,
+        )
+
     @property
     def name(self):
         """access offsets"""
         return self._name
 
     @property
-    def offsets(self):
+    def plain_offsets(self):
         """access offsets"""
         return list(self._offsets)
 
-    def append_offset(self, offset):
-        """access total offset"""
-        if not isinstance(offset, InstructionVariableOffset):
-            raise TypeError("Offset must be an InstructionVariableOffset")
-        if not _Chainable.is_compatible(self, offset):
-            raise ValueError("Incompatible offsets cannot be combined")
-        ret = InstructionVariable(offsets=self._offsets + [offset])
-        ret.output_config = offset.output_config
-        return ret
+    @property
+    def offsets(self):
+        """access offsets"""
+        return list(self.evaluate())
+
+    def evaluate(self):
+        """evaluate the offsets"""
+        current_pointer = self.input_config
+        for offset in self._offsets:
+            if current_pointer is not None and offset.input_config is not None:
+                if current_pointer != offset.input_config:
+                    raise ValueError("Found incompatible offsets")
+            offset, new_pointer = offset.compute(current_pointer)
+            yield offset
+            current_pointer = new_pointer
+
+    def progress(self, *offsets):
+        """append an extra offset"""
+        for offset in offsets:
+            if not isinstance(offset, InstructionVariableOffset):
+                offset = self._auto_convert(offset)
+            if not _Chainable.is_compatible(self, offset):
+                raise ValueError("Incompatible offsets cannot be combined")
+            self._offsets.append(offset)
+            self.output_config = offset.output_config
+        return self
+
+    def _auto_convert(self, potential_offset):
+        if isinstance(potential_offset, InstructionVariableOffset):
+            return potential_offset
+        return InstructionVariableOffset.auto_convert(
+            potential_offset,
+            self.__class__._offset_handle,
+            self.output_config,
+        )
+
+    def progressed(self, *offsets):
+        """append an new instance with an extra offset"""
+        return self.__class__(
+            *self.plain_offsets,
+            input_config=self.input_config,
+            output_config=self.output_config,
+            _pure_copy=True,
+        ).progress(*offsets)
 
     def merge(self, other):
         """merge an instruction variable with another one"""
@@ -158,29 +234,21 @@ class InstructionVariable(_Chainable):
             raise TypeError("Merging partner must be an InstructionVariable")
         if not _Chainable.is_compatible(self, other):
             raise ValueError("Incompatible variables cannot be combined")
-        return InstructionVariable(
-            offsets=self._offsets + other.offsets,
+        return self.__class__(
+            *self.plain_offsets,
+            *other.plain_offsets,
             input_config=self.input_config,
             output_config=other.output_config,
+            _pure_copy=True,
         )
 
-    # def combined(self, other):
-    #     """combine two variables"""
-    #     return InstructionVariable(
-    #         name=self._name,
-    #         offsets=self.offsets + other.offsets,
-    #     )
+    def __add__(self, other):
+        if not isinstance(other, InstructionVariableOffset):
+            raise TypeError("Offset must be an InstructionVariableOffset")
+        return self.progressed(other)
 
-    # def _progress_keymap(self, *params):
-    #     """resolve num steps in param"""
-    #     newpointer = self.output_config
-    #     for param in params:
-    #         assert newpointer is not None
-    #         offset, newpointer = newpointer.goto(param)
-    #         self.output_config = newpointer
-    #         self._offsets.append(offset)
-    #     self.output_config = newpointer
-    #     return self
+    def __or__(self, other):
+        return self.merge(other)
 
 
 class InstructionVariableOffset(_Chainable):
@@ -193,9 +261,79 @@ class InstructionVariableOffset(_Chainable):
             input_config=input_config, output_config=output_config
         )
         self._value = value
+        self._fixed_value = None
+
+    def __str__(self):
+        return f"+{self._value}"
+
+    def __repr__(self):
+        return f"+{self._value}"
+
+    @staticmethod
+    def auto_convert(potential_offset, handle="AUTO", config=None):
+        """automatically convert the offset using the identifier handle"""
+        if isinstance(potential_offset, InstructionVariableOffset):
+            return potential_offset
+        match handle.upper().strip():
+            case "AUTO":
+                if isinstance(potential_offset, int):
+                    return InstructionVariableOffset.auto_convert(
+                        potential_offset, handle="int", config=config
+                    )
+                if isinstance(potential_offset, str):
+                    return InstructionVariableOffset.auto_convert(
+                        potential_offset, handle="key", config=config
+                    )
+                if isinstance(potential_offset, tuple):
+                    return InstructionVariableOffset.auto_convert(
+                        potential_offset, handle="key", config=config
+                    )
+                if isinstance(potential_offset, InstructionVariable):
+                    return InstructionVariableOffset.auto_convert(
+                        potential_offset, handle="symbol", config=config
+                    )
+                raise TypeError(
+                    f"Cannot interpret offset type from {potential_offset}."
+                )
+            case "KEY":
+                return KeyOffset(potential_offset, keymap=config)
+            case "SYMBOL":
+                return SymbolicOffset(potential_offset, input_config=config)
+            case "INT":
+                return IntegerOffset(potential_offset, input_config=config)
+            case _:
+                raise KeyError(f"Unknown offset handle: {handle}")
+
+    def compute(self, config):
+        """compute the offset from the input value"""
+        raise NotImplementedError("Subclass must implement this method.")
+
+    def _get_config(self, config=None):
+        """get the proper config or an error. External or inner or match or error"""
+        if self.input_config is None:
+            return config
+        if config is None:
+            return self.input_config
+        if config == self.input_config:
+            return config
+        raise ValueError("Incompatible input configurations")
+
+    def fix(self, config=None):
+        """fix the value"""
+        self._fixed_value, output_config = self.compute(config=config)
+        if output_config is not None:
+            self.output_config = output_config
+        return self._fixed_value
+
+    def evaluate(self, config=None, fix=True):
+        """get the actual offset. This might trigger the computation"""
+        if fix:
+            return self.fix(config=config)
+        offset, _ = self.compute(config=config)
+        return offset
 
 
-class KeyMapOffset(InstructionVariableOffset):
+class KeyOffset(InstructionVariableOffset):
     """
     An offset made from a key in a keymap
     """
@@ -205,35 +343,104 @@ class KeyMapOffset(InstructionVariableOffset):
             value=key, input_config=keymap, output_config=out_config
         )
 
+    def compute(self, config=None):
+        current_pointer = self._get_config(config=config)
+        assert current_pointer is not None
+        offset, new_pointer = current_pointer.goto(self._value)
+        return offset, new_pointer
+
+
+class IntegerOffset(InstructionVariableOffset):
+    """
+    An offset simply made by an integer
+    """
+
+    def compute(self, config=None):
+        """simply get the prepared value"""
+        return self._value, self.output_config
+
 
 class SymbolicOffset(InstructionVariableOffset):
     """
-    An offset that has a symbolic value until determined
+    An offset that has a symbolic integer value until determined
     """
 
+    def __init__(self, variable=None, input_config=None, output_config=None):
+        super().__init__(
+            variable, input_config=input_config, output_config=output_config
+        )
 
-STRATEGY = """
-InstructionVariable objects hold offsets that evaluate lazy.
+    def associate_variable(self, variable):
+        """associate a new value"""
+        self._value = variable
 
-As there are various ways how an offset can be expressed, there is an offset
-class to cover the possible ways to finally render the value.
-
-Entering offsets should be easy though, so I am not completely happy yet...
-
-
-   THIS!
-   =====
-
-Maybe any merge should get an InstructionVar class with proper offset classes
-but there can still be KeyMapInstructionVariables etc that have a simplified 
-way of entering offsets. 
+    def compute(self, config=None):
+        """stringify whatever enters"""
+        # this might change once I have completely implemented RoutineVariables
+        if self._value is None:
+            return "?", self.output_config
+        return str(self._value), self.output_config
 
 
---------------------------------
+class InstructionEnvironment:
+    """Defines an instruction environment where all known variables can be stored"""
 
-Alternatively I could make a "from_key" function, but that's bulky again...
-"""
-print(STRATEGY)
+    def __init__(self, **variables):
+        self._variables: Dict[str, InstructionVariable] = variables
+
+    def items(self):
+        """iterate through dict-like items"""
+        yield from self._variables.items()
+
+    def as_dict(self):
+        """display as a dictionary"""
+        return {key: val for key, val in self.items()}
+
+    def copy(self) -> InstructionEnvironment:
+        """make a proper copy"""
+        return self.__class__(
+            **{key: var.copy() for key, var in self._variables.items()}
+        )
+
+    def __str__(self):
+        content_as_string = [val for val in self._variables.values()]
+        return f"<Env{content_as_string}>"
+
+    def merge(
+        self, other_environment: InstructionEnvironment
+    ) -> InstructionEnvironment:
+        """merge an environment with another"""
+        new_environment = self.copy()
+        new_environment.update(**other_environment.as_dict())
+        return new_environment
+
+    def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
+        return self.merge(other)
+
+    def update(self, **kwargs):
+        """update the internal dictionary. Extend if possible"""
+        for varname, variable in kwargs.items():
+            if varname in self._variables:
+                self._variables[varname] = self._variables[varname].merge(
+                    variable
+                )
+            else:
+                self._variables[varname] = variable
+        return self
+
+    def keys(self):
+        """access keys of inner dict"""
+        return self._variables.keys()
+
+    def __getitem__(self, key):
+        return self._variables[key]
+
+    def __contains__(self, key):
+        return key in self._variables
+
+
+####################################################################################
+
 
 # class KeyMapInstructionVariable(InstructionVariable):
 #     """
@@ -348,58 +555,3 @@ print(STRATEGY)
 #             history=list(self._history),
 #             _config=self._config,
 #         )
-
-
-class InstructionEnvironment:
-    """Defines an instruction environment where all known variables can be stored"""
-
-    def __init__(self, **variables):
-        self._variables: Dict[str, InstructionVariable] = variables
-
-    def items(self):
-        """iterate through dict-like items"""
-        yield from self._variables.items()
-
-    def as_dict(self):
-        """display as a dictionary"""
-        return {key: val for key, val in self.items()}
-
-    def copy(self) -> InstructionEnvironment:
-        """make a proper copy"""
-        return self.__class__(
-            **{key: var.copy() for key, var in self._variables.items()}
-        )
-
-    def __str__(self):
-        content_as_string = [val for val in self._variables.values()]
-        return f"<Env{content_as_string}>"
-
-    def merge(
-        self, other_environment: InstructionEnvironment
-    ) -> InstructionEnvironment:
-        """merge an environment with another"""
-        new_environment = self.copy()
-        new_environment.update(**other_environment.as_dict())
-        return new_environment
-
-    def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
-        return self.merge(other)
-
-    def update(self, **kwargs):
-        """update the internal dictionary. Extend if possible"""
-        for varname, variable in kwargs.items():
-            if varname in self._variables:
-                self._variables[varname] |= variable
-            else:
-                self._variables[varname] = variable
-        return self
-
-    def keys(self):
-        """access keys of inner dict"""
-        return self._variables.keys()
-
-    def __getitem__(self, key):
-        return self._variables[key]
-
-    def __contains__(self, key):
-        return key in self._variables

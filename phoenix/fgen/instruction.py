@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 06/03/2025, 17:54
-# Version:     0.0.2339
+# Last Update: 07/03/2025, 12:08
+# Version:     0.0.2465
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -37,8 +37,8 @@ from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
 from phoenix.fgen.instructionvar2 import (
     InstructionVariable,
-    # KeyMapOffset,
-    # SymbolicOffset,
+    KeyOffset,
+    SymbolicOffset,
     InstructionEnvironment,
 )
 
@@ -487,7 +487,7 @@ class KeyMapInstruction(GenericInstruction, ftype="kmap"):
         for key, val in self._params.items():
             if isinstance(val, InstructionVariable):
                 if val.name in environment:
-                    modified_params[key] = environment[val.name] | val
+                    modified_params[key] = environment[val.name].merge(val)
                 else:
                     modified_params[key] = val
             else:
@@ -833,16 +833,6 @@ class VariationEnvironmentInstruction(
     versions do not interact anywhere, implying some wiggle room for safe parallelization
     """
 
-    # TODO
-    # Unpack (and therefore indirectly flatten) needs to consider offsets!
-
-    # Contains
-    # - Instructions to be offsetted
-
-    # requires:
-    # - value of offset
-    # - variable mapping if names change
-
 
 ###############################################################################
 #
@@ -898,25 +888,6 @@ class MapInstructionGroup(InstructionGroup, ftype="map"):
     def __init__(self, environments, mapped, itype=None):
         super().__init__(environments, itype=itype)
         self._mapped = mapped
-
-
-###############################################################################
-#
-# VARIATION ENVIRONMENT
-# =====================
-
-
-# class VariationGroup(InstructionGroup, ftype="variation"):
-#     """Within this environment, variables are offsetted"""
-
-#     # TODO
-
-#     # Contains
-#     # - Multiple Instruction groups accessible via keywords
-#     # - a default choice, e.g. the first submitted group
-
-#     # Functionality
-#     # User can select another keyword to alter the chosen instruction group
 
 
 ###############################################################################
@@ -1043,13 +1014,13 @@ if __name__ == "__main__":
     big_km.update()
     print(list(big_km.keys()))
 
-    VarInp = InstructionVariable.new(name="input1")
-    VarOut = InstructionVariable.new(name="output1")
+    VarInp = InstructionVariable.new(name="input1", config=big_km)
+    VarOut = InstructionVariable.new(name="output1", config=big_km)
     # VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
     # KeyMapInstructionVariable("input1", keymap=big_km)
 
-    VarInpInner = InstructionVariable.new("inner_input1")
-    VarOutInner = InstructionVariable.new("inner_output1")
+    VarInpInner = InstructionVariable.new("inner_input1", config=ltl_km)
+    VarOutInner = InstructionVariable.new("inner_output1", config=ltl_km)
 
     print(InstructionVariable().name)
 
@@ -1071,8 +1042,8 @@ if __name__ == "__main__":
             OffsetEnvironmentInstruction(
                 test_instructions_inner,
                 environment={
-                    "input1": VarInp(f"foo{val}"),
-                    "output1": VarOut(f"foo{val}"),
+                    "inner_input1": VarInp(f"foo{val}"),
+                    "inner_output1": VarOut(f"foo{val}"),
                 },
             )
             for val in range(5)
@@ -1089,7 +1060,7 @@ if __name__ == "__main__":
 
     print(VarInp._name)
 
-    print(VarInp("foo1", "key2"))
+    print(VarInp("foo1"))
     # print(VarInp("foo1", "key2").resolve())
 
     print("Distinction")
@@ -1106,8 +1077,8 @@ if __name__ == "__main__":
             print(
                 "\t",
                 env_el.identifier,
-                env_el["tgt0"].offset,
-                env_el["src0"].offset,
+                env_el["tgt0"].offsets,
+                env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
@@ -1120,8 +1091,8 @@ if __name__ == "__main__":
             print(
                 "\t",
                 env_el.identifier,
-                env_el["tgt0"].offset,
-                env_el["src0"].offset,
+                env_el["tgt0"].offsets,
+                env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
@@ -1134,8 +1105,8 @@ if __name__ == "__main__":
             print(
                 "\t",
                 env_el.identifier,
-                env_el["tgt0"].offset,
-                env_el["src0"].offset,
+                env_el["tgt0"].offsets,
+                env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
@@ -1148,8 +1119,8 @@ if __name__ == "__main__":
             print(
                 "\t",
                 env_el.identifier,
-                env_el["tgt0"].offset,
-                env_el["src0"].offset,
+                env_el["tgt0"].offsets,
+                env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
@@ -1162,19 +1133,19 @@ if __name__ == "__main__":
             print(
                 "\t",
                 env_el.identifier,
-                env_el["tgt0"].offset,
-                env_el["src0"].offset,
+                env_el["tgt0"].offsets,
+                env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
             print("\t", el, env)
 
-    some_value_x = SymbolicInstructionVariable("offset")
+    some_value_x = SymbolicOffset("some_offset")
     some_value_x.associate_variable("x")
 
     print("unpack, True recursive, extra tests on variable variables")
     for el in test_instructions.unpack(recursive=True):
-        print("\t", el["tgt0"] | some_value_x)
+        print("\t", el["tgt0"] + some_value_x)
 
     sys.exit(0)
 
