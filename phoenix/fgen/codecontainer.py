@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 07/03/2025, 15:28
-# Version:     0.0.516
+# Last Update: 07/03/2025, 17:21
+# Version:     0.0.537
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -193,13 +193,35 @@ class CodeContainer:
         self._level = level
 
     @classmethod
-    def from_instruction(cls, instruction: Instruction, level=0, parent=None):
+    def from_instruction(
+        cls,
+        instruction: Instruction,
+        builder,
+        environment,
+        level=0,
+        parent=None,
+        buildargs=None,
+        **kwargs,
+    ):
         """request data from instruction, supplement with defaults if valid"""
+        if buildargs is None:
+            buildargs = {}
+        assert not kwargs
         return cls(
             level=level,
             parent=parent,
             **instruction.to_dict(*cls._REQUEST_KEYS, cls._KEY_DEFAULTS),
-        )
+        ).complete(builder, environment, buildargs)
+
+    def complete(self, builder, environment, buildargs, **kwargs):
+        """complete the instruction from the builder in the proper environment"""
+        print("Complete called")
+        print(f"\tBuilder    : {builder}")
+        print(f"\tEnvironment: {environment}")
+        print(f"\tbuild args : {buildargs}")
+        print(f"\textra args : {kwargs}")
+        assert not kwargs
+        return self
 
     def _set_parent(self, parent):
         """private method to manage the parent reference"""
@@ -306,7 +328,7 @@ class CodeContainer:
         for container in containers:
             self._container_head.append(container)
 
-def append_body(self, *containers: CodeContainer) -> None:
+    def append_body(self, *containers: CodeContainer) -> None:
         """append at body"""
         for container in containers:
             self._container_body.append(container)
@@ -326,6 +348,11 @@ def append_body(self, *containers: CodeContainer) -> None:
         """perform a capture check for the requirement"""
         # if not overwritten, generic CodeContainers do not captere anything
         return False
+
+    @classmethod
+    def compatibility_check(cls, builder, instruction, environment, **kwargs):
+        """checks if anything speaks against using this container"""
+        return True
 
 
 class GroupContainer(CodeContainer):

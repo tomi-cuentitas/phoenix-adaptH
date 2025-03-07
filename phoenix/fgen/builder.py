@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 07/03/2025, 10:38
-# Version:     0.0.47
+# Last Update: 07/03/2025, 17:20
+# Version:     0.0.72
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,8 @@
 """
 
 from typing import Dict, Set
-from instructionvar2 import InstructionEnvironment
+from phoenix.fgen.instructionvar2 import InstructionEnvironment
+
 
 class Optimizer:
     """Optimize the instruction tree w.r.t. certain aspects"""
@@ -28,7 +29,7 @@ class Optimizer:
     @property
     def identifier(self):
         """access the identifier"""
-        return self.__class__._identifier
+        return type(self)._identifier
 
     @classmethod
     def __init_subclass__(cls, identifier=None):
@@ -90,30 +91,50 @@ class Builder(Optimizer, identifier="GENERIC"):
         if instruction_cls in cls._supported_instruction_classes:
             del cls._supported_instruction_classes[instruction_cls]
 
-    def from_instruction(self, instruction, environment=None, **kwargs):
+    @classmethod
+    def _get_potential_fits(cls, instruction):
+        for elder in instruction.__class__.__mro__:
+            if elder in cls._not_supported_instruction_classes:
+                raise TypeError("Instruction class not supported")
+            if elder in cls._supported_instruction_classes:
+                yield cls._supported_instruction_classes[elder]
+
+    def from_instruction(self, instruction, environment=None, **buildargs):
         """call the right class from instruction"""
         if environment is None:
             environment = InstructionEnvironment()
         closest_match = None
-        # note: mro contains self.__class__ and then all parents
-        for potential_fit in instruction.__class__.__mro__:
-            try:
-                if potential_fit in cls._not_supported_instruction_classes:
-                    raise ValueError("Instruction class not supported")
-                if potential_fit in cls._supported_instruction_classes:
-                    potential_fit.compatibility_check()
-                    closest_match = cls._supported_instruction_classes[
-                        potential_fit
-                    ]
-
-                    break
+        # note: mro contains type(self) and then all parents
+        for potential_fit in type(self)._get_potential_fits(instruction):
+            if potential_fit.compatibility_check(
+                self, instruction, environment, **buildargs
+            ):
+                closest_match = potential_fit
+                break
         if closest_match is None:
             raise ValueError("Instruction class not supported")
-        return closest_match(**kwargs).from_instruction(instruction)
+        if environment is None:
+            environment = InstructionEnvironment()
+        return closest_match().from_instruction(
+            instruction=instruction,
+            builder=self,
+            environment=environment,
+            level=0,
+            parent=None,
+            buildargs=buildargs,
+        )
 
-    def build(self, instruction_tree):
+    def build(self, instruction, environment=None, **buildargs):
         """build the code from the instruction tree"""
-        return None
+        optimized_tree = super().apply(instruction)  # this is a deepcopy call
+        for optimizer in self._optimizers:
+            optimized_tree = optimizer.apply(instruction)
+        environment = InstructionEnvironment()
+        self.from_instruction(
+            optimized_tree,
+            environment=environment,
+            **{**self._params, **buildargs},
+        )
 
 
 print(Builder(foo="bar"))

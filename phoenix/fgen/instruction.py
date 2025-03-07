@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/03/2025, 15:13
-# Version:     0.0.2651
+# Last Update: 07/03/2025, 17:06
+# Version:     0.0.2663
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -77,8 +77,8 @@ class Instruction:
     _obj_id_count = 0
 
     def _get_obj_id(self):
-        self.__class__._obj_id_count += 1
-        return f"{self._ftype}#{self.__class__._obj_id_count}"
+        type(self)._obj_id_count += 1
+        return f"{self._ftype}#{type(self)._obj_id_count}"
 
     def _instruction_hash(self, generating) -> int:
         """
@@ -227,7 +227,7 @@ class Instruction:
     @property
     def ftype(self):
         """property for class level ftype attribute"""
-        return self.__class__._ftype
+        return type(self)._ftype
 
     @property
     def sort_key(self):
@@ -450,10 +450,10 @@ class GenericInstruction(Instruction, ftype="generic"):
         )
 
     def _from_alias(self, key):
-        print(f"look up potential alias {key} in {self.__class__.__name__}")
-        if key in self.__class__._alias:
+        print(f"look up potential alias {key} in {type(self).__name__}")
+        if key in type(self)._alias:
             # don't call self._params here, so alias can chain
-            return self[self.__class__._alias[key]]
+            return self[type(self)._alias[key]]
         raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
     def __deepcopy__(self, memo=None):
@@ -461,7 +461,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             memo = {}
         if id(self) in memo:
             return memo[id(self)]()  # beware, must be called due to weakref
-        copied = self.__class__.from_dict(self._params)
+        copied = type(self).from_dict(self._params)
         memo[id(self)] = weakref.ref(copied)
         return copied
 
@@ -496,7 +496,7 @@ class KeyMapInstruction(GenericInstruction, ftype="kmap"):
                     modified_params[key] = val
             else:
                 modified_params[key] = val
-        return self.__class__.from_dict(modified_params)
+        return type(self).from_dict(modified_params)
 
 
 ###############################################################################
@@ -559,7 +559,7 @@ class InstructionGroup(Instruction, ftype="group"):
             else:
                 copied_instr = instr.deepcopy(memo)
             copied_instructions.append(copied_instr)
-        copied_group = self.__class__(
+        copied_group = type(self)(
             copied_instructions, itype=self.itype, **self._params
         )
         memo[id(self)] = weakref.ref(copied_group)
@@ -606,7 +606,7 @@ class InstructionGroup(Instruction, ftype="group"):
 
     def flatten(self):
         """replace content by flattened instructions, which will unpack all inner groups"""
-        return self.__class__(list(self.unpack()))
+        return type(self)(list(self.unpack()))
 
     def sorted(self, ordering_function=None, sort_function=None):
         """return a sorted version. Sort function is optional. Does not
@@ -615,13 +615,13 @@ class InstructionGroup(Instruction, ftype="group"):
         if sort_function is None:
             sort_function = sorted
         if ordering_function is None:
-            return self.__class__(
+            return type(self)(
                 list(sort_function(self.instructions)), itype=self._itype
             )
         sorted_instructions = sort_function(
             [(ordering_function(instr), instr) for instr in self.instructions]
         )
-        return self.__class__(
+        return type(self)(
             [instr for _, instr in sorted_instructions], itype=self._itype
         )
 
@@ -655,9 +655,9 @@ class InstructionGroup(Instruction, ftype="group"):
                 groups[group_id] = []
             groups[group_id].append(instr)
         if group_type is None:
-            group_type = self.__class__
+            group_type = type(self)
         if subgroup_type is None:
-            subgroup_type = self.__class__
+            subgroup_type = type(self)
         return group_type(
             [
                 subgroup_type(group, itype=self._itype)
@@ -671,9 +671,9 @@ class InstructionGroup(Instruction, ftype="group"):
         Does not conserve continuousity of data"""
         groups: List[List[Instruction]] = [[] for _ in range(batches)]
         if group_type is None:
-            group_type = self.__class__
+            group_type = type(self)
         if subgroup_type is None:
-            subgroup_type = self.__class__
+            subgroup_type = type(self)
         for num, instr in enumerate(self.instructions):
             groups[num % batches].append(instr)
         return group_type(
@@ -685,9 +685,9 @@ class InstructionGroup(Instruction, ftype="group"):
         group: List[Instruction] = []
         collect: List[List[Instruction]] = []
         if group_type is None:
-            group_type = self.__class__
+            group_type = type(self)
         if subgroup_type is None:
-            subgroup_type = self.__class__
+            subgroup_type = type(self)
         for instr in self.instructions:
             if len(group) >= max_size:
                 collect.append(subgroup_type(group, itype=self._itype))
@@ -700,7 +700,7 @@ class InstructionGroup(Instruction, ftype="group"):
     def _apply_environment(
         self, environment: InstructionEnvironment, memo: dict
     ) -> Instruction:
-        return self.__class__(
+        return type(self)(
             [
                 instr.apply_environment(environment, memo=memo)
                 for instr in self.instructions
@@ -750,6 +750,9 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
             self._environment.include(environment)
         self._params = params
 
+    def __len__(self):
+        return len(self._content)
+
     @property
     def instructions(self):
         """access instructions"""
@@ -759,7 +762,7 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
         if memo is None:
             memo = {}
         copied_content = self._content.deepcopy(memo=memo)
-        return self.__class__(
+        return type(self)(
             copied_content,
             environment={
                 key: (
@@ -1255,6 +1258,8 @@ if __name__ == "__main__":
             el["tgt0"] + some_value_x,
             (el["tgt0"] + some_value_x).offsets,
         )
+
+    print(len(printed_instructions))
 
     sys.exit(0)
 

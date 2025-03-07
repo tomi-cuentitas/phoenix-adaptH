@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 03/03/2025, 17:38
-# Version:     0.0.179
+# Last Update: 07/03/2025, 16:50
+# Version:     0.0.180
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -121,7 +121,7 @@ class LibRoutineLocalVariable(LibRoutineVariable):
 
     def __init__(self, size=None, namepool=None, prefix="tmp"):
         if namepool is None:
-            namepool = self.__class__._class_namepool
+            namepool = type(self)._class_namepool
         self._namepool = namepool
         super().__init__(
             name=self.autoname(namepool=namepool, prefix=prefix), size=size

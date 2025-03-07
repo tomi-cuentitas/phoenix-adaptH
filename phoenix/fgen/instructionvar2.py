@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 07/03/2025, 15:14
-# Version:     0.0.1111
+# Last Update: 07/03/2025, 17:00
+# Version:     0.0.1113
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -119,7 +119,7 @@ class InstructionVariable(_Chainable):
         _pure_copy=False,
     ):
         if input_config is None:
-            input_config = self.__class__._default_config
+            input_config = type(self)._default_config
         output_config = input_config
         super().__init__(
             input_config=input_config, output_config=output_config
@@ -176,7 +176,7 @@ class InstructionVariable(_Chainable):
 
     def copy(self):
         """get a copy. Does what it says, nothing special."""
-        return self.__class__(
+        return type(self)(
             *self.plain_offsets,
             input_config=self.input_config,
             output_config=self.output_config,
@@ -224,13 +224,13 @@ class InstructionVariable(_Chainable):
             return potential_offset
         return InstructionVariableOffset.auto_convert(
             potential_offset,
-            self.__class__._offset_handle,
+            type(self)._offset_handle,
             self.output_config,
         )
 
     def progressed(self, *offsets):
         """append an new instance with an extra offset"""
-        return self.__class__(
+        return type(self)(
             *self.plain_offsets,
             input_config=self.input_config,
             output_config=self.output_config,
@@ -244,7 +244,7 @@ class InstructionVariable(_Chainable):
         if not _Chainable.is_compatible(self, other):
             raise ValueError("Incompatible variables cannot be combined")
         # print("merge var", self, other)
-        return self.__class__(
+        return type(self)(
             *self.plain_offsets,
             *other.plain_offsets,
             input_config=self.input_config,
@@ -344,7 +344,6 @@ class KeyOffset(InstructionVariableOffset):
         super().__init__(
             value=key, input_config=keymap, output_config=out_config
         )
-        print("Key Offset created", key, keymap)
         if keymap is not None:
             if key not in keymap:
                 raise KeyError(f"Key '{key}' not found in keymap {keymap}")
@@ -404,7 +403,7 @@ class InstructionEnvironment:
 
     def copy(self) -> InstructionEnvironment:
         """make a proper copy"""
-        copied = self.__class__()
+        copied = type(self)()
         for key, variable in self.items():
             copied.update(key, variable.copy())
         return copied
@@ -523,7 +522,7 @@ class InstructionEnvironment:
 
 #     # def copy(self, _id=None):
 #     #     """return a copy"""
-#     #     return self.__class__(
+#     #     return type(self)(
 #     #         name=self._name,
 #     #         offsets=list(self._offsets),
 #     #         _config=self._config,
@@ -578,7 +577,7 @@ class InstructionEnvironment:
 
 #     def copy(self):
 #         """return a copy"""
-#         return self.__class__(
+#         return type(self)(
 #             name=self._name,
 #             symbol=self._symbol,
 #             offsets=list(self._offsets),
