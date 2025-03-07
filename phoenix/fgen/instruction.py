@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/03/2025, 13:44
-# Version:     0.0.2599
+# Last Update: 07/03/2025, 14:49
+# Version:     0.0.2650
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -484,6 +484,8 @@ class KeyMapInstruction(GenericInstruction, ftype="kmap"):
     ) -> Instruction:
         """actually apply the environment"""
         modified_params = {}
+        # print("modify keymap instruction")
+        # print(environment)
         for key, val in self._params.items():
             if isinstance(val, InstructionVariable):
                 if val.__class__ in environment:
@@ -821,13 +823,52 @@ class OffsetEnvironmentInstruction(EnvironmentInstruction, ftype="offset"):
     # - variable mapping if names change
 
     def __init__(self, content, *, offsets=None, itype=None, **params):
+        super().__init__(content, environment=None, itype=itype, **params)
         if offsets is None:
             offsets = InstructionEnvironment()
-        super().__init__(content, environment=offsets, itype=itype, **params)
+        for offset_target, offset_value in offsets.items():
+            self.set_offset(offset_target, offset_value)
 
-    def set_offset(self, targetclass, offsetvalue):
+    def set_offset(self, inner_class, outer_variable):
         """set the offset of a target class in content"""
-        self._environment.update(targetclass, offsetvalue)
+        if not isinstance(outer_variable, InstructionVariable):
+            raise TypeError(
+                "Outer variable must be of type InstructionVariable"
+            )
+        self._environment.update(inner_class, outer_variable)
+        return self
+
+
+###############################################################################
+#
+# ASSIGNMENT ENVIRONMENT
+# ======================
+
+
+class LinkVariableEnvironmentInstruction(
+    EnvironmentInstruction, ftype="assign"
+):
+    """
+    Within this environment, outer variables are linked to inner variables
+    """
+
+    def __init__(self, content, *, connections=None, itype=None, **params):
+        super().__init__(content, environment=None, itype=itype, **params)
+        if connections is None:
+            connections = InstructionEnvironment()
+        for inner_class, outer_class in connections.items():
+            self.connect(inner_class, outer_class)
+
+    def connect(self, inner_class, outer_class):
+        """set the offset of a target class in content"""
+        if isinstance(outer_class, type):
+            self._environment.update(inner_class, outer_class())
+        elif isinstance(outer_class, InstructionVariable):
+            self._environment.update(inner_class, outer_class)
+        else:
+            raise TypeError(
+                "Assignment target must be variable class or variable instance"
+            )
         return self
 
 
@@ -1086,7 +1127,17 @@ if __name__ == "__main__":
         ]
     )
 
+    VarFancy = InstructionVariable.new("fancy_out")
+
     test_instructions = test_instructions1
+    test_instructions3 = OffsetEnvironmentInstruction(
+        test_instructions1,
+        offsets={
+            # VarOut: VarFancy(),
+        },
+    )
+
+    printed_instructions = test_instructions3
 
     for instruction in test_instructions.instructions:
         print(instruction._obj_id)
@@ -1103,13 +1154,13 @@ if __name__ == "__main__":
 
     print("Distinction")
 
-    print(len(test_instructions))
+    print(len(printed_instructions))
     print(len(test_instructions.flatten()))
 
     import sys
 
     print("unpack, 0 recursive")
-    for isleaf, el, env in test_instructions.walk(recursive=0):
+    for isleaf, el, env in printed_instructions.walk(recursive=0):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
@@ -1123,7 +1174,7 @@ if __name__ == "__main__":
             print("\t", el, env)
 
     print("unpack, non recursive")
-    for isleaf, el, env in test_instructions.walk(recursive=False):
+    for isleaf, el, env in printed_instructions.walk(recursive=False):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
@@ -1137,7 +1188,7 @@ if __name__ == "__main__":
             print("\t", el, env)
 
     print("unpack, 1 recursive")
-    for isleaf, el, env in test_instructions.walk(recursive=1):
+    for isleaf, el, env in printed_instructions.walk(recursive=1):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
@@ -1151,7 +1202,7 @@ if __name__ == "__main__":
             print("\t", el, env)
 
     print("unpack, 2 recursive")
-    for isleaf, el, env in test_instructions.walk(recursive=2):
+    for isleaf, el, env in printed_instructions.walk(recursive=2):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
@@ -1165,7 +1216,7 @@ if __name__ == "__main__":
             print("\t", el, env)
 
     print("unpack, 3 recursive")
-    for isleaf, el, env in test_instructions.walk(recursive=3):
+    for isleaf, el, env in printed_instructions.walk(recursive=3):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
@@ -1179,7 +1230,7 @@ if __name__ == "__main__":
             print("\t", el, env)
 
     print("unpack, True recursive")
-    for isleaf, el, env in test_instructions.walk(recursive=True):
+    for isleaf, el, env in printed_instructions.walk(recursive=True):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
@@ -1187,6 +1238,8 @@ if __name__ == "__main__":
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
+                env_el["tgt0"].name,
+                env_el["src0"].name,
                 env_el["coeff_x1"],
             )
         else:
@@ -1196,8 +1249,12 @@ if __name__ == "__main__":
     some_value_x.associate_variable("x")
 
     print("unpack, True recursive, extra tests on variable variables")
-    for el in test_instructions.unpack(recursive=True):
-        print("\t", el["tgt0"] + some_value_x)
+    for el in printed_instructions.unpack(recursive=True):
+        print(
+            "\t",
+            el["tgt0"] + some_value_x,
+            (el["tgt0"] + some_value_x).offsets,
+        )
 
     sys.exit(0)
 

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 07/03/2025, 13:44
-# Version:     0.0.1077
+# Last Update: 07/03/2025, 14:48
+# Version:     0.0.1109
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -244,6 +244,7 @@ class InstructionVariable(_Chainable):
             raise TypeError("Merging partner must be an InstructionVariable")
         if not _Chainable.is_compatible(self, other):
             raise ValueError("Incompatible variables cannot be combined")
+        # print("merge var", self, other)
         return self.__class__(
             *self.plain_offsets,
             *other.plain_offsets,
@@ -251,6 +252,8 @@ class InstructionVariable(_Chainable):
             output_config=other.output_config,
             _pure_copy=True,
         )
+        # print("result", ret)
+        # return ret
 
     def __add__(self, other):
         if not isinstance(other, InstructionVariableOffset):
@@ -408,7 +411,9 @@ class InstructionEnvironment:
         return copied
 
     def __str__(self):
-        content_as_string = [val for val in self._variables.values()]
+        content_as_string = [
+            f"{val}:<{src._name}*?*>" for src, val in self._variables.items()
+        ]
         return f"<Env{content_as_string}>"
 
     def merge(
@@ -421,11 +426,16 @@ class InstructionEnvironment:
 
     def include(self, other_environment: InstructionEnvironment):
         """include an environment"""
-        for key, variable in other_environment.items():
-            if key in self._variables:
-                self._variables[key] = self._variables[key].merge(variable)
+        # print("include new environment:")
+        # print("  outer:", self)
+        # print("  inner:", other_environment)
+        for inner_key, inner_variable in other_environment.items():
+            if (outer_key := inner_variable.__class__) in self:
+                self._variables[inner_key] = self._variables[outer_key].merge(
+                    inner_variable
+                )
             else:
-                self._variables[key] = variable
+                self._variables[inner_key] = inner_variable
         return self
 
     def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
