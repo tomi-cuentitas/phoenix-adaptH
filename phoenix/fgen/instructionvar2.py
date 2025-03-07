@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 07/03/2025, 12:07
-# Version:     0.0.1027
+# Last Update: 07/03/2025, 13:44
+# Version:     0.0.1077
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -93,6 +93,16 @@ class _Chainable:
                     return False
         return True
 
+    def _get_config(self, config=None):
+        """get the proper config or an error. External or inner or match or error"""
+        if self.input_config is None:
+            return config
+        if config is None:
+            return self.input_config
+        if config == self.input_config:
+            return config
+        raise ValueError("Incompatible input configurations")
+
 
 class InstructionVariable(_Chainable):
     """Instruction Variable is a chainable"""
@@ -110,8 +120,7 @@ class InstructionVariable(_Chainable):
     ):
         if input_config is None:
             input_config = self.__class__._default_config
-        if not offsets:
-            output_config = input_config
+        output_config = input_config
         super().__init__(
             input_config=input_config, output_config=output_config
         )
@@ -151,6 +160,7 @@ class InstructionVariable(_Chainable):
         newclass = cls._new_bare(name)
         newclass.set_offset_handle(offset_type)
         newclass.set_default_config(config)
+        print("§NEW", issubclass(newclass, InstructionVariable))
         return newclass
 
     def __str__(self):
@@ -308,16 +318,6 @@ class InstructionVariableOffset(_Chainable):
         """compute the offset from the input value"""
         raise NotImplementedError("Subclass must implement this method.")
 
-    def _get_config(self, config=None):
-        """get the proper config or an error. External or inner or match or error"""
-        if self.input_config is None:
-            return config
-        if config is None:
-            return self.input_config
-        if config == self.input_config:
-            return config
-        raise ValueError("Incompatible input configurations")
-
     def fix(self, config=None):
         """fix the value"""
         self._fixed_value, output_config = self.compute(config=config)
@@ -342,6 +342,10 @@ class KeyOffset(InstructionVariableOffset):
         super().__init__(
             value=key, input_config=keymap, output_config=out_config
         )
+        print("Key Offset created", key, keymap)
+        if keymap is not None:
+            if key not in keymap:
+                raise KeyError(f"Key '{key}' not found in keymap {keymap}")
 
     def compute(self, config=None):
         current_pointer = self._get_config(config=config)
@@ -398,9 +402,10 @@ class InstructionEnvironment:
 
     def copy(self) -> InstructionEnvironment:
         """make a proper copy"""
-        return self.__class__(
-            **{key: var.copy() for key, var in self._variables.items()}
-        )
+        copied = self.__class__()
+        for key, variable in self.items():
+            copied.update(key, variable.copy())
+        return copied
 
     def __str__(self):
         content_as_string = [val for val in self._variables.values()]
@@ -409,23 +414,39 @@ class InstructionEnvironment:
     def merge(
         self, other_environment: InstructionEnvironment
     ) -> InstructionEnvironment:
-        """merge an environment with another"""
+        """merge an environment with another. Creates a new object."""
         new_environment = self.copy()
-        new_environment.update(**other_environment.as_dict())
+        new_environment.include(other_environment)
         return new_environment
+
+    def include(self, other_environment: InstructionEnvironment):
+        """include an environment"""
+        for key, variable in other_environment.items():
+            if key in self._variables:
+                self._variables[key] = self._variables[key].merge(variable)
+            else:
+                self._variables[key] = variable
+        return self
 
     def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
         return self.merge(other)
 
-    def update(self, **kwargs):
-        """update the internal dictionary. Extend if possible"""
-        for varname, variable in kwargs.items():
-            if varname in self._variables:
-                self._variables[varname] = self._variables[varname].merge(
-                    variable
-                )
+    def update(self, key, variable, overwrite=False):
+        """
+        update the internal dictionary. Extend if possible.
+        set variable to None to delete from environment
+        """
+        if not issubclass(key, InstructionVariable):
+            raise TypeError(f"Key must be an InstructionVariable: {key}")
+        if key in self._variables:
+            if variable is None:
+                del self._variables[key]
+            if overwrite:
+                self._variables[key] = variable
             else:
-                self._variables[varname] = variable
+                self._variables[key] = self._variables[key].merge(variable)
+        else:
+            self._variables[key] = variable
         return self
 
     def keys(self):

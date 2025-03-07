@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/03/2025, 12:08
-# Version:     0.0.2465
+# Last Update: 07/03/2025, 13:44
+# Version:     0.0.2599
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -486,8 +486,10 @@ class KeyMapInstruction(GenericInstruction, ftype="kmap"):
         modified_params = {}
         for key, val in self._params.items():
             if isinstance(val, InstructionVariable):
-                if val.name in environment:
-                    modified_params[key] = environment[val.name].merge(val)
+                if val.__class__ in environment:
+                    modified_params[key] = environment[val.__class__].merge(
+                        val
+                    )
                 else:
                     modified_params[key] = val
             else:
@@ -732,8 +734,10 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
         if itype is None:
             itype = content.itype
         super().__init__(itype=itype)
-        if not isinstance(content, InstructionGroup):
-            raise TypeError("content must be an InstructionGroup")
+        if not isinstance(content, (InstructionGroup, EnvironmentInstruction)):
+            raise TypeError(
+                "content must be an InstructionGroup or Environment"
+            )
         if not isinstance(content, Instruction):
             raise TypeError(
                 "content of environment must be of type instruction"
@@ -741,7 +745,7 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
         self._content = content
         self._environment = InstructionEnvironment()
         if environment is not None:
-            self._environment.update(**environment)
+            self._environment.include(environment)
         self._params = params
 
     @property
@@ -815,6 +819,16 @@ class OffsetEnvironmentInstruction(EnvironmentInstruction, ftype="offset"):
     # requires:
     # - value of offset
     # - variable mapping if names change
+
+    def __init__(self, content, *, offsets=None, itype=None, **params):
+        if offsets is None:
+            offsets = InstructionEnvironment()
+        super().__init__(content, environment=offsets, itype=itype, **params)
+
+    def set_offset(self, targetclass, offsetvalue):
+        """set the offset of a target class in content"""
+        self._environment.update(targetclass, offsetvalue)
+        return self
 
 
 ###############################################################################
@@ -1019,8 +1033,8 @@ if __name__ == "__main__":
     # VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
     # KeyMapInstructionVariable("input1", keymap=big_km)
 
-    VarInpInner = InstructionVariable.new("inner_input1", config=ltl_km)
-    VarOutInner = InstructionVariable.new("inner_output1", config=ltl_km)
+    VarInpInner = InstructionVariable.new("inner_input1", config=None)
+    VarOutInner = InstructionVariable.new("inner_output1", config=None)
 
     print(InstructionVariable().name)
 
@@ -1037,18 +1051,42 @@ if __name__ == "__main__":
             ),
         ]
     )
-    test_instructions = InstructionGroup(
+    test_instructions1 = InstructionGroup(
         [
             OffsetEnvironmentInstruction(
                 test_instructions_inner,
-                environment={
-                    "inner_input1": VarInp(f"foo{val}"),
-                    "inner_output1": VarOut(f"foo{val}"),
+                offsets={
+                    VarInpInner: VarInp(f"foo{val}"),
+                    VarOutInner: VarOut(f"foo{val}"),
                 },
             )
             for val in range(5)
         ]
     )
+
+    test_instructions2 = InstructionGroup(
+        [
+            OffsetEnvironmentInstruction(
+                InstructionGroup(
+                    [
+                        OffsetEnvironmentInstruction(
+                            test_instructions_inner,
+                            offsets={
+                                VarInpInner: VarInp(f"foo{val_inp}"),
+                            },
+                        )
+                        for val_inp in range(5)
+                    ]
+                ),
+                offsets={
+                    VarOutInner: VarOut(f"foo{val_out}"),
+                },
+            )
+            for val_out in range(5)
+        ]
+    )
+
+    test_instructions = test_instructions1
 
     for instruction in test_instructions.instructions:
         print(instruction._obj_id)
@@ -1126,6 +1164,20 @@ if __name__ == "__main__":
         else:
             print("\t", el, env)
 
+    print("unpack, 3 recursive")
+    for isleaf, el, env in test_instructions.walk(recursive=3):
+        if isleaf:
+            env_el = el.apply_environment(env)
+            print(
+                "\t",
+                env_el.identifier,
+                env_el["tgt0"].offsets,
+                env_el["src0"].offsets,
+                env_el["coeff_x1"],
+            )
+        else:
+            print("\t", el, env)
+
     print("unpack, True recursive")
     for isleaf, el, env in test_instructions.walk(recursive=True):
         if isleaf:
@@ -1148,68 +1200,6 @@ if __name__ == "__main__":
         print("\t", el["tgt0"] + some_value_x)
 
     sys.exit(0)
-
-    print(
-        """
-    Strategy
-    ========
-
-    Comment 25/02/10: partly outdated.
-
-    We introduce the variable data type to remember the variable name and the
-    proper way to access it. At the instruction level, this access is not
-    specific to a backend yet.
-
-    A variable is represented by its own subclass of the proper parent class.
-    Loops over offset variations can be realized by resolving the accumulated
-    param values that refer to KeyMap Keys in case of a
-    KeyMapInstructionVariable. They can be translated into an offset. 
-
-    Upon application, this offset can be included into a loop variable, that
-    can be used symbolically.
-
-    This loop variable can be hard coded in the instruction group. For example,
-    the GPU implementation might not need it, and at instruction level I don't
-    want the structure to be too specific.
-
-    My dream-procedure:
-    We introduce a offset-repeat instruction, where a single instructiongroup
-    is repeated for multiple offsets. This instruction group can take offset
-    configurations. Right now I am not sure if these offset configurations
-    should be a list of offsets passed to a special group, or just repetitions
-    of a special apply-offset command and some code magic. Or maybe a special
-    group and a special operation that simply says "repeat".
-
-    As of now I think, that an OffsetApplyInstruction in a RepeatGroup is the
-    right way to go. Upon evaluation, the Instruction group to be offsetted
-    will be recognized by ID once it is repeated a couple times. In this case,
-    OffsetApply should group automatically. At least if the Group is purely
-    made from OffsetApplyInstructions.
-
-    This might be elegant to implement as an environment, and the repeat group
-    would repeat the environment for the instructiongroup to be repeated.
-
-    A potential reason to introduce the RepeatGroup would be external
-    affirmation, that the computation can be done in parallel.
-
-    In this case it would be a ParallelGroup that expects subgroups of type
-    environment.
-
-
-    Update 25/02/10
-    ---------------
-
-    Only the flattening of OffsetGroups and -Environments has to consider the
-    entry offset merge. If not unpacked, the libroutine decides how it will be
-    implemented in detail.
-
-    To implement a proper copy, __deepcopy__ should be implemented, that takes
-    a memo dict as extra argument to keep track of all entries that have been
-    copied, with their id as a key. Doing that, references to a single object
-    will be represented by new references to a single new object via lookup.
-    """
-    )
-
 
 #
 #
