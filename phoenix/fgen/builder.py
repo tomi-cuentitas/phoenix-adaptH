@@ -5,39 +5,73 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 10/03/2025, 13:10
-# Version:     0.0.101
+# Last Update: 10/03/2025, 15:37
+# Version:     0.0.230
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from typing import Dict, Set, Tuple
+from typing import Dict, Set, Tuple, Any
 from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable
+from phoenix.toolbox.logger import Logger
+
+MODULE_LOGGER = Logger("module_builder")
 
 
 class Optimizer:
     """Optimize the instruction tree w.r.t. certain aspects"""
 
     _CLSNAME_PREFIX = "Optimizer"
-    _identifier = "GENERIC"
+    _IDENTIFIER = "GENERIC"
+    _VERSN = 0
+    _BUILD = 0
+    _BCKND = "GENERIC"
 
-    def __init__(self, **params):
-        self._params = params
+    def __init__(self, _log_welcome=True, **params):
+        self._params: Dict[str, Any] = params
+        if _log_welcome:
+            self._welcome_log()
+
+    def _welcome_log(self):
+        for line in self._welcome_log_lines():
+            MODULE_LOGGER.infolog(line)
+
+    def _welcome_log_lines(self):
+        version, build = type(self)._VERSN, type(self)._BUILD
+        yield (
+            f"Hello from {type(self)._CLSNAME_PREFIX} "
+            + f"'{type(self)._IDENTIFIER}'"
+            + f" (v{version}.{build})"
+        )
+        yield from self._detail_log_lines()
+        yield "-" * 15
+
+    def _detail_log_lines(self):
+        yield ""
+        yield f"parameters ({len(self._params)}):"
+        for param, value in self._params.items():
+            yield f"  {param}={value}"
 
     @property
     def identifier(self):
         """access the identifier"""
-        return type(self)._identifier
+        return type(self)._IDENTIFIER
 
     @classmethod
-    def __init_subclass__(cls, identifier=None):
+    def __init_subclass__(cls, identifier=None, _major=False):
         if identifier is None:
             identifier = cls.__name__.upper()
-        cls._identifier = identifier
+        cls._IDENTIFIER = identifier
+        # handle versioning when a new builder is implemented.
+        if _major:
+            cls._VERSN += 1
+            cls._BUILD = 0
+        else:
+            cls._BUILD += 1
 
     def __str__(self):
         param_string = "|".join(
@@ -46,40 +80,45 @@ class Optimizer:
         return f"<{self._CLSNAME_PREFIX}.{self.identifier}: {param_string}>"
 
     def __repr__(self):
-        param_string = "|".join(
-            [f"{key}={val}" for key, val in self._params.items()]
-        )
+        # param_string = "|".join(
+        #     [f"{key}={val}" for key, val in self._params.items()]
+        # )
         return f"<{self._CLSNAME_PREFIX}.{self.identifier}>"
 
+    @MODULE_LOGGER.wrap_call
     def apply(self, instruction_tree):
         """apply the optimizer"""
         return instruction_tree.deepcopy()
 
 
 class Builder(Optimizer, identifier="GENERIC"):
-    """Make codecontainer from instruction tree
-
-    TODO:
-    Builder needs to recognize input ADAA structure, such as COMPLX, ...
-    and carry that along the variables to select the proper codeblock to
-    get.
-    In the future, either:
-      - supported instructions or not supported instruction dictionary keys
-        might be expanded
-      - (preferred): As codeblocks are classes anyways, let them do the work.
-        Requesting code for an unsopported structure can still lead to an
-        exception and the next potentially supporting block can be checked
+    """
+    Make codecontainer from instruction tree
     """
 
     _CLSNAME_PREFIX = "Builder"
     _supported_instruction_classes: Dict[type, type] = {}
     _not_supported_instruction_classes: Set[type] = set()
 
-    def __init__(self, **params):
-        super().__init__(**params)
+    def __init__(self, _log_welcome=True, **params):
+        super().__init__(**params, _log_welcome=False)
         self._optimizers = []
+        if _log_welcome:
+            self._welcome_log()
+
+    def _detail_log_lines(self):
+        yield from Optimizer._detail_log_lines(self)
+        yield ""
+        yield f"supported ({len(type(self)._supported_instruction_classes)}):"
+        for instruction_type in type(self)._supported_instruction_classes:
+            yield f"  - {instruction_type}"
+        yield ""
+        yield f"excluded ({len(type(self)._not_supported_instruction_classes)}):"
+        for instruction_type in type(self)._not_supported_instruction_classes:
+            yield f"  - {instruction_type}"
 
     @classmethod
+    @MODULE_LOGGER.wrap_call
     def add_supported_instruction_cls(cls, instruction_cls, target):
         """add a new instruction class to recognize and assign a proper target"""
         cls._supported_instruction_classes[instruction_cls] = target
@@ -87,6 +126,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             cls._not_supported_instruction_classes.remove(instruction_cls)
 
     @classmethod
+    @MODULE_LOGGER.wrap_call
     def add_non_supported_instruction_cls(cls, instruction_cls):
         """remember that this kind of instruction is not supported"""
         cls._not_supported_instruction_classes.add(instruction_cls)
@@ -94,6 +134,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             del cls._supported_instruction_classes[instruction_cls]
 
     @classmethod
+    @MODULE_LOGGER.wrap_call
     def _get_potential_fits(cls, instruction):
         for elder in instruction.__class__.__mro__:
             if elder in cls._not_supported_instruction_classes:
@@ -101,6 +142,14 @@ class Builder(Optimizer, identifier="GENERIC"):
             if elder in cls._supported_instruction_classes:
                 yield cls._supported_instruction_classes[elder]
 
+    @MODULE_LOGGER.wrap_call
+    def use_optimizer(self, optimizer):
+        """append an optimizer to the list"""
+        if not isinstance(optimizer, Optimizer):
+            raise TypeError("Optimizer must be an instance of Optimizer")
+        self._optimizers.append(optimizer)
+
+    @MODULE_LOGGER.wrap_call
     def build_from_instruction(
         self, instruction, environment=None, level=0, parent=None, **buildargs
     ):
@@ -127,22 +176,28 @@ class Builder(Optimizer, identifier="GENERIC"):
             buildargs=buildargs,
         )
 
+    @MODULE_LOGGER.wrap_call
     def build(
         self, instruction, environment=None, known_variables=None, **buildargs
     ):
         """build the code from the instruction tree"""
+        MODULE_LOGGER.infolog("build code from instruction tree")
         optimized_tree = super().apply(instruction)  # this is a deepcopy call
-        for optimizer in self._optimizers:
+        for num, optimizer in enumerate(self._optimizers):
+            MODULE_LOGGER.infolog(f"apply optimizer #{num+1}")
             optimized_tree = optimizer.apply(instruction)
         if known_variables is None:
             known_variables = {}
         environment = InstructionEnvironment()
+        MODULE_LOGGER.infolog("start with root instruction node")
         self.build_from_instruction(
             optimized_tree,
             environment=environment,
             **{**self._params, **buildargs},
         )
+        MODULE_LOGGER.infolog("reached end of instruction build")
 
+    @MODULE_LOGGER.wrap_call
     def get_signature(
         self,
         instruction: Instruction,
@@ -163,12 +218,29 @@ class Builder(Optimizer, identifier="GENERIC"):
         # conditions than pure in or pure out variables.
         return ((), (), ())
 
+    @MODULE_LOGGER.wrap_call
     def function_name(self):
         """derive a function name from the parameters following a standardized pattern"""
 
+    @MODULE_LOGGER.wrap_call
+    def test_the_log(self, argument, **kwargument):
+        MODULE_LOGGER.infolog("foobar was here")
+        return "fooo"
 
-print(Builder(foo="bar"))
+    @MODULE_LOGGER.wrap_call
+    def test_the_log2(self, argument, **kwargument):
+        MODULE_LOGGER.infolog("foobar was here")
+        raise ValueError("argument should be an integer")
+        return "fooo"
 
+
+MODULE_LOGGER.set_loglevel(3)
+
+mybuilder = Builder(foo="bar")
+mybuilder.test_the_log(12)
+Builder.add_non_supported_instruction_cls("test")
+mybuilder.test_the_log2(13)
+mybuilder.test_the_log(15, x="y")
 
 # build:
 # - look for a proper codecontainer by looking up the instructions

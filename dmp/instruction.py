@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 10/03/2025, 14:40
-# Version:     0.0.2666
+# Last Update: 10/03/2025, 10:20
+# Version:     0.0.2667
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -311,11 +311,6 @@ class Instruction:
         env_applied = self._apply_environment(environment, memo=memo)
         memo[(id(environment), id(self))] = weakref.ref(env_applied)
         return env_applied
-
-    def get_instruction_variables(self):
-        """get the instruction variables that are included in the instruction"""
-        return
-        yield
 
 
 ###############################################################################
