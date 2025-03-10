@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 07/03/2025, 17:20
-# Version:     0.0.72
+# Last Update: 10/03/2025, 10:19
+# Version:     0.0.86
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,6 +15,7 @@
 
 from typing import Dict, Set
 from phoenix.fgen.instructionvar2 import InstructionEnvironment
+from phoenix.fgen.instruction import Instruction
 
 
 class Optimizer:
@@ -99,7 +100,9 @@ class Builder(Optimizer, identifier="GENERIC"):
             if elder in cls._supported_instruction_classes:
                 yield cls._supported_instruction_classes[elder]
 
-    def from_instruction(self, instruction, environment=None, **buildargs):
+    def build_from_instruction(
+        self, instruction, environment=None, level=0, parent=None, **buildargs
+    ):
         """call the right class from instruction"""
         if environment is None:
             environment = InstructionEnvironment()
@@ -115,12 +118,11 @@ class Builder(Optimizer, identifier="GENERIC"):
             raise ValueError("Instruction class not supported")
         if environment is None:
             environment = InstructionEnvironment()
-        return closest_match().from_instruction(
+        parent = instruction.parent
+        return closest_match().container_from_instruction(
             instruction=instruction,
             builder=self,
-            environment=environment,
-            level=0,
-            parent=None,
+            context=(level, environment, parent),
             buildargs=buildargs,
         )
 
@@ -130,11 +132,19 @@ class Builder(Optimizer, identifier="GENERIC"):
         for optimizer in self._optimizers:
             optimized_tree = optimizer.apply(instruction)
         environment = InstructionEnvironment()
-        self.from_instruction(
+        self.build_from_instruction(
             optimized_tree,
             environment=environment,
             **{**self._params, **buildargs},
         )
+
+    def get_signature(
+        self, instruction: Instruction, environment: InstructionEnvironment
+    ):
+        """Get an instruction's call signature"""
+
+        # ADAA types of OUT and IN. OUT may be handled as INOUT.
+        return ((), ())
 
 
 print(Builder(foo="bar"))

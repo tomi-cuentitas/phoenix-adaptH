@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 07/03/2025, 17:21
-# Version:     0.0.537
+# Last Update: 10/03/2025, 10:15
+# Version:     0.0.544
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,7 @@
 """
 from __future__ import annotations
 
-from typing import Generator, Any, Set, Callable, List, Dict
+from typing import Generator, Any, Set, Callable, List, Dict, Tuple
 
 from weakref import ref
 
@@ -22,6 +22,7 @@ from weakref import ref
 from weakref import ReferenceType as wrReferenceType
 
 from phoenix.fgen.instruction import Instruction
+from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 
@@ -166,9 +167,12 @@ class CodeContainer:
     _REQUEST_KEYS: List[str] = []
     _KEY_DEFAULTS: Dict[str, Any] = {}
 
-    def __init__(self, parent=None, **params) -> None:
+    def __init__(self, signature: str, parent=None, **params) -> None:
         # all content that may or may not be useful
         self._params = params
+
+        # the call signature
+        self._call_signature = signature
 
         # collect variables that are used here
         self._requirements: Set[LibRoutineVariable] = set()
@@ -193,22 +197,22 @@ class CodeContainer:
         self._level = level
 
     @classmethod
-    def from_instruction(
+    def container_from_instruction(
         cls,
         instruction: Instruction,
         builder,
-        environment,
-        level=0,
-        parent=None,
+        context: Tuple[int, InstructionEnvironment, Instruction | None],
         buildargs=None,
-        **kwargs,
     ):
         """request data from instruction, supplement with defaults if valid"""
         if buildargs is None:
             buildargs = {}
-        assert not kwargs
+        (environment, level, parent) = context
         return cls(
             level=level,
+            signature=builder.get_signature(
+                instruction, environment, buildargs
+            ),
             parent=parent,
             **instruction.to_dict(*cls._REQUEST_KEYS, cls._KEY_DEFAULTS),
         ).complete(builder, environment, buildargs)
@@ -219,8 +223,6 @@ class CodeContainer:
         print(f"\tBuilder    : {builder}")
         print(f"\tEnvironment: {environment}")
         print(f"\tbuild args : {buildargs}")
-        print(f"\textra args : {kwargs}")
-        assert not kwargs
         return self
 
     def _set_parent(self, parent):
