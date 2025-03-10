@@ -5,17 +5,18 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 10/03/2025, 10:19
-# Version:     0.0.86
+# Last Update: 10/03/2025, 13:10
+# Version:     0.0.101
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from typing import Dict, Set
-from phoenix.fgen.instructionvar2 import InstructionEnvironment
+from typing import Dict, Set, Tuple
+from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.instruction import Instruction
+from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 
 class Optimizer:
@@ -126,11 +127,15 @@ class Builder(Optimizer, identifier="GENERIC"):
             buildargs=buildargs,
         )
 
-    def build(self, instruction, environment=None, **buildargs):
+    def build(
+        self, instruction, environment=None, known_variables=None, **buildargs
+    ):
         """build the code from the instruction tree"""
         optimized_tree = super().apply(instruction)  # this is a deepcopy call
         for optimizer in self._optimizers:
             optimized_tree = optimizer.apply(instruction)
+        if known_variables is None:
+            known_variables = {}
         environment = InstructionEnvironment()
         self.build_from_instruction(
             optimized_tree,
@@ -139,12 +144,46 @@ class Builder(Optimizer, identifier="GENERIC"):
         )
 
     def get_signature(
-        self, instruction: Instruction, environment: InstructionEnvironment
+        self,
+        instruction: Instruction,
+        known_variables: Dict[type, Tuple[str, LibRoutineVariable]] | None,
     ):
         """Get an instruction's call signature"""
 
-        # ADAA types of OUT and IN. OUT may be handled as INOUT.
-        return ((), ())
+        if known_variables is None:
+            known_variables = {}
+
+        # ADAA types of OUT, INOUT and IN. Or subsets of this. Can be purely INOUT.
+        # Builder class can decide on how to handle that.
+        #
+        # example for usage:
+        # When GPU uses mapped memory, write-only regions can be of performance advantage
+        # the mapping refers to instruction variables.
+        # InOut Variables might be treated differently w.r.t. parallelization and racing
+        # conditions than pure in or pure out variables.
+        return ((), (), ())
+
+    def function_name(self):
+        """derive a function name from the parameters following a standardized pattern"""
 
 
 print(Builder(foo="bar"))
+
+
+# build:
+# - look for a proper codecontainer by looking up the instructions
+#   MRO.
+# - input and output args are assigned to ADAAs at the highest
+#   level. This assignment is carried along in the known_variables
+#   dictionary. Any instruction variable known to an instruction
+#   can be mapped to the proper set of routine variables. The
+#   mapping goes through all environments.
+# - check if the signature is supported. If not, try to find the
+#   next match in MRO
+#   alternatively, the lookup can directly include the MRO and the
+#   structure, depending on the complexity. Control structures most
+#   likely don't care for any signature, so I thought two individual
+#   checks can safe us some effort.
+# - generate the code container with the current information known,
+#   implementing the proper libroutine variables and handle all
+#   dependencies, calls, ...

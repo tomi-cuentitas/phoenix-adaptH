@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 10/03/2025, 10:15
-# Version:     0.0.544
+# Last Update: 10/03/2025, 13:00
+# Version:     0.0.545
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -352,7 +352,7 @@ class CodeContainer:
         return False
 
     @classmethod
-    def compatibility_check(cls, builder, instruction, environment, **kwargs):
+    def compatibility_check(cls, signature):
         """checks if anything speaks against using this container"""
         return True
 

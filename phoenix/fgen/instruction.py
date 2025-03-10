@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/03/2025, 17:06
-# Version:     0.0.2663
+# Last Update: 10/03/2025, 12:47
+# Version:     0.0.2664
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,7 +35,7 @@ import weakref
 
 from phoenix._aux import segment_overlap
 from phoenix.keymap import Key, KeyMap
-from phoenix.fgen.instructionvar2 import (
+from phoenix.fgen.instructionvar import (
     InstructionVariable,
     KeyOffset,
     SymbolicOffset,
