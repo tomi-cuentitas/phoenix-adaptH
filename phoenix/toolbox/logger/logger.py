@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 10/03/2025, 15:44
-# Version:     0.0.213
+# Last Update: 10/03/2025, 17:02
+# Version:     0.0.236
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -41,25 +41,25 @@ class Logger:
 
         def wrapper(*args, **kwargs):
             try:
-                self.debuglog(f"CALLED function {function.__name__}")
-                self.debuglog(f"- args  : {args}")
-                self.debuglog(f"- kwargs: {kwargs}")
+                if __debug__:
+                    self.debuglog(f"CALLED function {function.__name__}")
+                    self.debuglog(f"- args  : {args}")
+                    self.debuglog(f"- kwargs: {kwargs}")
                 if self._loglevel > 2:
                     self._indentlevel += 1
                 ret = function(*args, **kwargs)
                 if self._loglevel > 2:
                     self._indentlevel -= 1
-                self.debuglog(f"- return value: {ret}")
-                self.debuglog(f"END of function {function.__name__}")
+                if __debug__:
+                    self.debuglog(f"- return value: {ret}")
+                    self.debuglog(f"END of function {function.__name__}")
             except Exception as exc:
-                self.errorlog(f"")
-                self.errorlog(f"An error occurred: {exc}")
-                self.errorlog(f"- called function {function.__name__}")
-                self.errorlog(f"- args  : {args}")
-                self.errorlog(f"- kwargs: {kwargs}")
-                self.errorlog("")
-                self.errorlog("TRACEBACK:")
-                self.errorlog("==========")
+                # self.warnlog(f"")
+                self.warnlog(f"An error occurred: {exc}")
+                self.warnlog(f"- called function {function.__name__}")
+                self.warnlog(f"- args  : {args}")
+                self.warnlog(f"- kwargs: {kwargs}")
+                self.warnlog("- traceback:")
                 for num, segment in enumerate(
                     tb.format_tb(exc.__traceback__, limit=None)
                 ):
@@ -67,13 +67,56 @@ class Logger:
                         continue
                     for line in segment.split("\n"):
                         if line.strip():
-                            self.errorlog(line)
+                            self.warnlog(f"  {line}")
                 exc.add_note(
                     f"Information has been written to the log file '{self._file}'"
                 )
                 raise exc
-            else:
-                return ret
+            return ret
+
+        # potential TODO: tidy the stacktrace from the logger parts
+
+        return wrapper
+
+    def wrap_gen(self, function):
+        """a decorator from a logger instance"""
+
+        def wrapper(*args, **kwargs):
+            try:
+                if __debug__:
+                    self.debuglog(f"CALLED generator {function.__name__}")
+                    self.debuglog(f"- args  : {args}")
+                    self.debuglog(f"- kwargs: {kwargs}")
+                if self._loglevel > 2:
+                    self._indentlevel += 1
+                for ret in function(*args, **kwargs):
+                    if __debug__:
+                        self.debuglog(f"- yield value: {ret}")
+                    yield ret
+                if self._loglevel > 2:
+                    self._indentlevel -= 1
+                if __debug__:
+                    self.debuglog(f"END of generator {function.__name__}")
+            except Exception as exc:
+                # self.warnlog(f"")
+                self.warnlog(f"An error occurred: {exc}")
+                self.warnlog(f"- called generator {function.__name__}")
+                self.warnlog(f"- args  : {args}")
+                self.warnlog(f"- kwargs: {kwargs}")
+                self.warnlog("- traceback:")
+                for num, segment in enumerate(
+                    tb.format_tb(exc.__traceback__, limit=None)
+                ):
+                    if num == 0:
+                        continue
+                    for line in segment.split("\n"):
+                        if line.strip():
+                            self.warnlog(f"  {line}")
+                exc.add_note(
+                    f"Information has been written to the log file '{self._file}'"
+                )
+                raise exc
+            return ret
 
         # potential TODO: tidy the stacktrace from the logger parts
 
@@ -140,4 +183,4 @@ class Logger:
 
     def errorlog(self, message):
         """make an informative log message"""
-        self.log(message, "ERROR", level=0)
+        self.log(message, "ERROR")

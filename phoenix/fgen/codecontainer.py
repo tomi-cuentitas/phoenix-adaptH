@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 10/03/2025, 13:00
-# Version:     0.0.545
+# Last Update: 10/03/2025, 17:16
+# Version:     0.0.585
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -164,10 +164,8 @@ class CodeContainer:
     """
 
     _IND = "  "
-    _REQUEST_KEYS: List[str] = []
-    _KEY_DEFAULTS: Dict[str, Any] = {}
 
-    def __init__(self, signature: str, parent=None, **params) -> None:
+    def __init__(self, signature: Any = None, parent=None, **params) -> None:
         # all content that may or may not be useful
         self._params = params
 
@@ -204,18 +202,22 @@ class CodeContainer:
         context: Tuple[int, InstructionEnvironment, Instruction | None],
         buildargs=None,
     ):
-        """request data from instruction, supplement with defaults if valid"""
+        """Generator! Request data from instruction, supplement with defaults if valid."""
         if buildargs is None:
             buildargs = {}
         (environment, level, parent) = context
-        return cls(
+        yield from cls(
             level=level,
             signature=builder.get_signature(
                 instruction, environment, buildargs
             ),
             parent=parent,
-            **instruction.to_dict(*cls._REQUEST_KEYS, cls._KEY_DEFAULTS),
-        ).complete(builder, environment, buildargs)
+            **instruction.to_dict(),
+        ).complete(builder, environment, buildargs).representatives()
+
+    def representatives(self):
+        """yield the containers that represent self. Is self in many cases"""
+        yield self
 
     def complete(self, builder, environment, buildargs, **kwargs):
         """complete the instruction from the builder in the proper environment"""
@@ -365,8 +367,19 @@ class GroupContainer(CodeContainer):
     delimiters and comments.
     """
 
+    def __init__(self, content, signature=None, parent=None, **params):
+        super().__init__(signature=signature, parent=parent, **params)
+        self._content = content
 
-class EnvironmentContainer(GroupContainer):
+    # should default to getting the content of body without any extras.
+
+    def append(self, content):
+        """append a container to the body"""
+        self._container_body.append(content)
+        content.parent = self
+
+
+class EnclosingContainer(GroupContainer):
     """
     An Environment block. Opening and closing operators so pairs always match.
     Indent optional. Made for brackets, parenthesis, definitions, ...
@@ -375,26 +388,23 @@ class EnvironmentContainer(GroupContainer):
     class and are not occupied
     """
 
+    def __init__(
+        self, content, environment, signature=None, parent=None, **params
+    ):
+        transformed_content = content.apply_environment(environment)
+        super().__init__(
+            transformed_content, signature=signature, parent=parent, **params
+        )
 
-class LoopContainer(EnvironmentContainer):
+
+class LoopContainer(EnclosingContainer):
     """
     A LoopContainer provides basic loop control capabilities. It can derive into
     different versions depending on the architecture.
     """
 
 
-class KernelContainer(EnvironmentContainer):
-    """
-    A KernelContainer represents a piece of code that is supposed to be called
-    in various memory locations, potentially simultaneously. KernelContainers
-    might map to parametrized auxilliary functions or actual kernels on GPUs.
-
-    An instruction block from a map instruction is preferably rendered into a
-    kernel
-    """
-
-
-class DefinitionSection(EnvironmentContainer):
+class DefinitionContainer(CodeContainer):
     """
     A code container that defines stuff and prevents them from getting passed
     on during requirement iterator. Supports a filtering function that decides
@@ -443,14 +453,25 @@ class DefinitionSection(EnvironmentContainer):
                 yield requirement
 
 
-class RoutineDefinition(DefinitionSection):
+# class KernelContainer(DefinitionContainer):
+#     """
+#     A KernelContainer represents a piece of code that is supposed to be called
+#     in various memory locations, potentially simultaneously. KernelContainers
+#     might map to parametrized auxilliary functions or actual kernels on GPUs.
+
+#     An instruction block from a map instruction is preferably rendered into a
+#     kernel
+#     """
+
+
+class RoutineContainer(DefinitionContainer):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
     """
 
 
-class LibraryContainer(DefinitionSection):
+class LibraryContainer(DefinitionContainer):
     """
     A Library contains routines, constants and more.
     """
@@ -465,8 +486,16 @@ class LibraryContainer(DefinitionSection):
         return True
 
 
-class ConditionalContainer(EnvironmentContainer):
-    """Conditionals. If, then, else. You know what."""
+class ConditionalContainer(EnclosingContainer):
+    """Conditionals. If. You know what."""
+
+    def __init__(
+        self, content, condition, signature=None, parent=None, **params
+    ):
+        super().__init__(content, signature=signature, parent=parent, **params)
+        self._condition = condition  # figure that out,
+        # maybe sth like (libroutinevar, operator, libroutinevar)?
+        # (would require a constant lrv)
 
 
 class CodeBlock(GroupContainer):
@@ -475,6 +504,10 @@ class CodeBlock(GroupContainer):
 
 class CodeLine(CodeContainer):
     """Recursion-Breaking. Literally a single line."""
+
+    def __init__(self, line, signature=None, parent=None, **params):
+        super().__init__(signature=signature, parent=parent, **params)
+        self._line = line
 
 
 class StatementLine(CodeLine):
@@ -489,12 +522,34 @@ class StatementLine(CodeLine):
     dependencies
     """
 
+    _BLUEPRINT = ""
+
+    def __init__(self, signature=None, parent=None, **params):
+        line = type(self)._BLUEPRINT.format(**params)
+        super().__init__(line, signature=signature, parent=parent, **params)
+
 
 class CommentLine(CodeLine):
     """
     This line represents a comment
     """
 
+    _COMMENT_PREFIX = "#"
+
+    def __init__(self, text, parent=None, **params):
+        line = f"{self._COMMENT_PREFIX} {text}"
+        super().__init__(line, signature=None, parent=parent, **params)
+
+
+Important Containers:
+
+StatementLine(s): All required leaf instructions need one
+CommentLine: for structure. At least define comment symbol
+GroupContainer: grouping of lines.
+EnvironmentContainer
+DefinitionContainer
+LoopContainer
+RoutineContainer
 
 if __name__ == "__main__":
     from phoenix.fgen.libroutinevar import (
@@ -502,7 +557,7 @@ if __name__ == "__main__":
         LibRoutineLocalVariable,
     )
 
-    foo = DefinitionSection()
+    foo = DefinitionContainer()
     print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # False
     foo.add_capture("CONSTANT")
     print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # True
@@ -519,34 +574,31 @@ if __name__ == "__main__":
     foo.add_capture(lambda x: "f" in x.name)
     print(foo.capture_check(LibRoutineVariable("foo", 1)))  # True
 
+    SUMMARY = """
+    Definition section provides capture capability. Builder has mapping from instruction type to class. CRO is analyzed to find most specific fit among supported codecontainers. 
 
-SUMMARY = """
-Definition section provides capture capability. Builder has mapping from instruction type to class. CRO is analyzed to find most specific fit among supported codecontainers. 
+    CodeLines do not contain other containers and break any recursion. In the end, anything is broken down into codelines, where indentation is handled.
 
-CodeLines do not contain other containers and break any recursion. In the end, anything is broken down into codelines, where indentation is handled.
+    I give up on the idea, that code containers are made from instruction. The assignment between instruction types and codecontainer subclasses is made by the Builder instance and only preceding Optimizers can influence the ultimate instruction tree.
+    """
+    print(SUMMARY)
 
-I give up on the idea, that code containers are made from instruction. The assignment between instruction types and codecontainer subclasses is made by the Builder instance and only preceding Optimizers can influence the ultimate instruction tree.
-"""
-print(SUMMARY)
+    for tline in multiline_iterable(
+        ["Hello", "World", "Foo", "Bar", "Baz"],
+        # [],
+        ", ",
+        max_line_length=22,
+        indent="    ",
+        prefix="[",
+        suffix="]",
+        prefix_suffix_lines=True,
+        linebreak=" //",
+    ):
+        print(tline)
 
-
-for tline in multiline_iterable(
-    ["Hello", "World", "Foo", "Bar", "Baz"],
-    # [],
-    ", ",
-    max_line_length=22,
-    indent="    ",
-    prefix="[",
-    suffix="]",
-    prefix_suffix_lines=True,
-    linebreak=" //",
-):
-    print(tline)
-
-
-for tline in multiline_text(
-    SUMMARY,
-    max_line_length=30,
-    indent="# ",
-):
-    print(tline)
+    for tline in multiline_text(
+        SUMMARY,
+        max_line_length=30,
+        indent="# ",
+    ):
+        print(tline)

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 10/03/2025, 14:40
-# Version:     0.0.2666
+# Last Update: 10/03/2025, 16:45
+# Version:     0.0.2673
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -938,19 +938,18 @@ class SubroutineEnvironmentInstruction(
 # ===========================
 
 
-class MapInstructionGroup(InstructionGroup, ftype="map"):
+class MapEnvironmentsInstruction(Instruction, ftype="map"):
     """
     Within this environment, Environment groups (e.g. OffsetGroups) are applied
     to an instructiongroup that is then executed from within every environment.
     """
 
-    # TODO
-    # Decide what happens to instructions in environment when map is applied
-    # consider pre-map and post-map operations
-
-    def __init__(self, environments, mapped, itype=None):
-        super().__init__(environments, itype=itype)
-        self._mapped = mapped
+    def __init__(self, content, environments, itype=None):
+        if itype is None:
+            itype = content.itype
+        super().__init__(itype=itype)
+        self._content = content
+        self._environments = environments
 
 
 ###############################################################################

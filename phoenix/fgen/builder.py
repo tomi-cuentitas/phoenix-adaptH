@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 10/03/2025, 15:37
-# Version:     0.0.230
+# Last Update: 10/03/2025, 17:10
+# Version:     0.0.270
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,7 +19,7 @@ from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable
 from phoenix.toolbox.logger import Logger
 
-MODULE_LOGGER = Logger("module_builder")
+MODULE_LOGGER = Logger("module_builder", loglevel=2)
 
 
 class Optimizer:
@@ -28,7 +28,7 @@ class Optimizer:
     _CLSNAME_PREFIX = "Optimizer"
     _IDENTIFIER = "GENERIC"
     _VERSN = 0
-    _BUILD = 0
+    _BUILD = -1
     _BCKND = "GENERIC"
 
     def __init__(self, _log_welcome=True, **params):
@@ -41,6 +41,7 @@ class Optimizer:
             MODULE_LOGGER.infolog(line)
 
     def _welcome_log_lines(self):
+        yield "-----" * 15
         version, build = type(self)._VERSN, type(self)._BUILD
         yield (
             f"Hello from {type(self)._CLSNAME_PREFIX} "
@@ -48,7 +49,7 @@ class Optimizer:
             + f" (v{version}.{build})"
         )
         yield from self._detail_log_lines()
-        yield "-" * 15
+        yield "-----" * 15
 
     def _detail_log_lines(self):
         yield ""
@@ -100,6 +101,9 @@ class Builder(Optimizer, identifier="GENERIC"):
     _supported_instruction_classes: Dict[type, type] = {}
     _not_supported_instruction_classes: Set[type] = set()
 
+    _VERSN = 0
+    _BUILD = -1
+
     def __init__(self, _log_welcome=True, **params):
         super().__init__(**params, _log_welcome=False)
         self._optimizers = []
@@ -149,7 +153,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             raise TypeError("Optimizer must be an instance of Optimizer")
         self._optimizers.append(optimizer)
 
-    @MODULE_LOGGER.wrap_call
+    @MODULE_LOGGER.wrap_gen
     def build_from_instruction(
         self, instruction, environment=None, level=0, parent=None, **buildargs
     ):
@@ -169,7 +173,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         if environment is None:
             environment = InstructionEnvironment()
         parent = instruction.parent
-        return closest_match().container_from_instruction(
+        yield from closest_match().container_from_instruction(
             instruction=instruction,
             builder=self,
             context=(level, environment, parent),
@@ -190,11 +194,12 @@ class Builder(Optimizer, identifier="GENERIC"):
             known_variables = {}
         environment = InstructionEnvironment()
         MODULE_LOGGER.infolog("start with root instruction node")
-        self.build_from_instruction(
+        yield from self.build_from_instruction(
             optimized_tree,
             environment=environment,
             **{**self._params, **buildargs},
         )
+
         MODULE_LOGGER.infolog("reached end of instruction build")
 
     @MODULE_LOGGER.wrap_call
@@ -222,40 +227,55 @@ class Builder(Optimizer, identifier="GENERIC"):
     def function_name(self):
         """derive a function name from the parameters following a standardized pattern"""
 
-    @MODULE_LOGGER.wrap_call
-    def test_the_log(self, argument, **kwargument):
-        MODULE_LOGGER.infolog("foobar was here")
-        return "fooo"
 
-    @MODULE_LOGGER.wrap_call
-    def test_the_log2(self, argument, **kwargument):
-        MODULE_LOGGER.infolog("foobar was here")
-        raise ValueError("argument should be an integer")
-        return "fooo"
+if __name__ == "__main__":
 
+    class TestBuilder(Builder, identifier="TEST"):
+        """A builder for pure testing purposes"""
 
-MODULE_LOGGER.set_loglevel(3)
+        @MODULE_LOGGER.wrap_call
+        def test_the_log(self, arg, **kwargs):
+            """a good testing routine for the builder's log module"""
+            MODULE_LOGGER.infolog("foobar was here")
+            print(f"my argument is {arg}")
+            print(f"my kwarguments are {kwargs}")
+            return "fooo"
 
-mybuilder = Builder(foo="bar")
-mybuilder.test_the_log(12)
-Builder.add_non_supported_instruction_cls("test")
-mybuilder.test_the_log2(13)
-mybuilder.test_the_log(15, x="y")
+        @MODULE_LOGGER.wrap_call
+        def test_the_log2(self, arg, **kwargs):
+            """a bad testing routine for the builder's log module"""
+            MODULE_LOGGER.infolog("foobar was here")
+            print(f"my argument is {arg}")
+            print(f"my kwarguments are {kwargs}")
+            print("I will raise an exception now.")
+            raise ValueError("argument should be an integer")
+            return "fooo"
 
-# build:
-# - look for a proper codecontainer by looking up the instructions
-#   MRO.
-# - input and output args are assigned to ADAAs at the highest
-#   level. This assignment is carried along in the known_variables
-#   dictionary. Any instruction variable known to an instruction
-#   can be mapped to the proper set of routine variables. The
-#   mapping goes through all environments.
-# - check if the signature is supported. If not, try to find the
-#   next match in MRO
-#   alternatively, the lookup can directly include the MRO and the
-#   structure, depending on the complexity. Control structures most
-#   likely don't care for any signature, so I thought two individual
-#   checks can safe us some effort.
-# - generate the code container with the current information known,
-#   implementing the proper libroutine variables and handle all
-#   dependencies, calls, ...
+    # MODULE_LOGGER.set_loglevel(3)
+
+    mybuilder = TestBuilder(foo="bar")
+    mybuilder.test_the_log(12)
+    Builder.add_non_supported_instruction_cls("test")
+    try:
+        mybuilder.test_the_log2(19)
+    except Exception as e:
+        print(e)
+    mybuilder.test_the_log(15, x="y")
+
+    # build:
+    # - look for a proper codecontainer by looking up the instructions
+    #   MRO.
+    # - input and output args are assigned to ADAAs at the highest
+    #   level. This assignment is carried along in the known_variables
+    #   dictionary. Any instruction variable known to an instruction
+    #   can be mapped to the proper set of routine variables. The
+    #   mapping goes through all environments.
+    # - check if the signature is supported. If not, try to find the
+    #   next match in MRO
+    #   alternatively, the lookup can directly include the MRO and the
+    #   structure, depending on the complexity. Control structures most
+    #   likely don't care for any signature, so I thought two individual
+    #   checks can safe us some effort.
+    # - generate the code container with the current information known,
+    #   implementing the proper libroutine variables and handle all
+    #   dependencies, calls, ...
