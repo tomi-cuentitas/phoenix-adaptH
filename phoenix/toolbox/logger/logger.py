@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 12/03/2025, 17:14
-# Version:     0.0.640
+# Last Update: 12/03/2025, 17:18
+# Version:     0.0.642
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,7 +43,7 @@ class Logger:
     """A logger class to be used from all other classes"""
 
     _actioncount = 0
-    _LOGREPR = {
+    _LOG_REPR = {
         "ERROR": "!ERR",
         "WARNING": "WARN",
         "INFO": "info",
@@ -258,7 +258,7 @@ class Logger:
             first = True
             for mline in message_lines:
                 acstr = f"{acount:>6}" + ":"
-                typestr = f"{type(self)._LOGREPR[msgtype.upper()]: <4}" + ": "
+                typestr = f"{type(self)._LOG_REPR[msgtype.upper()]: <4}" + ": "
                 if not first:
                     acstr = " " * len(acstr)
                     typestr = " " * len(typestr)
