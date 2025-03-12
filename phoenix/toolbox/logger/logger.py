@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 12/03/2025, 16:36
-# Version:     0.0.578
+# Last Update: 12/03/2025, 17:04
+# Version:     0.0.624
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -66,7 +66,7 @@ class Logger:
         def wrapper(*args, **kwargs):
             try:
                 if __debug__:
-                    self.debuglog(
+                    self.debug(
                         f"CALLED function {function.__name__}",
                         f"args  : {args}",
                         f"kwargs: {kwargs}",
@@ -75,8 +75,8 @@ class Logger:
                     self._indentlevel += 1
                 ret = function(*args, **kwargs)
                 if __debug__:
-                    self.debuglog(f"return value: {ret}")
-                    self.debuglog("done")
+                    self.debug(f"return value: {ret}")
+                    self.debug("done")
             except Exception as exc:
                 if self._alerted:
                     control_message = "Error! An exception occured"
@@ -98,9 +98,9 @@ class Logger:
                         for line in segment.split("\n"):
                             if line.strip():
                                 lines.append(f"  {line}")
-                    self.errorlog(*lines)
+                    self.error(*lines)
                 else:
-                    self.warnlog(*lines)
+                    self.warn(*lines)
                 exc.add_note(
                     f"Information has been written to the log file '{self._file}'"
                 )
@@ -108,7 +108,7 @@ class Logger:
             finally:
                 if self._loglevel > 2:
                     self._indentlevel -= 1
-                self.debuglog(f"END of function {function.__name__}")
+                self.debug(f"END of function {function.__name__}")
             return ret
 
         # potential TODO: tidy the stacktrace from the logger parts
@@ -121,7 +121,7 @@ class Logger:
         def wrapper(*args, **kwargs):
             try:
                 if __debug__:
-                    self.debuglog(
+                    self.debug(
                         f"CALLED generator {function.__name__}",
                         f"args  : {args}",
                         f"kwargs: {kwargs}",
@@ -130,10 +130,10 @@ class Logger:
                     self._indentlevel += 1
                 for ret in function(*args, **kwargs):
                     if __debug__:
-                        self.debuglog(f"yield value: {ret}")
+                        self.debug(f"yield value: {ret}")
                     yield ret
                 if __debug__:
-                    self.debuglog("done")
+                    self.debug("done")
             except Exception as exc:
                 if self._alerted:
                     control_message = "Error! An exception occured"
@@ -155,9 +155,9 @@ class Logger:
                         for line in segment.split("\n"):
                             if line.strip():
                                 lines.append(f"  {line}")
-                    self.errorlog(*lines)
+                    self.error(*lines)
                 else:
-                    self.warnlog(*lines)
+                    self.warn(*lines)
                 exc.add_note(
                     f"Information has been written to the log file '{self._file}'"
                 )
@@ -165,7 +165,7 @@ class Logger:
             finally:
                 if self._loglevel > 2:
                     self._indentlevel -= 1
-                self.debuglog(f"END of generator {function.__name__}")
+                self.debug(f"END of generator {function.__name__}")
             return ret
 
         # potential TODO: tidy the stacktrace from the logger parts
@@ -246,74 +246,109 @@ class Logger:
         if level is None:
             level = self._indentlevel
 
-        acount = Logger._actioncount
-        Logger._actioncount += 1
+        if "".join(message_lines).replace("\n", "").strip():
+            acount = Logger._actioncount
+            Logger._actioncount += 1
 
-        first = True
-        for mline in message_lines:
-            acstr = f"{acount:>6}" + ":"
-            typestr = f"{type(self)._LOGREPR[msgtype.upper()]: <4}" + ": "
-            if not first:
-                acstr = " " * len(acstr)
-                typestr = " " * len(typestr)
-            first = False
-            self._write_to_stdout(acstr, typestr, mline, msgtype, level)
-            self._write_to_file(acstr, typestr, mline, msgtype, level)
+            first = True
+            for mline in message_lines:
+                acstr = f"{acount:>6}" + ":"
+                typestr = f"{type(self)._LOGREPR[msgtype.upper()]: <4}" + ": "
+                if not first:
+                    acstr = " " * len(acstr)
+                    typestr = " " * len(typestr)
+                first = False
+                self._write_to_stdout(acstr, typestr, mline, msgtype, level)
+                if mline.strip():
+                    self._write_to_file(acstr, typestr, mline, msgtype, level)
+        else:
+            self._write_to_stdout("", "", "", msgtype, level)
 
     def log(self, message, msgtype="INFO", level=None):
         """log a line"""
         self.multiline_log([message], msgtype=msgtype, level=level)
 
-    def debuglog(self, *messages):
-        """make a debug log message"""
+    def _log_debug(self, *messages):
         if self._loglevel > 2:
             self.multiline_log(list(messages), "DEBUG")
 
-    def infolog(self, *messages):
-        """make an informative log message"""
+    def _log_info(self, *messages):
         if self._loglevel > 1:
             self.multiline_log(list(messages), "INFO")
 
-    def successlog(self, message):
-        """make an informative log message"""
+    def _log_success(self, message):
         if self._loglevel > 1:
             self.multiline_log([message], "CONFIRM")
 
-    def warnlog(self, *messages):
-        """make an informative log message"""
+    def _log_warn(self, *messages):
         if self._loglevel > 0:
             self.multiline_log(list(messages), "WARNING")
 
-    def errorlog(self, *messages):
-        """make an informative log message"""
+    def _log_error(self, *messages):
         self.multiline_log(list(messages), "ERROR")
 
-    def info(self, message, level=None):
-        """plain on-screen info"""
-        if level is None:
-            level = self._indentlevel
-        self._write_to_stdout("", "", str(message), "INFO", level)
+    def info(self, *messages):
+        """make an info log message"""
+        return self._log_info(
+            *sum((msg.split("\n") for msg in messages), start=[])
+        )
 
-    def success(self, message="success", level=None):
-        """plain on-screen info"""
-        if level is None:
-            level = self._indentlevel
-        self._write_to_stdout("", "", str(message), "CONFIRM", level)
+    def success(self, message):
+        """make a success log message"""
+        return self._log_success(message)
 
-    def debug(self, message, level=None):
-        """plain on-screen info"""
-        if level is None:
-            level = self._indentlevel
-        self._write_to_stdout("", "", str(message), "DEBUG", level)
+    def debug(self, *messages):
+        """make a debug log message"""
+        return self._log_debug(
+            *sum((msg.split("\n") for msg in messages), start=[])
+        )
 
-    def warn(self, message, level=None):
-        """plain on-screen info"""
-        if level is None:
-            level = self._indentlevel
-        self._write_to_stdout("", "", str(message), "WARNING", level)
+    def warn(self, *messages):
+        """make a warning log message"""
+        return self._log_warn(
+            *sum((msg.split("\n") for msg in messages), start=[])
+        )
 
-    def error(self, message, level=None):
-        """plain on-screen info"""
-        if level is None:
-            level = self._indentlevel
-        self._write_to_stdout("", "", str(message), "ERROR", level)
+    def error(self, *messages):
+        """make an error log message"""
+        return self._log_error(
+            *sum((msg.split("\n") for msg in messages), start=[])
+        )
+
+
+# DUMP
+# ====
+#
+#
+# def info(self, message, level=None):
+#     """plain on-screen info"""
+#     if level is None:
+#         level = self._indentlevel
+#     if self._loglevel > 1:
+#         self._write_to_stdout("", "", str(message), "INFO", level)
+# def success(self, message="success", level=None):
+#     """plain on-screen info"""
+#     if level is None:
+#         level = self._indentlevel
+#     if self._loglevel > 1:
+#         self._write_to_stdout("", "", str(message), "CONFIRM", level)
+# def debug(self, message, level=None):
+#     """plain on-screen info"""
+#     if level is None:
+#         level = self._indentlevel
+#     if self._loglevel > 2:
+#         self._write_to_stdout("", "", str(message), "DEBUG", level)
+# def warn(self, message, level=None):
+#     """plain on-screen info"""
+#     if level is None:
+#         level = self._indentlevel
+#     if self._loglevel > 0:
+#         self._write_to_stdout("", "", str(message), "WARNING", level)
+# def error(self, message, level=None):
+#     """plain on-screen info"""
+#     if level is None:
+#         level = self._indentlevel
+#     self._write_to_stdout("", "", str(message), "ERROR", level)
+
+
+GLOBAL_LOGGER = Logger(None, loglevel=2, stdout=True)

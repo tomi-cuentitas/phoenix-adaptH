@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 12/03/2025, 16:38
-# Version:     0.0.312
+# Last Update: 12/03/2025, 17:05
+# Version:     0.0.353
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,14 +17,15 @@ from typing import Dict, Set, Tuple, Any
 from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable
-from phoenix.toolbox.logger import Logger
+from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
-MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
+# MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
 
-fprint = MODULE_LOGGER.info
-success = MODULE_LOGGER.success
-debug = MODULE_LOGGER.debug
-warn = MODULE_LOGGER.warn
+info = log.info
+success = log.success
+debug = log.debug
+warn = log.warn
+error = log.error
 
 
 class Optimizer:
@@ -33,7 +34,7 @@ class Optimizer:
     _CLSNAME_PREFIX = "Optimizer"
     _IDENTIFIER = "GENERIC"
     _VERSN = 0
-    _BUILD = -1
+    _BUILD = 0
     _BCKND = "GENERIC"
 
     def __init__(self, _log_welcome=True, **params):
@@ -42,7 +43,7 @@ class Optimizer:
             self._welcome_log()
 
     def _welcome_log(self):
-        MODULE_LOGGER.infolog(*self._welcome_log_lines())
+        info(*self._welcome_log_lines())
 
     def _welcome_log_lines(self):
         version, build = type(self)._VERSN, type(self)._BUILD
@@ -54,10 +55,9 @@ class Optimizer:
         yield from self._detail_log_lines()
 
     def _detail_log_lines(self):
-        yield ""
         yield f"parameters ({len(self._params)}):"
         for param, value in self._params.items():
-            yield f"  {param}={value}"
+            yield f"  - {param}={value}"
 
     @property
     def identifier(self):
@@ -65,16 +65,20 @@ class Optimizer:
         return type(self)._IDENTIFIER
 
     @classmethod
-    def __init_subclass__(cls, identifier=None, _major=False):
+    def __init_subclass__(
+        cls,
+        identifier=None,
+        # _major=False,
+    ):
         if identifier is None:
             identifier = cls.__name__.upper()
         cls._IDENTIFIER = identifier
         # handle versioning when a new builder is implemented.
-        if _major:
-            cls._VERSN += 1
-            cls._BUILD = 0
-        else:
-            cls._BUILD += 1
+        # if _major:
+        #     cls._VERSN += 1
+        #     cls._BUILD = 0
+        # else:
+        #     cls._BUILD += 1
 
     def __str__(self):
         param_string = "|".join(
@@ -88,7 +92,7 @@ class Optimizer:
         # )
         return f"<{self._CLSNAME_PREFIX}.{self.identifier}>"
 
-    @MODULE_LOGGER.wrap_call
+    @log.wrap_call
     def apply(self, instruction_tree):
         """apply the optimizer"""
         return instruction_tree.deepcopy()
@@ -104,7 +108,7 @@ class Builder(Optimizer, identifier="GENERIC"):
     _not_supported_instruction_classes: Set[type] = set()
 
     _VERSN = 0
-    _BUILD = -1
+    _BUILD = 0
 
     def __init__(self, _log_welcome=True, **params):
         super().__init__(**params, _log_welcome=False)
@@ -114,17 +118,15 @@ class Builder(Optimizer, identifier="GENERIC"):
 
     def _detail_log_lines(self):
         yield from Optimizer._detail_log_lines(self)
-        yield ""
         yield f"supported ({len(type(self)._supported_instruction_classes)}):"
         for instruction_type in type(self)._supported_instruction_classes:
             yield f"  - {instruction_type}"
-        yield ""
         yield f"excluded ({len(type(self)._not_supported_instruction_classes)}):"
         for instruction_type in type(self)._not_supported_instruction_classes:
             yield f"  - {instruction_type}"
 
     @classmethod
-    @MODULE_LOGGER.wrap_call
+    @log.wrap_call
     def add_supported_instruction_cls(cls, instruction_cls, target):
         """add a new instruction class to recognize and assign a proper target"""
         cls._supported_instruction_classes[instruction_cls] = target
@@ -132,7 +134,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             cls._not_supported_instruction_classes.remove(instruction_cls)
 
     @classmethod
-    @MODULE_LOGGER.wrap_call
+    @log.wrap_call
     def add_non_supported_instruction_cls(cls, instruction_cls):
         """remember that this kind of instruction is not supported"""
         cls._not_supported_instruction_classes.add(instruction_cls)
@@ -140,7 +142,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             del cls._supported_instruction_classes[instruction_cls]
 
     @classmethod
-    @MODULE_LOGGER.wrap_call
+    @log.wrap_call
     def _get_potential_fits(cls, instruction):
         for elder in instruction.__class__.__mro__:
             if elder in cls._not_supported_instruction_classes:
@@ -148,14 +150,14 @@ class Builder(Optimizer, identifier="GENERIC"):
             if elder in cls._supported_instruction_classes:
                 yield cls._supported_instruction_classes[elder]
 
-    @MODULE_LOGGER.wrap_call
+    @log.wrap_call
     def use_optimizer(self, optimizer):
         """append an optimizer to the list"""
         if not isinstance(optimizer, Optimizer):
             raise TypeError("Optimizer must be an instance of Optimizer")
         self._optimizers.append(optimizer)
 
-    @MODULE_LOGGER.wrap_gen
+    @log.wrap_gen
     def build_from_instruction(
         self, instruction, environment=None, level=0, parent=None, **buildargs
     ):
@@ -182,28 +184,28 @@ class Builder(Optimizer, identifier="GENERIC"):
             buildargs=buildargs,
         )
 
-    @MODULE_LOGGER.wrap_gen
+    @log.wrap_gen
     def to_codecontainer(
         self, instruction, environment=None, known_variables=None, **buildargs
     ):
         """build the code from the instruction tree"""
-        MODULE_LOGGER.infolog("build code from instruction tree")
+        info("build code from instruction tree")
         optimized_tree = super().apply(instruction)  # this is a deepcopy call
         for num, optimizer in enumerate(self._optimizers):
-            MODULE_LOGGER.infolog(f"apply optimizer #{num+1}")
+            info(f"apply optimizer #{num+1}")
             optimized_tree = optimizer.apply(instruction)
         if known_variables is None:
             known_variables = {}
         environment = InstructionEnvironment()
-        MODULE_LOGGER.infolog("start with root instruction node")
+        info("start with root instruction node")
         yield from self.build_from_instruction(
             optimized_tree,
             environment=environment,
             **{**self._params, **buildargs},
         )
-        MODULE_LOGGER.infolog("reached end of instruction build")
+        info("reached end of instruction build")
 
-    @MODULE_LOGGER.wrap_call
+    @log.wrap_call
     def get_signature(
         self,
         instruction: Instruction,
@@ -224,9 +226,9 @@ class Builder(Optimizer, identifier="GENERIC"):
         # conditions than pure in or pure out variables.
         return ((), (), ())
 
-    @MODULE_LOGGER.wrap_call
-    def function_name(self):
-        """derive a function name from the parameters following a standardized pattern"""
+    @log.wrap_call
+    def generate_suffix(self):
+        """derive a name suffix from the parameters following a standardized pattern"""
 
 
 if __name__ == "__main__":
@@ -234,43 +236,49 @@ if __name__ == "__main__":
     class TestBuilder(Builder, identifier="TEST"):
         """A builder for pure testing purposes"""
 
-        @MODULE_LOGGER.wrap_call
+        @log.wrap_call
         def test_the_log(self, arg, **kwargs):
             """a good testing routine for the builder's log module"""
-            MODULE_LOGGER.infolog("foobar was here")
+            info("foobar was here")
             debug(f"my argument is {arg}")
             debug(f"my kwarguments are {kwargs}")
             return "fooo"
 
         # exceptions trigger a warning because they are treated outside of the call
-        @MODULE_LOGGER.controlled
-        @MODULE_LOGGER.wrap_call
+        @log.controlled
+        @log.wrap_call
         def test_the_log2(self, arg, **kwargs):
             """a bad testing routine for the builder's log module"""
-            MODULE_LOGGER.infolog("foobar was here, too")
+            info("foobar was here, too")
             debug(f"my argument is {arg}")
             debug(f"my kwarguments are {kwargs}")
             debug("I will raise an exception now.")
             raise ValueError("argument should be an integer")
             return "fooo"
 
-    MODULE_LOGGER.set_loglevel(3)
+    class TestOptimizer(Optimizer, identifier="TESTAGAIN"):
+        pass
 
-    fprint("run some tests")
+    # log.set_loglevel(3)
+
+    info("run some tests")
     mybuilder = TestBuilder(foo="bar")
     mybuilder.test_the_log(1)
     mybuilder.test_the_log(2)
     mybuilder.test_the_log(3)
-    fprint("now let's do a critical one")
+    info("now let's do a critical one")
     try:
         mybuilder.test_the_log2("test")
     except ValueError as e:
         pass
     success("This line should be visible")
     warn("now it's getting serious...")
-    mybuilder.test_the_log2("testtest")
-    debug("This should not be printed")
+    debug()
+    # mybuilder.test_the_log2("testtest")
+    # error("This should not be printed")
     mybuilder.test_the_log(15, x="y")
+
+    myoptimizer = TestOptimizer(foo="bazzz")
 
     # build:
     # - look for a proper codecontainer by looking up the instructions
