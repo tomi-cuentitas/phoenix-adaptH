@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 12/03/2025, 17:05
-# Version:     0.0.353
+# Last Update: 12/03/2025, 17:14
+# Version:     0.0.355
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -260,6 +260,7 @@ if __name__ == "__main__":
         pass
 
     # log.set_loglevel(3)
+    log.set_logfile("testlog.txt")
 
     info("run some tests")
     mybuilder = TestBuilder(foo="bar")

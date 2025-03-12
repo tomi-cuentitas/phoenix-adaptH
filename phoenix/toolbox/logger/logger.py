@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 12/03/2025, 17:04
-# Version:     0.0.624
+# Last Update: 12/03/2025, 17:14
+# Version:     0.0.640
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -185,25 +185,14 @@ class Logger:
 
     def __init__(self, filename=None, path=None, loglevel=2, stdout=False):
         """supported kwargs: stdout (False), stderr(True)"""
-        if path is None:
-            path = Logger._DEFAULT_PATH
-        self._path = path
+        self._file = None
         self._alerted = True
         self._file = None
-        if filename is not None:
-            if filename.endswith(".log"):
-                self._filename = filename
-            else:
-                if "." in filename:
-                    self._filename = filename
-                else:
-                    self._filename = filename + ".log"
-            self._file = pathjoin(self._path, self._filename)
         self._indentlevel = 0
-        self._is_new = True
         self._loglevel = min(3, max(0, loglevel))
         self._stdout = stdout
 
+        self.set_logfile(filename, path)
         self.reset()
 
     def reset(self):
@@ -222,6 +211,22 @@ class Logger:
         3: also include debug info
         """
         self._loglevel = min(3, max(0, loglevel))
+
+    def set_logfile(self, filename, path=None):
+        """
+        Set the logfile and path
+        """
+        if filename is None:
+            # reset file?
+            self._file = None
+        else:
+            if not filename.endswith(".log"):
+                if not "." in filename:
+                    filename = filename + ".log"
+            if path is None:
+                # default path if not explicitely set
+                path = Logger._DEFAULT_PATH
+            self._file = pathjoin(path, filename)
 
     def _write_to_stdout(self, acstr, typestr, mline, msgtype, level):
         indent = level * "  "
