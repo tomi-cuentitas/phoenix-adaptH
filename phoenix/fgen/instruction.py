@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 10/03/2025, 16:45
-# Version:     0.0.2673
+# Last Update: 12/03/2025, 18:28
+# Version:     0.0.2752
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -117,6 +117,24 @@ class Instruction:
         """
         return 1
 
+    def to_dict(self, *keys, defaults: dict | None = None):
+        """get a dictionary from keys, filled with the values"""
+        if defaults is None:
+            defaults = {}
+        # check params first, then check defaults, return None for miss
+        data_dict = {}  # _PartialFormatDict
+        provided = self._full_dict()
+        if keys:
+            data_dict.update(
+                {
+                    key: provided.get(key, defaults.get(key, None))
+                    for key in keys
+                }
+            )
+        else:
+            data_dict.update(provided)
+        return data_dict
+
     def __init__(self, *, itype=None):
         self._sort_key = None
         self._itype = itype
@@ -213,11 +231,11 @@ class Instruction:
                 return
         yield True, self, environment
 
-    def to_dict(self, *keys, defaults: dict | None = None):
-        """get a dictionary from keys, filled with the values"""
-        raise NotImplementedError("Must be implemented in subclass")
-
     # pylint: enable=unused-argument
+
+    def _full_dict(self) -> Dict[str, Any]:
+        """get a dictionary from self"""
+        raise NotImplementedError("Must be implemented in subclass")
 
     @property
     def itype(self):
@@ -339,7 +357,7 @@ class GenericInstruction(Instruction, ftype="generic"):
     supported for flexible entry access without creating duplicates.
     """
 
-    _alias: dict[str, str] = {}
+    # _alias: dict[str, str] = {}
 
     def __init__(self, itype=None, **params):
         if itype is None:
@@ -372,15 +390,16 @@ class GenericInstruction(Instruction, ftype="generic"):
     def __getitem__(self, key):
         if key in self._params:
             return self._params[key]
-        return self._from_alias(key)
+        raise KeyError(f"Key '{key}' not found in instruction parameters")
+        # return self._from_alias(key)
 
     def __setitem__(self, key, value):
         self.set(key, value)
 
-    @classmethod
-    def set_alias(cls, alias, reference):
-        """add an alias to the class"""
-        cls._alias[alias] = reference
+    # @classmethod
+    # def set_alias(cls, alias, reference):
+    #     """add an alias to the class"""
+    #     cls._alias[alias] = reference
 
     def checksum(self):
         test_tuple = (
@@ -400,15 +419,18 @@ class GenericInstruction(Instruction, ftype="generic"):
             case (key, default):
                 if key in self._params:
                     return self._params[key]
-                try:
-                    return self._from_alias(key)
-                except KeyError:
-                    return default
+                # try:
+                #     return self._from_alias(key)
+                # except KeyError:
+                #     return default
                 return default
             case (key,):
                 if key in self._params:
                     return self._params[key]
-                return self._from_alias(key)
+                # return self._from_alias(key)
+                raise KeyError(
+                    f"Key '{key}' not found in instruction parameters"
+                )
             case _:
                 raise ValueError(
                     "get requires a key and an optional default value to return"
@@ -422,24 +444,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             )
         self._params[key] = value
 
-    def to_dict(self, *keys, defaults: dict | None = None):
-        """get a dictionary from keys, filled with the values"""
-        if defaults is None:
-            defaults = {}
-        # check params first, then check defaults, return None for miss
-        data_dict = {}  # _PartialFormatDict
-        if keys:
-            data_dict.update(
-                {key: self.get(key, defaults.get(key, None)) for key in keys}
-            )
-        else:
-            data_dict.update(
-                {
-                    key: self.get(key, defaults.get(key, None))
-                    for key in self.keys()
-                }
-            )
-        return data_dict
+    def _full_dict(self):
+        """access the full dict representation, which is params for any generic instruction"""
+        return self._params  # + alias if included
 
     def to_tuple(self, *keys, defaults: dict | None = None):
         """get a data tuple from keys in the order the keys are requested"""
@@ -454,12 +461,12 @@ class GenericInstruction(Instruction, ftype="generic"):
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
 
-    def _from_alias(self, key):
-        print(f"look up potential alias {key} in {type(self).__name__}")
-        if key in type(self)._alias:
-            # don't call self._params here, so alias can chain
-            return self[type(self)._alias[key]]
-        raise KeyError(f"Key '{key}' not found in dict nor alias map")
+    # def _from_alias(self, key):
+    #     print(f"look up potential alias {key} in {type(self).__name__}")
+    #     if key in type(self)._alias:
+    #         # don't call self._params here, so alias can chain
+    #         return self._params[type(self)._alias[key]]
+    #     raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
     def __deepcopy__(self, memo=None):
         if memo is None:
@@ -541,10 +548,9 @@ class InstructionGroup(Instruction, ftype="group"):
     # varied in the implementation step. A single operation parallelization
     # could have a higher level, that we only enable on GPUs.
 
-    def __init__(self, instructions, itype=None, **params):
+    def __init__(self, instructions, itype=None):
         self._instructions = list(instructions)
         self._len = len(self._instructions)
-        self._params = params
         if itype is None:
             itype = InstructionGroup._get_itype_common_root(self._instructions)
         super().__init__(itype=itype)
@@ -564,11 +570,13 @@ class InstructionGroup(Instruction, ftype="group"):
             else:
                 copied_instr = instr.deepcopy(memo)
             copied_instructions.append(copied_instr)
-        copied_group = type(self)(
-            copied_instructions, itype=self.itype, **self._params
-        )
+        copied_group = type(self)(copied_instructions, itype=self.itype)
         memo[id(self)] = weakref.ref(copied_group)
         return copied_group
+
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {"instructions": self._instructions}
 
     @property
     def itype(self):
@@ -716,6 +724,82 @@ class InstructionGroup(Instruction, ftype="group"):
 
 ######################################################################################
 #
+# .oPYo.                   o                    o   .oPYo.
+# 8    8                   8                    8   8.
+# 8       .oPYo.  odYo.   o8P  .oPYo.  odYo.   o8P  `boo    odYo.  o    o
+# 8       8    8  8' `8    8   8oooo8  8' `8    8   .P      8' `8  Y.  .P
+# 8    8  8    8  8   8    8   8.      8   8    8   8       8   8  `b..d'
+# `YooP'  `YooP'  8   8    8   `Yooo'  8   8    8   `YooP'  8   8   `YP'
+# :.....: :.....: ..::.. ::..: :.....: ..::.. ::..: :.....: ..::.. ::...::
+# ::::::: ::::::: :::::: ::::: ::::::: :::::: ::::: ::::::: :::::: :::::::
+# ::::::: ::::::: :::::: ::::: ::::::: :::::: ::::: ::::::: :::::: :::::::
+######################################################################################
+
+
+class ContentInstruction(Instruction, ftype="content"):
+    """Any instruction that has content inside and typical routines access content"""
+
+    def __init__(self, content, itype=None):
+        if itype is None:
+            itype = content.itype
+        super().__init__(itype=itype)
+        if not isinstance(content, Instruction):
+            raise TypeError(
+                "content of environment must be of type instruction"
+            )
+        self._content = content
+
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {"content": self._content}
+
+    def __len__(self):
+        return len(self._content)
+
+    @property
+    def instructions(self):
+        """access instructions"""
+        yield from self._content.instructions
+
+    def __deepcopy__(self, memo=None, **kwargs):
+        if memo is None:
+            memo = {}
+        copied_content = self._content.deepcopy(memo=memo, **kwargs)
+        return type(self)(
+            copied_content,
+            itype=self.itype,
+            **kwargs,
+        )
+
+    def walk(
+        self,
+        environment=None,
+        recursive: bool | int = True,
+        include_groups=True,
+    ):
+        """
+        walk the instruction tree. A generator that yields information on
+        self, the environment and a flag whether it is a leaf
+        """
+        # an environment does not count as recursive step!!
+        yield from self._content.walk(
+            environment=environment,
+            recursive=recursive,
+            include_groups=include_groups,
+        )
+
+    def _apply_environment(
+        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    ) -> Instruction:
+        # environments are replaced by their transformed content
+        return type(self)(
+            self._content.apply_environment(environment, memo=memo),
+            **kwargs,
+        )
+
+
+######################################################################################
+#
 # .oPYo.  o    o  o     o  o   .oPYo.  .oPYo.  o    o  o     o  .oPYo.  o    o  ooooo
 # 8.      8b   8  8     8  8   8   `8  8    8  8b   8  8b   d8  8.      8b   8    8
 # `boo    8`b  8  8     8  8  o8YooP'  8    8  8`b  8  8`b d'8  `boo    8`b  8    8
@@ -734,41 +818,22 @@ class InstructionGroup(Instruction, ftype="group"):
 # ========================
 
 
-class EnvironmentInstruction(Instruction, ftype="environment"):
+class EnvironmentInstruction(ContentInstruction, ftype="environment"):
     """Within this environment, variables are provided, renamed or offsetted"""
 
-    def __init__(self, content, *, environment=None, itype=None, **params):
-        if itype is None:
-            itype = content.itype
-        super().__init__(itype=itype)
-        if not isinstance(content, (InstructionGroup, EnvironmentInstruction)):
-            raise TypeError(
-                "content must be an InstructionGroup or Environment"
-            )
-        if not isinstance(content, Instruction):
-            raise TypeError(
-                "content of environment must be of type instruction"
-            )
-        self._content = content
-        self._environment = InstructionEnvironment()
-        if environment is not None:
-            self._environment.include(environment)
-        self._params = params
+    def __init__(self, content, *, environment, itype=None):
+        super().__init__(content, itype=itype)
+        self._environment = environment
 
-    def __len__(self):
-        return len(self._content)
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {"content": self._content, "environment": self._environment}
 
-    @property
-    def instructions(self):
-        """access instructions"""
-        yield from self._content.instructions
-
-    def __deepcopy__(self, memo=None):
+    def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
             memo = {}
-        copied_content = self._content.deepcopy(memo=memo)
-        return type(self)(
-            copied_content,
+        return super().__deepcopy__(
+            memo=memo,
             environment={
                 key: (
                     val.deepcopy(memo=memo)
@@ -777,16 +842,17 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
                 )
                 for key, val in self._environment.items()
             },
-            itype=self.itype,
-            **self._params,
+            **kwargs,
         )
 
     def _apply_environment(
-        self, environment: InstructionEnvironment, memo: dict
+        self, environment: InstructionEnvironment, memo: dict, **kwargs
     ) -> Instruction:
         combined_environment = environment.merge(self._environment)
         # environments are replaced by their transformed content
-        return self._content.apply_environment(combined_environment, memo=memo)
+        return self._content.apply_environment(
+            combined_environment, memo=memo, **kwargs
+        )
 
     def walk(
         self,
@@ -802,7 +868,7 @@ class EnvironmentInstruction(Instruction, ftype="environment"):
         if environment is None:
             environment = InstructionEnvironment()
         combined_environment = environment.merge(self._environment)
-        yield from self._content.walk(
+        yield from super().walk(
             environment=combined_environment,
             recursive=recursive,
             include_groups=include_groups,
@@ -830,12 +896,13 @@ class OffsetEnvironmentInstruction(EnvironmentInstruction, ftype="offset"):
     # - value of offset
     # - variable mapping if names change
 
-    def __init__(self, content, *, offsets=None, itype=None, **params):
-        super().__init__(content, environment=None, itype=itype, **params)
-        if offsets is None:
-            offsets = InstructionEnvironment()
-        for offset_target, offset_value in offsets.items():
-            self.set_offset(offset_target, offset_value)
+    def __init__(self, content, *, offsets=None, itype=None):
+        super().__init__(
+            content, environment=InstructionEnvironment(), itype=itype
+        )
+        if offsets:
+            for offset_target, offset_value in offsets.items():
+                self.set_offset(offset_target, offset_value)
 
     def set_offset(self, inner_class, outer_variable):
         """set the offset of a target class in content"""
@@ -860,10 +927,10 @@ class LinkVariableEnvironmentInstruction(
     Within this environment, outer variables are linked to inner variables
     """
 
-    def __init__(self, content, *, connections=None, itype=None, **params):
-        super().__init__(content, environment=None, itype=itype, **params)
-        if connections is None:
-            connections = InstructionEnvironment()
+    def __init__(self, content, *, connections=None, itype=None):
+        super().__init__(
+            content, environment=InstructionEnvironment(), itype=itype
+        )
         for inner_class, outer_class in connections.items():
             self.connect(inner_class, outer_class)
 
@@ -882,19 +949,96 @@ class LinkVariableEnvironmentInstruction(
 
 ###############################################################################
 #
-# VARIATION ENVIRONMENT
-# =====================
+# o     o                  o            o    o
+# 8     8                               8
+# 8     8  .oPYo.  oPYo.  o8  .oPYo.   o8P  o8  .oPYo.  odYo.
+# `b   d'  .oooo8  8  `'   8  .oooo8    8    8  8    8  8' `8
+#  `b d'   8    8  8       8  8    8    8    8  8    8  8   8
+#   `8'    `YooP8  8       8  `YooP8    8    8  `YooP'  8   8
+# :::..::: :.....: ..:::: :.. :.....: ::..: :.. :.....: ..::..
+# :::::::: ::::::: :::::: ::: ::::::: ::::: ::: ::::::: ::::::
+# :::::::: ::::::: :::::: ::: ::::::: ::::: ::: ::::::: ::::::
+###############################################################################
 
 
-class VariationEnvironmentInstruction(
-    OffsetEnvironmentInstruction, ftype="variation"
-):
+class VariationInstruction(ContentInstruction, ftype="variation"):
     """
     A variation is a special kind of offset that implies, that data contains copies
     that are addressable via offsets and independent and non-overlapping. E.g. a state
     operator interacts with several different sets of dynamic, but these different
     versions do not interact anywhere, implying some wiggle room for safe parallelization
     """
+
+    def __init__(self, content, key, itype=None):
+        super().__init__(content, itype=itype)
+        if not isinstance(key, str):
+            raise KeyError("Key must be a string")
+        self._variations = {key: content}
+
+    def add_variation(self, key, variation):
+        """add a variation to the selectable variations"""
+        if not isinstance(key, str):
+            raise KeyError("Key must be a string")
+        if not isinstance(variation, Instruction):
+            raise TypeError("Variation must be of type instruction")
+        self._variations[key] = variation
+
+    def select(self, key):
+        """select a variation to be valid"""
+        self._content = self._variations[key]
+
+
+###############################################################################
+#
+#  .oPYo.           o  8       8       .oo
+#  8   `8              8       8      .P 8
+# o8YooP'  o    o  o8  8  .oPYo8     .P  8  oPYo.  .oPYo.  .oPYo.
+#  8   `b  8    8   8  8  8    8    oPooo8  8  `'  8    8  Yb..
+#  8    8  8    8   8  8  8    8   .P    8  8      8    8    'Yb.
+#  8oooP'  `YooP'   8  8  `YooP'  .P     8  8      `YooP8  `YooP'
+# :......: :.....: :.. .. :.....: ..:::::.. ..:::: :....8  :.....:
+# :::::::: ::::::: ::: :: ::::::: ::::::::: :::::: ::ooP'. :::::::
+# :::::::: ::::::: ::: :: ::::::: ::::::::: :::::: ::...:: :::::::
+###############################################################################
+
+
+class BuildArgInstruction(ContentInstruction, ftype="buildargs"):
+    """
+    Contribute Build Args for builders or optimizers when containers are
+    constructed from inside instructions.
+    """
+
+    def __init__(self, content, *, buildargs=None, itype=None):
+        super().__init__(content, itype=itype)
+        if not isinstance(content, (InstructionGroup, EnvironmentInstruction)):
+            raise TypeError(
+                "content must be an InstructionGroup or Environment"
+            )
+        if not isinstance(content, Instruction):
+            raise TypeError(
+                "content of environment must be of type instruction"
+            )
+
+        if buildargs is None:
+            buildargs = {}
+        self._buildargs = buildargs
+
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {"content": self._content, "buildargs": self._buildargs}
+
+    def __deepcopy__(self, memo=None, **kwargs):
+        return super().__deepcopy__(
+            memo=memo, buildargs={**self._buildargs}, **kwargs
+        )
+
+    def _apply_environment(
+        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    ) -> Instruction:
+        # environments are replaced by their transformed content
+        return super()._apply_environment(
+            environment, memo=memo, buildargs={**self._buildargs}, **kwargs
+        )
 
 
 ###############################################################################
@@ -914,9 +1058,18 @@ class SubroutineEnvironmentInstruction(
     """
 
     def __init__(self, operations, inp_variables, out_variables, itype=None):
-        super().__init__(operations, itype=itype)
+        super().__init__(operations, environment=None, itype=itype)
         self._inp_variables = inp_variables
         self._out_variables = out_variables
+
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {
+            "content": self._content,
+            "environment": self._environment,
+            "inp_vars": self._inp_variables,
+            "out_vars": self._out_variables,
+        }
 
     @property
     def inp_variables(self):
@@ -938,18 +1091,68 @@ class SubroutineEnvironmentInstruction(
 # ===========================
 
 
-class MapEnvironmentsInstruction(Instruction, ftype="map"):
+class MapEnvironmentsInstruction(ContentInstruction, ftype="map"):
     """
     Within this environment, Environment groups (e.g. OffsetGroups) are applied
     to an instructiongroup that is then executed from within every environment.
     """
 
     def __init__(self, content, environments, itype=None):
-        if itype is None:
-            itype = content.itype
-        super().__init__(itype=itype)
-        self._content = content
+        super().__init__(content, itype=itype)
         self._environments = environments
+
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {"content": self._content, "environments": self._environments}
+
+    # TODO
+    def __len__(self):
+        return len(self._content)
+
+    # TODO
+    @property
+    def instructions(self):
+        """access instructions"""
+        yield from self._content.instructions
+
+    # TODO
+    def __deepcopy__(self, memo=None, **kwargs):
+        if memo is None:
+            memo = {}
+        copied_content = self._content.deepcopy(memo=memo, **kwargs)
+        return type(self)(
+            copied_content,
+            itype=self.itype,
+            **kwargs,
+        )
+
+    # TODO
+    def walk(
+        self,
+        environment=None,
+        recursive: bool | int = True,
+        include_groups=True,
+    ):
+        """
+        walk the instruction tree. A generator that yields information on
+        self, the environment and a flag whether it is a leaf
+        """
+        # an environment does not count as recursive step!!
+        yield from self._content.walk(
+            environment=environment,
+            recursive=recursive,
+            include_groups=include_groups,
+        )
+
+    # TODO
+    def _apply_environment(
+        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    ) -> Instruction:
+        # environments are replaced by their transformed content
+        return type(self)(
+            self._content.apply_environment(environment, memo=memo),
+            **kwargs,
+        )
 
 
 ###############################################################################
