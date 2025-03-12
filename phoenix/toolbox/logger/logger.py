@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 10/03/2025, 17:02
-# Version:     0.0.236
+# Last Update: 12/03/2025, 16:36
+# Version:     0.0.578
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,12 +16,27 @@
 from os.path import join as pathjoin
 import traceback as tb
 
+from sys import stdout, stderr
 
 # global log levels
 ERROR = 0
 WARNING = 1
 INFO = 2
 DEBUG = 3
+
+_COLORS = {
+    "green": "\033[32m",
+    "white": "\033[37m",
+    "red": "\033[31m",
+    "yellow": "\033[33m",
+    "blue": "\033[34m",
+    "gray": "\033[24m",
+    "black": "\033[30m",
+    "violet": "\033[35m",
+    "lightblue": "\033[36m",
+    "default": "\033[0m",
+}
+_NOCOLOR = _COLORS["default"]
 
 
 class Logger:
@@ -32,7 +47,16 @@ class Logger:
         "ERROR": "!ERR",
         "WARNING": "WARN",
         "INFO": "info",
+        "CONFIRM": "info",
         "DEBUG": " dbg",
+    }
+
+    _LOG_COLORS = {
+        "ERROR": "red",
+        "WARNING": "yellow",
+        "INFO": "white",
+        "CONFIRM": "green",
+        "DEBUG": "lightblue",
     }
     _DEFAULT_PATH = "./"
 
@@ -42,36 +66,49 @@ class Logger:
         def wrapper(*args, **kwargs):
             try:
                 if __debug__:
-                    self.debuglog(f"CALLED function {function.__name__}")
-                    self.debuglog(f"- args  : {args}")
-                    self.debuglog(f"- kwargs: {kwargs}")
+                    self.debuglog(
+                        f"CALLED function {function.__name__}",
+                        f"args  : {args}",
+                        f"kwargs: {kwargs}",
+                    )
                 if self._loglevel > 2:
                     self._indentlevel += 1
                 ret = function(*args, **kwargs)
-                if self._loglevel > 2:
-                    self._indentlevel -= 1
                 if __debug__:
-                    self.debuglog(f"- return value: {ret}")
-                    self.debuglog(f"END of function {function.__name__}")
+                    self.debuglog(f"return value: {ret}")
+                    self.debuglog("done")
             except Exception as exc:
-                # self.warnlog(f"")
-                self.warnlog(f"An error occurred: {exc}")
-                self.warnlog(f"- called function {function.__name__}")
-                self.warnlog(f"- args  : {args}")
-                self.warnlog(f"- kwargs: {kwargs}")
-                self.warnlog("- traceback:")
-                for num, segment in enumerate(
-                    tb.format_tb(exc.__traceback__, limit=None)
-                ):
-                    if num == 0:
-                        continue
-                    for line in segment.split("\n"):
-                        if line.strip():
-                            self.warnlog(f"  {line}")
+                if self._alerted:
+                    control_message = "Error! An exception occured"
+                else:
+                    control_message = "A controlled exception occured"
+                lines = [
+                    f"{control_message}: {exc}",
+                    f"called generator {function.__name__}",
+                    f"args  : {args}",
+                    f"kwargs: {kwargs}",
+                    "traceback:",
+                ]
+                if self._alerted:
+                    for num, segment in enumerate(
+                        tb.format_tb(exc.__traceback__, limit=None)
+                    ):
+                        if num == 0:
+                            continue
+                        for line in segment.split("\n"):
+                            if line.strip():
+                                lines.append(f"  {line}")
+                    self.errorlog(*lines)
+                else:
+                    self.warnlog(*lines)
                 exc.add_note(
                     f"Information has been written to the log file '{self._file}'"
                 )
                 raise exc
+            finally:
+                if self._loglevel > 2:
+                    self._indentlevel -= 1
+                self.debuglog(f"END of function {function.__name__}")
             return ret
 
         # potential TODO: tidy the stacktrace from the logger parts
@@ -84,59 +121,96 @@ class Logger:
         def wrapper(*args, **kwargs):
             try:
                 if __debug__:
-                    self.debuglog(f"CALLED generator {function.__name__}")
-                    self.debuglog(f"- args  : {args}")
-                    self.debuglog(f"- kwargs: {kwargs}")
+                    self.debuglog(
+                        f"CALLED generator {function.__name__}",
+                        f"args  : {args}",
+                        f"kwargs: {kwargs}",
+                    )
                 if self._loglevel > 2:
                     self._indentlevel += 1
                 for ret in function(*args, **kwargs):
                     if __debug__:
-                        self.debuglog(f"- yield value: {ret}")
+                        self.debuglog(f"yield value: {ret}")
                     yield ret
-                if self._loglevel > 2:
-                    self._indentlevel -= 1
                 if __debug__:
-                    self.debuglog(f"END of generator {function.__name__}")
+                    self.debuglog("done")
             except Exception as exc:
-                # self.warnlog(f"")
-                self.warnlog(f"An error occurred: {exc}")
-                self.warnlog(f"- called generator {function.__name__}")
-                self.warnlog(f"- args  : {args}")
-                self.warnlog(f"- kwargs: {kwargs}")
-                self.warnlog("- traceback:")
-                for num, segment in enumerate(
-                    tb.format_tb(exc.__traceback__, limit=None)
-                ):
-                    if num == 0:
-                        continue
-                    for line in segment.split("\n"):
-                        if line.strip():
-                            self.warnlog(f"  {line}")
+                if self._alerted:
+                    control_message = "Error! An exception occured"
+                else:
+                    control_message = "A controlled exception occured"
+                lines = [
+                    f"{control_message}: {exc}",
+                    f"called generator {function.__name__}",
+                    f"args  : {args}",
+                    f"kwargs: {kwargs}",
+                    "traceback:",
+                ]
+                if self._alerted:
+                    for num, segment in enumerate(
+                        tb.format_tb(exc.__traceback__, limit=None)
+                    ):
+                        if num == 0:
+                            continue
+                        for line in segment.split("\n"):
+                            if line.strip():
+                                lines.append(f"  {line}")
+                    self.errorlog(*lines)
+                else:
+                    self.warnlog(*lines)
                 exc.add_note(
                     f"Information has been written to the log file '{self._file}'"
                 )
                 raise exc
+            finally:
+                if self._loglevel > 2:
+                    self._indentlevel -= 1
+                self.debuglog(f"END of generator {function.__name__}")
             return ret
 
         # potential TODO: tidy the stacktrace from the logger parts
 
         return wrapper
 
-    def __init__(self, filename, path=None, loglevel=2):
+    def controlled(self, function):
+        """a decorator to alert that any exception is fatal within"""
+
+        def wrapper(*args, **kwargs):
+            self._alerted = False
+            ret = function(*args, **kwargs)
+            self._alerted = True
+            return ret
+
+        return wrapper
+
+    def __init__(self, filename=None, path=None, loglevel=2, stdout=False):
+        """supported kwargs: stdout (False), stderr(True)"""
         if path is None:
             path = Logger._DEFAULT_PATH
         self._path = path
-        if filename.endswith(".log"):
-            self._filename = filename
-        else:
-            if "." in filename:
+        self._alerted = True
+        self._file = None
+        if filename is not None:
+            if filename.endswith(".log"):
                 self._filename = filename
             else:
-                self._filename = filename + ".log"
-        self._file = pathjoin(self._path, self._filename)
-        self._loglevel = loglevel
+                if "." in filename:
+                    self._filename = filename
+                else:
+                    self._filename = filename + ".log"
+            self._file = pathjoin(self._path, self._filename)
         self._indentlevel = 0
         self._is_new = True
+        self._loglevel = min(3, max(0, loglevel))
+        self._stdout = stdout
+
+        self.reset()
+
+    def reset(self):
+        """reset the file"""
+        if self._file:
+            with open(self._file, "w") as file:
+                file.write("")
 
     def set_loglevel(self, loglevel):
         """
@@ -149,38 +223,97 @@ class Logger:
         """
         self._loglevel = min(3, max(0, loglevel))
 
-    def log(self, message, msgtype="INFO", level=None):
-        """log a message of a specific message type"""
-        if level is None:
-            indent = self._indentlevel * "  "
+    def _write_to_stdout(self, acstr, typestr, mline, msgtype, level):
+        indent = level * "  "
+        color_in, color_out = _COLORS[Logger._LOG_COLORS[msgtype]], _NOCOLOR
+        line = color_in + f"{indent}{mline}" + color_out
+        # line = color_in + f"{acstr}{typestr}{indent}{mline}" + color_out
+        if msgtype == "ERROR":
+            stderr.write(line + "\n")
         else:
-            indent = level * "  "
-        acount = Logger._actioncount
-        formatted_message = f"{acount:>6} {type(self)._LOGREPR[msgtype.upper()]: <4}: {indent}{message}\n"
-        Logger._actioncount += 1
-        if self._is_new:
-            with open(self._file, "w") as file:
-                file.write(formatted_message)
-            self._is_new = False
-        else:
-            with open(self._file, "a") as file:
-                file.write(formatted_message)
+            if self._stdout:
+                stdout.write(line + "\n")
 
-    def debuglog(self, message):
+    def _write_to_file(self, acstr, typestr, mline, msgtype, level):
+        indent = level * "  "
+        line = f"{acstr}{typestr}{indent}{mline}"
+        if self._file:
+            with open(self._file, "a") as file:
+                file.write(line + "\n")
+
+    def multiline_log(self, message_lines, msgtype="INFO", level=None):
+        """log multiple lines"""
+        if level is None:
+            level = self._indentlevel
+
+        acount = Logger._actioncount
+        Logger._actioncount += 1
+
+        first = True
+        for mline in message_lines:
+            acstr = f"{acount:>6}" + ":"
+            typestr = f"{type(self)._LOGREPR[msgtype.upper()]: <4}" + ": "
+            if not first:
+                acstr = " " * len(acstr)
+                typestr = " " * len(typestr)
+            first = False
+            self._write_to_stdout(acstr, typestr, mline, msgtype, level)
+            self._write_to_file(acstr, typestr, mline, msgtype, level)
+
+    def log(self, message, msgtype="INFO", level=None):
+        """log a line"""
+        self.multiline_log([message], msgtype=msgtype, level=level)
+
+    def debuglog(self, *messages):
         """make a debug log message"""
         if self._loglevel > 2:
-            self.log(message, "DEBUG")
+            self.multiline_log(list(messages), "DEBUG")
 
-    def infolog(self, message):
+    def infolog(self, *messages):
         """make an informative log message"""
         if self._loglevel > 1:
-            self.log(message, "INFO")
+            self.multiline_log(list(messages), "INFO")
 
-    def warnlog(self, message):
+    def successlog(self, message):
+        """make an informative log message"""
+        if self._loglevel > 1:
+            self.multiline_log([message], "CONFIRM")
+
+    def warnlog(self, *messages):
         """make an informative log message"""
         if self._loglevel > 0:
-            self.log(message, "WARNING")
+            self.multiline_log(list(messages), "WARNING")
 
-    def errorlog(self, message):
+    def errorlog(self, *messages):
         """make an informative log message"""
-        self.log(message, "ERROR")
+        self.multiline_log(list(messages), "ERROR")
+
+    def info(self, message, level=None):
+        """plain on-screen info"""
+        if level is None:
+            level = self._indentlevel
+        self._write_to_stdout("", "", str(message), "INFO", level)
+
+    def success(self, message="success", level=None):
+        """plain on-screen info"""
+        if level is None:
+            level = self._indentlevel
+        self._write_to_stdout("", "", str(message), "CONFIRM", level)
+
+    def debug(self, message, level=None):
+        """plain on-screen info"""
+        if level is None:
+            level = self._indentlevel
+        self._write_to_stdout("", "", str(message), "DEBUG", level)
+
+    def warn(self, message, level=None):
+        """plain on-screen info"""
+        if level is None:
+            level = self._indentlevel
+        self._write_to_stdout("", "", str(message), "WARNING", level)
+
+    def error(self, message, level=None):
+        """plain on-screen info"""
+        if level is None:
+            level = self._indentlevel
+        self._write_to_stdout("", "", str(message), "ERROR", level)

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 10/03/2025, 17:10
-# Version:     0.0.270
+# Last Update: 12/03/2025, 16:38
+# Version:     0.0.312
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,7 +19,12 @@ from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable
 from phoenix.toolbox.logger import Logger
 
-MODULE_LOGGER = Logger("module_builder", loglevel=2)
+MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
+
+fprint = MODULE_LOGGER.info
+success = MODULE_LOGGER.success
+debug = MODULE_LOGGER.debug
+warn = MODULE_LOGGER.warn
 
 
 class Optimizer:
@@ -37,11 +42,9 @@ class Optimizer:
             self._welcome_log()
 
     def _welcome_log(self):
-        for line in self._welcome_log_lines():
-            MODULE_LOGGER.infolog(line)
+        MODULE_LOGGER.infolog(*self._welcome_log_lines())
 
     def _welcome_log_lines(self):
-        yield "-----" * 15
         version, build = type(self)._VERSN, type(self)._BUILD
         yield (
             f"Hello from {type(self)._CLSNAME_PREFIX} "
@@ -49,7 +52,6 @@ class Optimizer:
             + f" (v{version}.{build})"
         )
         yield from self._detail_log_lines()
-        yield "-----" * 15
 
     def _detail_log_lines(self):
         yield ""
@@ -157,7 +159,7 @@ class Builder(Optimizer, identifier="GENERIC"):
     def build_from_instruction(
         self, instruction, environment=None, level=0, parent=None, **buildargs
     ):
-        """call the right class from instruction"""
+        """takes an instruction and yields code containers from it"""
         if environment is None:
             environment = InstructionEnvironment()
         closest_match = None
@@ -180,8 +182,8 @@ class Builder(Optimizer, identifier="GENERIC"):
             buildargs=buildargs,
         )
 
-    @MODULE_LOGGER.wrap_call
-    def build(
+    @MODULE_LOGGER.wrap_gen
+    def to_codecontainer(
         self, instruction, environment=None, known_variables=None, **buildargs
     ):
         """build the code from the instruction tree"""
@@ -199,7 +201,6 @@ class Builder(Optimizer, identifier="GENERIC"):
             environment=environment,
             **{**self._params, **buildargs},
         )
-
         MODULE_LOGGER.infolog("reached end of instruction build")
 
     @MODULE_LOGGER.wrap_call
@@ -237,29 +238,38 @@ if __name__ == "__main__":
         def test_the_log(self, arg, **kwargs):
             """a good testing routine for the builder's log module"""
             MODULE_LOGGER.infolog("foobar was here")
-            print(f"my argument is {arg}")
-            print(f"my kwarguments are {kwargs}")
+            debug(f"my argument is {arg}")
+            debug(f"my kwarguments are {kwargs}")
             return "fooo"
 
+        # exceptions trigger a warning because they are treated outside of the call
+        @MODULE_LOGGER.controlled
         @MODULE_LOGGER.wrap_call
         def test_the_log2(self, arg, **kwargs):
             """a bad testing routine for the builder's log module"""
-            MODULE_LOGGER.infolog("foobar was here")
-            print(f"my argument is {arg}")
-            print(f"my kwarguments are {kwargs}")
-            print("I will raise an exception now.")
+            MODULE_LOGGER.infolog("foobar was here, too")
+            debug(f"my argument is {arg}")
+            debug(f"my kwarguments are {kwargs}")
+            debug("I will raise an exception now.")
             raise ValueError("argument should be an integer")
             return "fooo"
 
-    # MODULE_LOGGER.set_loglevel(3)
+    MODULE_LOGGER.set_loglevel(3)
 
+    fprint("run some tests")
     mybuilder = TestBuilder(foo="bar")
-    mybuilder.test_the_log(12)
-    Builder.add_non_supported_instruction_cls("test")
+    mybuilder.test_the_log(1)
+    mybuilder.test_the_log(2)
+    mybuilder.test_the_log(3)
+    fprint("now let's do a critical one")
     try:
-        mybuilder.test_the_log2(19)
-    except Exception as e:
-        print(e)
+        mybuilder.test_the_log2("test")
+    except ValueError as e:
+        pass
+    success("This line should be visible")
+    warn("now it's getting serious...")
+    mybuilder.test_the_log2("testtest")
+    debug("This should not be printed")
     mybuilder.test_the_log(15, x="y")
 
     # build:
