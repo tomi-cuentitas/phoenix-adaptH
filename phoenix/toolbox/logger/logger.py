@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 12/03/2025, 17:18
-# Version:     0.0.642
+# Last Update: 13/03/2025, 11:19
+# Version:     0.0.760
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,18 +25,45 @@ INFO = 2
 DEBUG = 3
 
 _COLORS = {
-    "green": "\033[32m",
-    "white": "\033[37m",
-    "red": "\033[31m",
-    "yellow": "\033[33m",
-    "blue": "\033[34m",
-    "gray": "\033[24m",
-    "black": "\033[30m",
-    "violet": "\033[35m",
-    "lightblue": "\033[36m",
+    "fg black": "\033[30m",
+    "fg red": "\033[31m",
+    "fg green": "\033[32m",
+    "fg yellow": "\033[33m",
+    "fg blue": "\033[34m",
+    "fg magenta": "\033[35m",
+    "fg cyan": "\033[36m",
+    "fg white": "\033[37m",
+    #
+    "fg bright black": "\033[90m",
+    "fg bright red": "\033[91m",
+    "fg bright green": "\033[92m",
+    "fg bright yellow": "\033[93m",
+    "fg bright blue": "\033[94m",
+    "fg bright magenta": "\033[95m",
+    "fg bright cyan": "\033[96m",
+    "fg bright white": "\033[97m",
+    #
+    "bg black": "\033[40m",
+    "bg red": "\033[41m",
+    "bg green": "\033[42m",
+    "bg yellow": "\033[43m",
+    "bg blue": "\033[44m",
+    "bg magenta": "\033[45m",
+    "bg cyan": "\033[46m",
+    "bg white": "\033[47m",
+    #
+    "bg bright black": "\033[100m",
+    "bg bright red": "\033[101m",
+    "bg bright green": "\033[102m",
+    "bg bright yellow": "\033[103m",
+    "bg bright blue": "\033[104m",
+    "bg bright magenta": "\033[105m",
+    "bg bright cyan": "\033[106m",
+    "bg bright white": "\033[107m",
+    #
     "default": "\033[0m",
 }
-_NOCOLOR = _COLORS["default"]
+_COLOR_RESET = ["default"]
 
 
 class Logger:
@@ -52,11 +79,11 @@ class Logger:
     }
 
     _LOG_COLORS = {
-        "ERROR": "red",
-        "WARNING": "yellow",
-        "INFO": "white",
-        "CONFIRM": "green",
-        "DEBUG": "lightblue",
+        "ERROR": ["fg red", "bg bright white"],
+        "WARNING": ["fg bright yellow"],
+        "INFO": ["fg white"],
+        "CONFIRM": ["fg green"],
+        "DEBUG": ["fg bright black"],
     }
     _DEFAULT_PATH = "./"
 
@@ -71,8 +98,8 @@ class Logger:
                         f"args  : {args}",
                         f"kwargs: {kwargs}",
                     )
-                if self._loglevel > 2:
-                    self._indentlevel += 1
+                # if self._loglevel > 2:
+                self._indentlevel += 1
                 ret = function(*args, **kwargs)
                 if __debug__:
                     self.debug(f"return value: {ret}")
@@ -87,14 +114,14 @@ class Logger:
                     f"called generator {function.__name__}",
                     f"args  : {args}",
                     f"kwargs: {kwargs}",
-                    "traceback:",
                 ]
                 if self._alerted:
+                    lines.append("traceback:")
                     for num, segment in enumerate(
                         tb.format_tb(exc.__traceback__, limit=None)
                     ):
-                        if num == 0:
-                            continue
+                        # if num == 0:
+                        #     continue
                         for line in segment.split("\n"):
                             if line.strip():
                                 lines.append(f"  {line}")
@@ -106,8 +133,8 @@ class Logger:
                 )
                 raise exc
             finally:
-                if self._loglevel > 2:
-                    self._indentlevel -= 1
+                # if self._loglevel > 2:
+                self._indentlevel -= 1
                 self.debug(f"END of function {function.__name__}")
             return ret
 
@@ -126,8 +153,8 @@ class Logger:
                         f"args  : {args}",
                         f"kwargs: {kwargs}",
                     )
-                if self._loglevel > 2:
-                    self._indentlevel += 1
+                # if self._loglevel > 2:
+                self._indentlevel += 1
                 for ret in function(*args, **kwargs):
                     if __debug__:
                         self.debug(f"yield value: {ret}")
@@ -144,14 +171,14 @@ class Logger:
                     f"called generator {function.__name__}",
                     f"args  : {args}",
                     f"kwargs: {kwargs}",
-                    "traceback:",
                 ]
                 if self._alerted:
+                    lines.append("traceback:")
                     for num, segment in enumerate(
                         tb.format_tb(exc.__traceback__, limit=None)
                     ):
-                        if num == 0:
-                            continue
+                        # if num == 0:
+                        #     continue
                         for line in segment.split("\n"):
                             if line.strip():
                                 lines.append(f"  {line}")
@@ -163,8 +190,8 @@ class Logger:
                 )
                 raise exc
             finally:
-                if self._loglevel > 2:
-                    self._indentlevel -= 1
+                # if self._loglevel > 2:
+                self._indentlevel -= 1
                 self.debug(f"END of generator {function.__name__}")
             return ret
 
@@ -192,8 +219,7 @@ class Logger:
         self._loglevel = min(3, max(0, loglevel))
         self._stdout = stdout
 
-        self.set_logfile(filename, path)
-        self.reset()
+        self.set_logfile(filename, path, reset=True)
 
     def reset(self):
         """reset the file"""
@@ -212,7 +238,7 @@ class Logger:
         """
         self._loglevel = min(3, max(0, loglevel))
 
-    def set_logfile(self, filename, path=None):
+    def set_logfile(self, filename, path=None, reset=True):
         """
         Set the logfile and path
         """
@@ -227,29 +253,44 @@ class Logger:
                 # default path if not explicitely set
                 path = Logger._DEFAULT_PATH
             self._file = pathjoin(path, filename)
+            if reset:
+                self.reset()
 
-    def _write_to_stdout(self, acstr, typestr, mline, msgtype, level):
+    def _write_to_stdout(self, acstr, typestr, mline, msgtype, level, srcstr):
         indent = level * "  "
-        color_in, color_out = _COLORS[Logger._LOG_COLORS[msgtype]], _NOCOLOR
+        colors_in, colors_out = Logger._LOG_COLORS[msgtype], _COLOR_RESET
+        color_in = "".join((_COLORS[col] for col in colors_in))
+        color_out = "".join((_COLORS[col] for col in colors_out))
         line = color_in + f"{indent}{mline}" + color_out
-        # line = color_in + f"{acstr}{typestr}{indent}{mline}" + color_out
+        # line = color_in + f"{srcstr}{indent}{mline}" + color_out
+        # line = color_in + f"{acstr}{srcstr}{typestr}{indent}{mline}" + color_out
         if msgtype == "ERROR":
             stderr.write(line + "\n")
         else:
             if self._stdout:
                 stdout.write(line + "\n")
 
-    def _write_to_file(self, acstr, typestr, mline, msgtype, level):
+    def _write_to_file(self, acstr, typestr, mline, msgtype, level, srcstr):
         indent = level * "  "
-        line = f"{acstr}{typestr}{indent}{mline}"
+        line = f"{acstr}{srcstr}{typestr}{indent}{mline}"
         if self._file:
             with open(self._file, "a") as file:
                 file.write(line + "\n")
 
-    def multiline_log(self, message_lines, msgtype="INFO", level=None):
+    def multiline_log(
+        self, message_lines, msgtype="INFO", level=None, source=None
+    ):
         """log multiple lines"""
         if level is None:
             level = self._indentlevel
+        if source is None:
+            source = __name__
+        ssource = source.strip()
+        lsource = source.strip()
+        if len(ssource) > 12:
+            ssource = ".." + ssource[-10:]
+        if len(lsource) > 22:
+            lsource = ".." + lsource[-20:]
 
         if "".join(message_lines).replace("\n", "").strip():
             acount = Logger._actioncount
@@ -257,67 +298,81 @@ class Logger:
 
             first = True
             for mline in message_lines:
-                acstr = f"{acount:>6}" + ":"
+                acstr = f"{acount:>6}" + ": "
                 typestr = f"{type(self)._LOG_REPR[msgtype.upper()]: <4}" + ": "
+                lsrcstr = f"@{lsource:<22}: "
+                ssrcstr = f"@{ssource:<12}: "
                 if not first:
                     acstr = " " * len(acstr)
                     typestr = " " * len(typestr)
+                    lsrcstr = " " * len(lsrcstr)
+                    ssrcstr = " " * len(ssrcstr)
                 first = False
-                self._write_to_stdout(acstr, typestr, mline, msgtype, level)
+                self._write_to_stdout(
+                    acstr, typestr, mline, msgtype, level, ssrcstr
+                )
                 if mline.strip():
-                    self._write_to_file(acstr, typestr, mline, msgtype, level)
+                    self._write_to_file(
+                        acstr, typestr, mline, msgtype, level, lsrcstr
+                    )
         else:
-            self._write_to_stdout("", "", "", msgtype, level)
+            self._write_to_stdout("", "", "", msgtype, level, "")
 
-    def log(self, message, msgtype="INFO", level=None):
+    def log(self, message, msgtype="INFO", level=None, source=None):
         """log a line"""
-        self.multiline_log([message], msgtype=msgtype, level=level)
+        self.multiline_log(
+            [message], msgtype=msgtype, level=level, source=source
+        )
 
-    def _log_debug(self, *messages):
+    def _log_debug(self, *messages, source=None):
         if self._loglevel > 2:
-            self.multiline_log(list(messages), "DEBUG")
+            self.multiline_log(list(messages), "DEBUG", source=source)
 
-    def _log_info(self, *messages):
+    def _log_info(self, *messages, source=None):
         if self._loglevel > 1:
-            self.multiline_log(list(messages), "INFO")
+            self.multiline_log(list(messages), "INFO", source=source)
 
-    def _log_success(self, message):
+    def _log_success(self, message, source=None):
         if self._loglevel > 1:
-            self.multiline_log([message], "CONFIRM")
+            self.multiline_log([message], "CONFIRM", source=source)
 
-    def _log_warn(self, *messages):
+    def _log_warn(self, *messages, source=None):
         if self._loglevel > 0:
-            self.multiline_log(list(messages), "WARNING")
+            self.multiline_log(list(messages), "WARNING", source=source)
 
-    def _log_error(self, *messages):
-        self.multiline_log(list(messages), "ERROR")
+    def _log_error(self, *messages, source=None):
+        self.multiline_log(list(messages), "ERROR", source=source)
 
-    def info(self, *messages):
+    def info(self, *messages, source=None):
         """make an info log message"""
         return self._log_info(
-            *sum((msg.split("\n") for msg in messages), start=[])
+            *sum((msg.split("\n") for msg in messages), start=[]),
+            source=source,
         )
 
-    def success(self, message):
+    def success(self, message, source=None):
         """make a success log message"""
-        return self._log_success(message)
+        return (self._log_success(message, source=source),)
 
-    def debug(self, *messages):
+    def debug(self, *messages, source=None):
         """make a debug log message"""
         return self._log_debug(
-            *sum((msg.split("\n") for msg in messages), start=[])
+            *sum((msg.split("\n") for msg in messages), start=[]),
+            source=source,
         )
 
-    def warn(self, *messages):
+    def warn(self, *messages, source=None):
         """make a warning log message"""
         return self._log_warn(
-            *sum((msg.split("\n") for msg in messages), start=[])
+            *sum((msg.split("\n") for msg in messages), start=[]),
+            source=source,
         )
 
-    def error(self, *messages):
+    def error(self, *messages, source=None):
         """make an error log message"""
         return self._log_error(
-            *sum((msg.split("\n") for msg in messages), start=[])
+            *sum((msg.split("\n") for msg in messages), start=[]),
+            source=source,
         )
 
 

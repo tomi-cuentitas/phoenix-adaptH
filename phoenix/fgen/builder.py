@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 12/03/2025, 17:14
-# Version:     0.0.355
+# Last Update: 13/03/2025, 11:20
+# Version:     0.0.370
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -37,8 +37,11 @@ class Optimizer:
     _BUILD = 0
     _BCKND = "GENERIC"
 
-    def __init__(self, _log_welcome=True, **params):
+    def __init__(self, _internal=None, **params):
         self._params: Dict[str, Any] = params
+        if _internal is None:
+            _internal = {}
+        _log_welcome = _internal.get("_log_welcome", True)
         if _log_welcome:
             self._welcome_log()
 
@@ -110,11 +113,14 @@ class Builder(Optimizer, identifier="GENERIC"):
     _VERSN = 0
     _BUILD = 0
 
-    def __init__(self, _log_welcome=True, **params):
-        super().__init__(**params, _log_welcome=False)
-        self._optimizers = []
+    def __init__(self, _internal=None, **params):
+        super().__init__(**params, _internal={"_log_welcome": False})
+        if _internal is None:
+            _internal = {}
+        _log_welcome = _internal.get("_log_welcome", True)
         if _log_welcome:
             self._welcome_log()
+        self._optimizers = []
 
     def _detail_log_lines(self):
         yield from Optimizer._detail_log_lines(self)
@@ -259,7 +265,7 @@ if __name__ == "__main__":
     class TestOptimizer(Optimizer, identifier="TESTAGAIN"):
         pass
 
-    # log.set_loglevel(3)
+    log.set_loglevel(2)
     log.set_logfile("testlog.txt")
 
     info("run some tests")

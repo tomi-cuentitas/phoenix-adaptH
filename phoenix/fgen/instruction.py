@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 12/03/2025, 18:28
-# Version:     0.0.2752
+# Last Update: 13/03/2025, 11:51
+# Version:     0.0.2757
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -486,6 +486,12 @@ class GenericInstruction(Instruction, ftype="generic"):
         return cls(**params)
 
 
+###############################################################################
+#
+# KEYMAP INSTRUCTION
+# ==================
+
+
 class KeyMapInstruction(GenericInstruction, ftype="kmap"):
     """Represents an Expression"""
 
@@ -523,6 +529,11 @@ class KeyMapInstruction(GenericInstruction, ftype="kmap"):
 # :::::8  :::::::: ::::::: ::::::: :::::::: :::::::
 # :::::.. :::::::: ::::::: ::::::: :::::::: :::::::
 ###############################################################################
+
+###############################################################################
+#
+# GROUP PARENT CLASS
+# ==================
 
 
 class InstructionGroup(Instruction, ftype="group"):
@@ -735,6 +746,11 @@ class InstructionGroup(Instruction, ftype="group"):
 # ::::::: ::::::: :::::: ::::: ::::::: :::::: ::::: ::::::: :::::: :::::::
 ######################################################################################
 
+###############################################################################
+#
+# CONTENT INSTRUCTION PARENT CLASS
+# ================================
+
 
 class ContentInstruction(Instruction, ftype="content"):
     """Any instruction that has content inside and typical routines access content"""
@@ -814,7 +830,7 @@ class ContentInstruction(Instruction, ftype="content"):
 
 ###############################################################################
 #
-# PARENT CLASS ENVIRONMENT
+# ENVIRONMENT PARENT CLASS
 # ========================
 
 
@@ -949,100 +965,6 @@ class LinkVariableEnvironmentInstruction(
 
 ###############################################################################
 #
-# o     o                  o            o    o
-# 8     8                               8
-# 8     8  .oPYo.  oPYo.  o8  .oPYo.   o8P  o8  .oPYo.  odYo.
-# `b   d'  .oooo8  8  `'   8  .oooo8    8    8  8    8  8' `8
-#  `b d'   8    8  8       8  8    8    8    8  8    8  8   8
-#   `8'    `YooP8  8       8  `YooP8    8    8  `YooP'  8   8
-# :::..::: :.....: ..:::: :.. :.....: ::..: :.. :.....: ..::..
-# :::::::: ::::::: :::::: ::: ::::::: ::::: ::: ::::::: ::::::
-# :::::::: ::::::: :::::: ::: ::::::: ::::: ::: ::::::: ::::::
-###############################################################################
-
-
-class VariationInstruction(ContentInstruction, ftype="variation"):
-    """
-    A variation is a special kind of offset that implies, that data contains copies
-    that are addressable via offsets and independent and non-overlapping. E.g. a state
-    operator interacts with several different sets of dynamic, but these different
-    versions do not interact anywhere, implying some wiggle room for safe parallelization
-    """
-
-    def __init__(self, content, key, itype=None):
-        super().__init__(content, itype=itype)
-        if not isinstance(key, str):
-            raise KeyError("Key must be a string")
-        self._variations = {key: content}
-
-    def add_variation(self, key, variation):
-        """add a variation to the selectable variations"""
-        if not isinstance(key, str):
-            raise KeyError("Key must be a string")
-        if not isinstance(variation, Instruction):
-            raise TypeError("Variation must be of type instruction")
-        self._variations[key] = variation
-
-    def select(self, key):
-        """select a variation to be valid"""
-        self._content = self._variations[key]
-
-
-###############################################################################
-#
-#  .oPYo.           o  8       8       .oo
-#  8   `8              8       8      .P 8
-# o8YooP'  o    o  o8  8  .oPYo8     .P  8  oPYo.  .oPYo.  .oPYo.
-#  8   `b  8    8   8  8  8    8    oPooo8  8  `'  8    8  Yb..
-#  8    8  8    8   8  8  8    8   .P    8  8      8    8    'Yb.
-#  8oooP'  `YooP'   8  8  `YooP'  .P     8  8      `YooP8  `YooP'
-# :......: :.....: :.. .. :.....: ..:::::.. ..:::: :....8  :.....:
-# :::::::: ::::::: ::: :: ::::::: ::::::::: :::::: ::ooP'. :::::::
-# :::::::: ::::::: ::: :: ::::::: ::::::::: :::::: ::...:: :::::::
-###############################################################################
-
-
-class BuildArgInstruction(ContentInstruction, ftype="buildargs"):
-    """
-    Contribute Build Args for builders or optimizers when containers are
-    constructed from inside instructions.
-    """
-
-    def __init__(self, content, *, buildargs=None, itype=None):
-        super().__init__(content, itype=itype)
-        if not isinstance(content, (InstructionGroup, EnvironmentInstruction)):
-            raise TypeError(
-                "content must be an InstructionGroup or Environment"
-            )
-        if not isinstance(content, Instruction):
-            raise TypeError(
-                "content of environment must be of type instruction"
-            )
-
-        if buildargs is None:
-            buildargs = {}
-        self._buildargs = buildargs
-
-    def _full_dict(self):
-        """get a full dict-like object"""
-        return {"content": self._content, "buildargs": self._buildargs}
-
-    def __deepcopy__(self, memo=None, **kwargs):
-        return super().__deepcopy__(
-            memo=memo, buildargs={**self._buildargs}, **kwargs
-        )
-
-    def _apply_environment(
-        self, environment: InstructionEnvironment, memo: dict, **kwargs
-    ) -> Instruction:
-        # environments are replaced by their transformed content
-        return super()._apply_environment(
-            environment, memo=memo, buildargs={**self._buildargs}, **kwargs
-        )
-
-
-###############################################################################
-#
 # SUBROUTINE ENVIRONMENT
 # ======================
 
@@ -1087,11 +1009,25 @@ class SubroutineEnvironmentInstruction(
 
 ###############################################################################
 #
-# PARALLEL ENVIRONMENT GROUPS
-# ===========================
+# .oPYo.                           o          8
+# 8                                           8
+# `Yooo.  .oPYo.  .oPYo.  .oPYo.  o8  .oPYo.  8
+#     `8  8    8  8oooo8  8    '   8  .oooo8  8
+#      8  8    8  8.      8    .   8  8    8  8
+# `YooP'  8YooP'  `Yooo'  `YooP'   8  `YooP8  8
+# :.....: 8 ....: :.....: :.....: :.. :.....: ..
+# ::::::: 8 ::::: ::::::: ::::::: ::: ::::::: ::
+# ::::::: ..::::: ::::::: ::::::: ::: ::::::: ::
+###############################################################################
 
 
-class MapEnvironmentsInstruction(ContentInstruction, ftype="map"):
+###############################################################################
+#
+# MAP APPLY
+# =========
+
+
+class MapApplyInstruction(ContentInstruction, ftype="map"):
     """
     Within this environment, Environment groups (e.g. OffsetGroups) are applied
     to an instructiongroup that is then executed from within every environment.
@@ -1152,6 +1088,84 @@ class MapEnvironmentsInstruction(ContentInstruction, ftype="map"):
         return type(self)(
             self._content.apply_environment(environment, memo=memo),
             **kwargs,
+        )
+
+
+###############################################################################
+#
+# VARIATION
+# =========
+
+
+class VariationInstruction(ContentInstruction, ftype="variation"):
+    """
+    A variation is a special kind of offset that implies, that data contains copies
+    that are addressable via offsets and independent and non-overlapping. E.g. a state
+    operator interacts with several different sets of dynamic, but these different
+    versions do not interact anywhere, implying some wiggle room for safe parallelization
+    """
+
+    def __init__(self, content, key, itype=None):
+        super().__init__(content, itype=itype)
+        if not isinstance(key, str):
+            raise KeyError("Key must be a string")
+        self._variations = {key: content}
+
+    def add_variation(self, key, variation):
+        """add a variation to the selectable variations"""
+        if not isinstance(key, str):
+            raise KeyError("Key must be a string")
+        if not isinstance(variation, Instruction):
+            raise TypeError("Variation must be of type instruction")
+        self._variations[key] = variation
+
+    def select(self, key):
+        """select a variation to be valid"""
+        self._content = self._variations[key]
+
+
+###############################################################################
+#
+# BUILD PARAMETER
+# ===============
+
+
+class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
+    """
+    Contribute Build Args for builders or optimizers when containers are
+    constructed from inside instructions.
+    """
+
+    def __init__(self, content, *, buildargs=None, itype=None):
+        super().__init__(content, itype=itype)
+        if not isinstance(content, (InstructionGroup, EnvironmentInstruction)):
+            raise TypeError(
+                "content must be an InstructionGroup or Environment"
+            )
+        if not isinstance(content, Instruction):
+            raise TypeError(
+                "content of environment must be of type instruction"
+            )
+
+        if buildargs is None:
+            buildargs = {}
+        self._buildargs = buildargs
+
+    def _full_dict(self):
+        """get a full dict-like object"""
+        return {"content": self._content, "buildargs": self._buildargs}
+
+    def __deepcopy__(self, memo=None, **kwargs):
+        return super().__deepcopy__(
+            memo=memo, buildargs={**self._buildargs}, **kwargs
+        )
+
+    def _apply_environment(
+        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    ) -> Instruction:
+        # environments are replaced by their transformed content
+        return super()._apply_environment(
+            environment, memo=memo, buildargs={**self._buildargs}, **kwargs
         )
 
 

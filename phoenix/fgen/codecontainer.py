@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 10/03/2025, 17:16
-# Version:     0.0.585
+# Last Update: 13/03/2025, 11:48
+# Version:     0.0.587
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -541,15 +541,17 @@ class CommentLine(CodeLine):
         super().__init__(line, signature=None, parent=parent, **params)
 
 
+"""
 Important Containers:
 
 StatementLine(s): All required leaf instructions need one
 CommentLine: for structure. At least define comment symbol
 GroupContainer: grouping of lines.
-EnvironmentContainer
+EnclosingContainer
 DefinitionContainer
 LoopContainer
 RoutineContainer
+"""
 
 if __name__ == "__main__":
     from phoenix.fgen.libroutinevar import (
