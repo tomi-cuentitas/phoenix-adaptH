@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 13/03/2025, 11:51
-# Version:     0.0.2757
+# Last Update: 13/03/2025, 12:37
+# Version:     0.0.2831
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -123,7 +123,10 @@ class Instruction:
             defaults = {}
         # check params first, then check defaults, return None for miss
         data_dict = {}  # _PartialFormatDict
-        provided = self._full_dict()
+        provided = {}
+        for cls in reversed(self.__class__.__mro__):
+            if hasattr(cls, "_dict_update"):
+                provided.update(cls._dict_update(self))
         if keys:
             data_dict.update(
                 {
@@ -233,9 +236,14 @@ class Instruction:
 
     # pylint: enable=unused-argument
 
-    def _full_dict(self) -> Dict[str, Any]:
+    def _dict_update(self) -> Dict[str, Any]:
         """get a dictionary from self"""
-        raise NotImplementedError("Must be implemented in subclass")
+        return {
+            "identifier": self.identifier,
+            "ftype": self.ftype,
+            "itype": self.itype,
+            "size": len(self),
+        }
 
     @property
     def itype(self):
@@ -444,7 +452,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             )
         self._params[key] = value
 
-    def _full_dict(self):
+    def _dict_update(self):
         """access the full dict representation, which is params for any generic instruction"""
         return self._params  # + alias if included
 
@@ -585,7 +593,7 @@ class InstructionGroup(Instruction, ftype="group"):
         memo[id(self)] = weakref.ref(copied_group)
         return copied_group
 
-    def _full_dict(self):
+    def _dict_update(self):
         """get a full dict-like object"""
         return {"instructions": self._instructions}
 
@@ -765,7 +773,7 @@ class ContentInstruction(Instruction, ftype="content"):
             )
         self._content = content
 
-    def _full_dict(self):
+    def _dict_update(self):
         """get a full dict-like object"""
         return {"content": self._content}
 
@@ -841,9 +849,9 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
         super().__init__(content, itype=itype)
         self._environment = environment
 
-    def _full_dict(self):
+    def _dict_update(self):
         """get a full dict-like object"""
-        return {"content": self._content, "environment": self._environment}
+        return {"environment": self._environment}
 
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
@@ -984,11 +992,9 @@ class SubroutineEnvironmentInstruction(
         self._inp_variables = inp_variables
         self._out_variables = out_variables
 
-    def _full_dict(self):
+    def _dict_update(self):
         """get a full dict-like object"""
         return {
-            "content": self._content,
-            "environment": self._environment,
             "inp_vars": self._inp_variables,
             "out_vars": self._out_variables,
         }
@@ -1037,21 +1043,18 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         super().__init__(content, itype=itype)
         self._environments = environments
 
-    def _full_dict(self):
+    def _dict_update(self):
         """get a full dict-like object"""
-        return {"content": self._content, "environments": self._environments}
+        return {"environments": self._environments}
 
-    # TODO
     def __len__(self):
-        return len(self._content)
+        return len(self._content) * len(self._environments)
 
-    # TODO
     @property
     def instructions(self):
         """access instructions"""
         yield from self._content.instructions
 
-    # TODO
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
             memo = {}
@@ -1059,10 +1062,13 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         return type(self)(
             copied_content,
             itype=self.itype,
+            environments=[
+                environment.__deepcopy__()
+                for environment in self._environments
+            ],
             **kwargs,
         )
 
-    # TODO
     def walk(
         self,
         environment=None,
@@ -1074,20 +1080,25 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         self, the environment and a flag whether it is a leaf
         """
         # an environment does not count as recursive step!!
-        yield from self._content.walk(
-            environment=environment,
-            recursive=recursive,
-            include_groups=include_groups,
-        )
+        for thisenv in self._environments:
+            combined_environment = environment.merge(thisenv)
+            yield from self._content.walk(
+                environment=combined_environment,
+                recursive=recursive,
+                include_groups=include_groups,
+            )
 
-    # TODO
     def _apply_environment(
         self, environment: InstructionEnvironment, memo: dict, **kwargs
     ) -> Instruction:
         # environments are replaced by their transformed content
-        return type(self)(
-            self._content.apply_environment(environment, memo=memo),
-            **kwargs,
+        return InstructionGroup(
+            [
+                self._content._apply_environment(
+                    environment.merge(env), memo=memo, **kwargs
+                )
+                for env in self._environments
+            ]
         )
 
 
@@ -1151,7 +1162,7 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
             buildargs = {}
         self._buildargs = buildargs
 
-    def _full_dict(self):
+    def _dict_update(self):
         """get a full dict-like object"""
         return {"content": self._content, "buildargs": self._buildargs}
 
@@ -1481,6 +1492,8 @@ if __name__ == "__main__":
         )
 
     print(len(printed_instructions))
+
+    print(next(printed_instructions.instructions).to_dict())
 
     sys.exit(0)
 
