@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 10/03/2025, 13:00
-# Version:     0.0.181
+# Last Update: 13/03/2025, 15:21
+# Version:     0.0.254
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,68 +20,81 @@ from typing import Set
 # import weakref
 
 
-# class LanguageFeature:
-#     """Language feature base class"""
-
-#     def __init__(self, name, size=None, dtype=None):
-#         self._name = name
-#         self._dtype = dtype
-#         self._size = size
-
-#     @property
-#     def dtype(self):
-#         """access dtype, include preprocessing"""
-#         return self._dtype
-
-#     @property
-#     def size(self):
-#         """access size, include preprocessing"""
-#         return self._size
-
-#     @property
-#     def name(self):
-#         """access name, include preprocessing"""
-#         if self.size is None:
-#             return self._name
-#         return f"{self._dtype}[{self._size}] {self._name}"
-
-#     def name_access(self):
-#         """name-like access"""
-#         return f"{self._name}[]"
-
-#     def array_access(self, index):
-#         """array-like access"""
-#         if self.size is None:
-#             raise TypeError("Cannot access Scalar as Array type")
-#         return f"{self.name}[{index}]"
-
-#     def scalar_access(self):
-#         """array-like access"""
-#         if self.size is not None:
-#             raise TypeError("Cannot access Array as Scalar type")
-#         return f"{self.name}"
-
-#     def assign(self, expression):
-#         """assign to the constant somewhere in the code"""
-#         return f"{self.name} = {expression}"
-
-#     def initialize(self):
-#         """initialization line"""
-
-
 class LibRoutineVariable:
     """Any kind of variable used in the library"""
 
     _VAR_IDENTIFIER = "GENERIC"
+    _CLASS_BASE = "var"
 
-    def __init__(self, name, size):
+    _class_namepool: Set[str] = set()
+    # if this ever becomes a dict, it must be weak!
+
+    def __init__(
+        self,
+        size=None,
+        name=None,
+        namepool=None,
+        prefix=None,
+        suffix=None,
+    ):
+        if namepool is None:
+            namepool = type(self)._class_namepool
+        self._namepool = namepool
+        if name is None:
+            name = type(self)._CLASS_BASE
+        name = type(self).autoname(
+            namepool=namepool,
+            base=name,
+            prefix=prefix,
+            suffix=suffix,
+        )
+        assert name is not None
+        assert name not in namepool
         self._name = name
+        self._namepool.add(name)
         self._size = size
 
     def __str__(self):
         if self._size is None:
             return f"{self._name}"
         return f"{self._name}[{self._size}]"
+
+    @classmethod
+    def autoname(
+        cls,
+        namepool: Set[str] | None,
+        base=None,
+        prefix=None,
+        suffix=None,
+    ):
+        """autogenerate a name"""
+        if base is None:
+            base = cls._CLASS_BASE
+        name = base
+        if prefix is not None:
+            name = f"{prefix}_{name}"
+        if suffix is not None:
+            name = f"{name}_{suffix}"
+        if namepool is None:
+            namepool = cls._class_namepool
+        assert namepool is not None
+        num = 0
+        out = name
+        while True:
+            if out not in namepool:
+                break
+            num += 1
+            out = f"{name}{num}"
+        return out
+
+    def free_name(self):
+        """discard the name in the namepool"""
+        try:
+            self._namepool.remove(self._name)
+        except KeyError:
+            pass
+        except AttributeError:
+            print("fooo")
 
     @property
     def name(self):
@@ -98,55 +111,41 @@ class LibRoutineVariable:
         """access variable type"""
         return self._VAR_IDENTIFIER
 
+    def __del__(self):
+        self.free_name()
+
+    def __init_subclass__(cls, prefix=None, namepool=None):
+        if namepool is None:
+            namepool = set()
+        if prefix is not None:
+            cls._CLASS_BASE = prefix
+        cls._class_namepool = namepool
+
+    def expr_at_offset(self, offset):
+        """expression at offset"""
+        return f"{self._name}[{offset}]"
+
+    def expr(self):
+        """expression for the variable"""
+        return f"{self._name}"
+
+    def __format__(self, formatstr):
+        """here happens the magic"""
+        # TODO
+
 
 class LibRoutineLocalVariable(LibRoutineVariable):
     """Any kind of variable used in the library"""
 
     _VAR_IDENTIFIER = "LOCAL"
-
-    # if this ever becomes a dict, it must be weak!
-    _class_namepool: Set[str] = set()
-
-    @staticmethod
-    def autoname(namepool: Set[str], prefix="tmp"):
-        """autogenerate a name"""
-        num = 0
-        while True:
-            name = f"{prefix}{num}"
-            if name not in namepool:
-                break
-            num += 1
-        namepool.add(name)
-        return name
-
-    def __init__(self, size=None, namepool=None, prefix="tmp"):
-        if namepool is None:
-            namepool = type(self)._class_namepool
-        self._namepool = namepool
-        super().__init__(
-            name=self.autoname(namepool=namepool, prefix=prefix), size=size
-        )
-
-    def discard_name(self):
-        """discard the name in the namepool"""
-        try:
-            self._namepool.remove(self._name)
-        except KeyError:
-            pass
-
-    def __del__(self):
-        self.discard_name()
-
-    def __init_subclass__(cls, namepool=None):
-        if namepool is None:
-            namepool = set()
-        cls._class_namepool = namepool
+    _CLASS_BASE = "loc"
 
 
 class LibRoutineCounter(LibRoutineLocalVariable):
     """An integer type variable made for iterating through an array"""
 
     _VAR_IDENTIFIER = "COUNTER"
+    _CLASS_BASE = "cnt"
 
     # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
     # maybe let it rise like other variables and introduce a "handled" flag that is true once the
@@ -159,7 +158,7 @@ class LibRoutineCounter(LibRoutineLocalVariable):
     # needed and places it one segment above, once the counter is finally initialized even further
     # up.
 
-    def __init__(self, origin=None, size=None, namepool=None, prefix="tmp"):
+    def __init__(self, origin=None, size=None, namepool=None, prefix=None):
         super().__init__(size=size, namepool=namepool, prefix=prefix)
         if origin is None:
             raise ValueError("Counter requires origin.")
@@ -170,6 +169,7 @@ class LibRoutineInputVariable(LibRoutineVariable):
     """Input Variable. Potentially includes Read-Only behaviour"""
 
     _VAR_IDENTIFIER = "INPUT"
+    _CLASS_BASE = "inp"
 
     # in some languages, input variables are treated differently than output.
     # inputs are assumed constant
@@ -179,6 +179,17 @@ class LibRoutineOutputVariable(LibRoutineVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "OUTPUT"
+    _CLASS_BASE = "out"
+
+    # in some languages, output variables are treated differently than input.
+    # outputs are assumed read-write, or inout and not constant
+
+
+class LibRoutineInpOutVariable(LibRoutineVariable):
+    """Output Variable. Potentially includes Auto Initialization"""
+
+    _VAR_IDENTIFIER = "INPOUT"
+    _CLASS_BASE = "ref"
 
     # in some languages, output variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
@@ -196,24 +207,41 @@ class LibRoutineConstant(LibRoutineVariable):
     # differnt places.
 
     _VAR_IDENTIFIER = "CONSTANT"
+    _CLASS_BASE = "const"
 
-    def __init__(self, name, *content, size=None):
-        super().__init__(name=name, size=size)
-        self._content = list(content)
+    def __init__(self, name, value, size=None):
+        if size is None:
+            if hasattr(value, "__iter__"):
+                self._value = value
+                size = len(value)
+            else:
+                self._value = [value]
+        else:
+            if not hasattr(value, "__iter__"):
+                raise ValueError("value must be iterable.")
+            if len(value) != size:
+                raise ValueError("value size does not match the given size.")
+            self._value = value
+
+        super().__init__(
+            name=name,
+            size=None,
+            namepool=None,
+            prefix=None,
+            suffix=None,
+        )
 
     @property
-    def content(self):
-        """access content"""
+    def value(self):
+        """access value"""
         if self._size is None:
-            return self._content[0]
-        return list(self._content)
+            return self._value[0]
+        return list(self._value)
 
     def append(self, value):
         """append a value"""
-        if self._size is None:
-            raise ValueError("Cannot append to a scalar")
-        self._content.append(value)
-        self._size = len(self._content)
+        self._value.append(value)
+        self._size = len(self._value)
 
 
 # class LibRoutineExternal(LibRoutineConstant):
@@ -236,7 +264,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namepool),
         othernamepool,
     )
-    b = LibRoutineLocalVariable(2)
+    b = LibRoutineInputVariable(42)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -301,6 +329,15 @@ if __name__ == "__main__":
         othernamepool,
     )
     x = LibRoutineLocalVariable(8, namepool=othernamepool)
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namepool,
+        len(LibRoutineLocalVariable._class_namepool),
+        othernamepool,
+    )
+    x.free_name()
+    del x
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",

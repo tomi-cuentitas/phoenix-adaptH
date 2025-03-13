@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 13/03/2025, 11:48
-# Version:     0.0.587
+# Last Update: 13/03/2025, 17:56
+# Version:     0.0.686
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -24,6 +24,14 @@ from weakref import ReferenceType as wrReferenceType
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.libroutinevar import LibRoutineVariable
+
+from phoenix.toolbox.logger import GLOBAL_LOGGER as log
+
+info = log.info
+success = log.success
+debug = log.debug
+warn = log.warn
+error = log.error
 
 
 __doc__ = """
@@ -165,12 +173,9 @@ class CodeContainer:
 
     _IND = "  "
 
-    def __init__(self, signature: Any = None, parent=None, **params) -> None:
+    def __init__(self, parent, level, **params) -> None:
         # all content that may or may not be useful
         self._params = params
-
-        # the call signature
-        self._call_signature = signature
 
         # collect variables that are used here
         self._requirements: Set[LibRoutineVariable] = set()
@@ -188,10 +193,11 @@ class CodeContainer:
         self._body_indent = False
 
         # hierarchy level
-        if self.parent is None:
-            level = 0
-        else:
-            level = self.parent.level
+        # if self.parent is None:
+        #     level = 0
+        # else:
+        #     level = self.parent.level
+
         self._level = level
 
     @classmethod
@@ -199,32 +205,44 @@ class CodeContainer:
         cls,
         instruction: Instruction,
         builder,
-        context: Tuple[int, InstructionEnvironment, Instruction | None],
-        buildargs=None,
+        context,
+        buildargs,
     ):
-        """Generator! Request data from instruction, supplement with defaults if valid."""
-        if buildargs is None:
-            buildargs = {}
-        (environment, level, parent) = context
-        yield from cls(
-            level=level,
-            signature=builder.get_signature(
-                instruction, environment, buildargs
-            ),
-            parent=parent,
-            **instruction.to_dict(),
-        ).complete(builder, environment, buildargs).representatives()
+        """Request necessary data from instruction to generate a container."""
+        (level, _, parent, _) = context
+        return cls(
+            parent=parent,  # keep a way back to the roots
+            level=level,  # consider tree depth
+            **instruction.to_dict(),  # take what you need for initialization
+        ).build(
+            builder=builder,
+            instruction=instruction,
+            context=context,
+            buildargs=buildargs,
+        )
+        # fill with content. This is not done on build automatically to be able
+        # to implement that lazy as well.
 
     def representatives(self):
-        """yield the containers that represent self. Is self in many cases"""
+        """
+        Yield the containers that represent self. Is self in many cases. This allows
+        us to skip containers if they don't contribute anything meaningful
+        """
         yield self
 
-    def complete(self, builder, environment, buildargs, **kwargs):
+    def build(self, builder, instruction, context, buildargs, **_):
         """complete the instruction from the builder in the proper environment"""
-        print("Complete called")
-        print(f"\tBuilder    : {builder}")
-        print(f"\tEnvironment: {environment}")
-        print(f"\tbuild args : {buildargs}")
+        (environment, level, parent, namespace) = context
+        debug("start container build")
+        debug(f"\tTarget     : {self}")
+        debug(f"\tInstruction: {instruction}")
+        debug(f"\tBuilder    : {builder}")
+        debug(f"\tEnvironment: {environment}")
+        debug(f"\tLevel      : {level}")
+        debug(f"\tParent     : {parent}")
+        debug(f"\tNamespace  : {namespace}")
+        debug(f"\tParams     : {self._params}")
+        debug(f"\tbuild args : {buildargs}")
         return self
 
     def _set_parent(self, parent):
@@ -348,6 +366,10 @@ class CodeContainer:
             raise TypeError("Dependencies must be LibRoutineVariables")
         self._requirements.add(requirement)
 
+    def add_capture(self, capture: str | Callable) -> None:
+        """add a type of requirement to capture"""
+        raise TypeError(f"Cannot have caputure in class {type(self)}.")
+
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
         # if not overwritten, generic CodeContainers do not captere anything
@@ -384,17 +406,9 @@ class EnclosingContainer(GroupContainer):
     An Environment block. Opening and closing operators so pairs always match.
     Indent optional. Made for brackets, parenthesis, definitions, ...
     Brackets in brackets are treated, ignored or combined.
-    As the group container requires, head and foot are defined by the Environment
-    class and are not occupied
+    As the group container requires, head and foot are defined by the Enclosing
+    class and are not occupied by actual content.
     """
-
-    def __init__(
-        self, content, environment, signature=None, parent=None, **params
-    ):
-        transformed_content = content.apply_environment(environment)
-        super().__init__(
-            transformed_content, signature=signature, parent=parent, **params
-        )
 
 
 class LoopContainer(EnclosingContainer):
@@ -411,8 +425,8 @@ class DefinitionContainer(CodeContainer):
     on which type of requirements are implemented here or passed on.
     """
 
-    def __init__(self, **params) -> None:
-        super().__init__(**params)
+    def __init__(self, parent, level, **params) -> None:
+        super().__init__(parent=parent, level=level, **params)
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
         self._provide: Set[LibRoutineVariable] = set()
@@ -489,10 +503,8 @@ class LibraryContainer(DefinitionContainer):
 class ConditionalContainer(EnclosingContainer):
     """Conditionals. If. You know what."""
 
-    def __init__(
-        self, content, condition, signature=None, parent=None, **params
-    ):
-        super().__init__(content, signature=signature, parent=parent, **params)
+    def __init__(self, parent, level, content, condition, **params):
+        super().__init__(content, parent=parent, level=level, **params)
         self._condition = condition  # figure that out,
         # maybe sth like (libroutinevar, operator, libroutinevar)?
         # (would require a constant lrv)
@@ -505,8 +517,8 @@ class CodeBlock(GroupContainer):
 class CodeLine(CodeContainer):
     """Recursion-Breaking. Literally a single line."""
 
-    def __init__(self, line, signature=None, parent=None, **params):
-        super().__init__(signature=signature, parent=parent, **params)
+    def __init__(self, line, parent, level, **params):
+        super().__init__(parent=parent, level=level, **params)
         self._line = line
 
 
@@ -524,9 +536,9 @@ class StatementLine(CodeLine):
 
     _BLUEPRINT = ""
 
-    def __init__(self, signature=None, parent=None, **params):
+    def __init__(self, parent, level, **params):
         line = type(self)._BLUEPRINT.format(**params)
-        super().__init__(line, signature=signature, parent=parent, **params)
+        super().__init__(line, parent=parent, level=level, **params)
 
 
 class CommentLine(CodeLine):
@@ -536,9 +548,9 @@ class CommentLine(CodeLine):
 
     _COMMENT_PREFIX = "#"
 
-    def __init__(self, text, parent=None, **params):
+    def __init__(self, text, parent, level, **params):
         line = f"{self._COMMENT_PREFIX} {text}"
-        super().__init__(line, signature=None, parent=parent, **params)
+        super().__init__(line, parent=parent, level=level, **params)
 
 
 """
@@ -559,22 +571,37 @@ if __name__ == "__main__":
         LibRoutineLocalVariable,
     )
 
-    foo = DefinitionContainer()
-    print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # False
+    foo = DefinitionContainer(None, 0)
+    print(foo.capture_check(LibRoutineConstant(name="foo", value=1337)))
+    # False
+
     foo.add_capture("CONSTANT")
-    print(foo.capture_check(LibRoutineConstant("foo", 1337, 42)))  # True
+    print(foo.capture_check(LibRoutineConstant(name="foo", value=[1337])))
+    # True
+
     print()
-    print(foo.capture_check(LibRoutineLocalVariable("foo")))  # False
+    print(foo.capture_check(LibRoutineLocalVariable(name="foo")))
+    # False
+
     foo.add_capture("LOCAL")
-    print(foo.capture_check(LibRoutineLocalVariable("foo")))  # True
+    print(foo.capture_check(LibRoutineLocalVariable(name="foo")))
+    # True
+
     print()
-    print(foo.capture_check(LibRoutineVariable("foo", 1337)))  # False
-    foo.add_capture(lambda x: x.size > 1)
-    print(foo.capture_check(LibRoutineVariable("foo", 1337)))  # True
+    print(foo.capture_check(LibRoutineVariable(name="foo", size=42)))
+    # False
+
+    foo.add_capture(lambda x: x.size > 12)
+    print(foo.capture_check(LibRoutineVariable(name="foo", size=42)))
+    # True
+
     print()
-    print(foo.capture_check(LibRoutineVariable("foo", 1)))  # False
+    print(foo.capture_check(LibRoutineVariable(name="foo", size=2)))
+    # False
+
     foo.add_capture(lambda x: "f" in x.name)
-    print(foo.capture_check(LibRoutineVariable("foo", 1)))  # True
+    print(foo.capture_check(LibRoutineVariable(name="foo", size=2)))
+    # True
 
     SUMMARY = """
     Definition section provides capture capability. Builder has mapping from instruction type to class. CRO is analyzed to find most specific fit among supported codecontainers. 
@@ -583,24 +610,27 @@ if __name__ == "__main__":
 
     I give up on the idea, that code containers are made from instruction. The assignment between instruction types and codecontainer subclasses is made by the Builder instance and only preceding Optimizers can influence the ultimate instruction tree.
     """
-    print(SUMMARY)
+    # print(SUMMARY)
 
     for tline in multiline_iterable(
         ["Hello", "World", "Foo", "Bar", "Baz"],
         # [],
         ", ",
         max_line_length=22,
-        indent="    ",
+        indent="  ",
         prefix="[",
         suffix="]",
         prefix_suffix_lines=True,
         linebreak=" //",
+        extra_indent="  ",
     ):
         print(tline)
 
+    print()
+
     for tline in multiline_text(
         SUMMARY,
-        max_line_length=30,
+        max_line_length=50,
         indent="# ",
     ):
         print(tline)

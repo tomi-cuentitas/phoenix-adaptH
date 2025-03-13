@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 13/03/2025, 11:20
-# Version:     0.0.370
+# Last Update: 13/03/2025, 17:44
+# Version:     0.0.421
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -147,15 +147,6 @@ class Builder(Optimizer, identifier="GENERIC"):
         if instruction_cls in cls._supported_instruction_classes:
             del cls._supported_instruction_classes[instruction_cls]
 
-    @classmethod
-    @log.wrap_call
-    def _get_potential_fits(cls, instruction):
-        for elder in instruction.__class__.__mro__:
-            if elder in cls._not_supported_instruction_classes:
-                raise TypeError("Instruction class not supported")
-            if elder in cls._supported_instruction_classes:
-                yield cls._supported_instruction_classes[elder]
-
     @log.wrap_call
     def use_optimizer(self, optimizer):
         """append an optimizer to the list"""
@@ -163,50 +154,66 @@ class Builder(Optimizer, identifier="GENERIC"):
             raise TypeError("Optimizer must be an instance of Optimizer")
         self._optimizers.append(optimizer)
 
+    @log.wrap_call
+    def find_container_match(self, instruction):
+        """find a matching container for instruction"""
+        for elder in instruction.__class__.__mro__:
+            # note: mro contains type(self) and then all parents
+
+            if elder in type(self)._not_supported_instruction_classes:
+                raise TypeError("Instruction class not supported")
+            if elder in type(self)._supported_instruction_classes:
+                return type(self)._supported_instruction_classes[elder]
+        return None
+
     @log.wrap_gen
     def build_from_instruction(
-        self, instruction, environment=None, level=0, parent=None, **buildargs
+        self,
+        instruction,
+        context,
+        **buildargs,
     ):
         """takes an instruction and yields code containers from it"""
-        if environment is None:
-            environment = InstructionEnvironment()
-        closest_match = None
-        # note: mro contains type(self) and then all parents
-        for potential_fit in type(self)._get_potential_fits(instruction):
-            if potential_fit.compatibility_check(
-                self, instruction, environment, **buildargs
-            ):
-                closest_match = potential_fit
-                break
+        closest_match = self.find_container_match(instruction)
+
+        # there has to be a match, otherwise the builder cannot build this.
         if closest_match is None:
-            raise ValueError("Instruction class not supported")
-        if environment is None:
-            environment = InstructionEnvironment()
-        parent = instruction.parent
-        yield from closest_match().container_from_instruction(
-            instruction=instruction,
-            builder=self,
-            context=(level, environment, parent),
-            buildargs=buildargs,
+            raise TypeError("Instruction class not supported")
+
+        yield from (
+            closest_match.container_from_instruction(
+                instruction=instruction,
+                builder=self,
+                context=context,
+                buildargs=buildargs,
+            ).representatives()
         )
 
     @log.wrap_gen
-    def to_codecontainer(
-        self, instruction, environment=None, known_variables=None, **buildargs
-    ):
-        """build the code from the instruction tree"""
+    def generate_container_tree(self, instruction, **buildargs):
+        """
+        Build the code from the instruction tree. This is meant to be called
+        from the trees root.
+        This is a generator!
+        """
         info("build code from instruction tree")
-        optimized_tree = super().apply(instruction)  # this is a deepcopy call
+        optimized_tree = self.apply(instruction)  # this is a deepcopy call
+
         for num, optimizer in enumerate(self._optimizers):
-            info(f"apply optimizer #{num+1}")
-            optimized_tree = optimizer.apply(instruction)
-        if known_variables is None:
-            known_variables = {}
-        environment = InstructionEnvironment()
+            info(f"apply optimizer #{num + 1}")
+            optimized_tree = optimizer.apply(optimized_tree)
+
         info("start with root instruction node")
+
+        # context = (level, environment, parent, namespace)
+        context: Tuple[
+            int, InstructionEnvironment, Instruction | None, Dict[str, Any]
+        ]
+
+        context = (0, InstructionEnvironment(), None, {})
         yield from self.build_from_instruction(
             optimized_tree,
-            environment=environment,
+            context=context,
             **{**self._params, **buildargs},
         )
         info("reached end of instruction build")
@@ -286,6 +293,9 @@ if __name__ == "__main__":
     mybuilder.test_the_log(15, x="y")
 
     myoptimizer = TestOptimizer(foo="bazzz")
+
+    success()
+    info()
 
     # build:
     # - look for a proper codecontainer by looking up the instructions

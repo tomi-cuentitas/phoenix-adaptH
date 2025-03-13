@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 13/03/2025, 11:19
-# Version:     0.0.760
+# Last Update: 13/03/2025, 13:45
+# Version:     0.0.764
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -350,7 +350,7 @@ class Logger:
             source=source,
         )
 
-    def success(self, message, source=None):
+    def success(self, message="done!", source=None):
         """make a success log message"""
         return (self._log_success(message, source=source),)
 
