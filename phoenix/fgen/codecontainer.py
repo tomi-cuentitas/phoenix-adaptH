@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 13/03/2025, 17:56
-# Version:     0.0.686
+# Last Update: 13/03/2025, 18:07
+# Version:     0.0.690
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -173,9 +173,8 @@ class CodeContainer:
 
     _IND = "  "
 
-    def __init__(self, parent, level, **params) -> None:
+    def __init__(self, parent, level, **_) -> None:
         # all content that may or may not be useful
-        self._params = params
 
         # collect variables that are used here
         self._requirements: Set[LibRoutineVariable] = set()
@@ -209,11 +208,12 @@ class CodeContainer:
         buildargs,
     ):
         """Request necessary data from instruction to generate a container."""
-        (level, _, parent, _) = context
+        (level, _, parent, _) = context  # (level, env, parent, namespace)
         return cls(
             parent=parent,  # keep a way back to the roots
             level=level,  # consider tree depth
             **instruction.to_dict(),  # take what you need for initialization
+            **buildargs,
         ).build(
             builder=builder,
             instruction=instruction,
@@ -241,7 +241,6 @@ class CodeContainer:
         debug(f"\tLevel      : {level}")
         debug(f"\tParent     : {parent}")
         debug(f"\tNamespace  : {namespace}")
-        debug(f"\tParams     : {self._params}")
         debug(f"\tbuild args : {buildargs}")
         return self
 
