@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 13/03/2025, 18:07
-# Version:     0.0.690
+# Last Update: 14/03/2025, 11:30
+# Version:     0.0.738
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -175,6 +175,7 @@ class CodeContainer:
 
     def __init__(self, parent, level, **_) -> None:
         # all content that may or may not be useful
+        # self._data: Dict[str, Any] = {}
 
         # collect variables that are used here
         self._requirements: Set[LibRoutineVariable] = set()
@@ -199,50 +200,47 @@ class CodeContainer:
 
         self._level = level
 
-    @classmethod
-    def container_from_instruction(
-        cls,
-        instruction: Instruction,
-        builder,
-        context,
-        buildargs,
-    ):
-        """Request necessary data from instruction to generate a container."""
-        (level, _, parent, _) = context  # (level, env, parent, namespace)
-        return cls(
-            parent=parent,  # keep a way back to the roots
-            level=level,  # consider tree depth
-            **instruction.to_dict(),  # take what you need for initialization
-            **buildargs,
-        ).build(
-            builder=builder,
-            instruction=instruction,
-            context=context,
-            buildargs=buildargs,
-        )
-        # fill with content. This is not done on build automatically to be able
-        # to implement that lazy as well.
+    # @classmethod
+    # def container_from_instruction(
+    #     cls,
+    #     instruction: Instruction,
+    #     context,
+    #     buildargs,
+    # ):
+    #     """Request necessary data from instruction to generate a container."""
+    #     (level, _, parent, _) = context  # (level, env, parent, namespace)
+    #     return cls(
+    #         parent=parent,  # keep a way back to the roots
+    #         level=level,  # consider tree depth
+    #         **instruction.to_dict(),  # take what you need for initialization
+    #         **buildargs,
+    #     )
 
-    def representatives(self):
-        """
-        Yield the containers that represent self. Is self in many cases. This allows
-        us to skip containers if they don't contribute anything meaningful
-        """
-        yield self
+    # def get_representatives(self):
+    #     """
+    #     Get the representatives of this container, which might be only Self.
+    #     However, some instructions MIGHT render into multiple containers. These
+    #     can be representatives of a 'virtual' container.
+    #     """
+    #     yield self
 
-    def build(self, builder, instruction, context, buildargs, **_):
-        """complete the instruction from the builder in the proper environment"""
-        (environment, level, parent, namespace) = context
-        debug("start container build")
-        debug(f"\tTarget     : {self}")
-        debug(f"\tInstruction: {instruction}")
-        debug(f"\tBuilder    : {builder}")
-        debug(f"\tEnvironment: {environment}")
-        debug(f"\tLevel      : {level}")
-        debug(f"\tParent     : {parent}")
-        debug(f"\tNamespace  : {namespace}")
-        debug(f"\tbuild args : {buildargs}")
-        return self
+    # @log.wrap_call
+    # def build(self, builder, context, buildargs, **_):
+    #     """
+    #     Complete the instruction from the builder in the proper environment.
+    #     This does not involve the built of children, but it at least prepares them!
+    #     """
+    #     (environment, level, parent, namespace) = context
+    #     debug("start container build")
+    #     debug(f"\tTarget     : {self}")
+    #     debug(f"\tData       : {self._data}")
+    #     debug(f"\tBuilder    : {builder}")
+    #     debug(f"\tEnvironment: {environment}")
+    #     debug(f"\tLevel      : {level}")
+    #     debug(f"\tParent     : {parent}")
+    #     debug(f"\tNamespace  : {namespace}")
+    #     debug(f"\tbuild args : {buildargs}")
+    #     return self
 
     def _set_parent(self, parent):
         """private method to manage the parent reference"""
@@ -374,10 +372,10 @@ class CodeContainer:
         # if not overwritten, generic CodeContainers do not captere anything
         return False
 
-    @classmethod
-    def compatibility_check(cls, signature):
-        """checks if anything speaks against using this container"""
-        return True
+    # @classmethod
+    # def compatibility_check(cls, signature):
+    #     """checks if anything speaks against using this container"""
+    #     return True
 
 
 class GroupContainer(CodeContainer):
@@ -552,6 +550,29 @@ class CommentLine(CodeLine):
         super().__init__(line, parent=parent, level=level, **params)
 
 
+# class VirtualContainer(CodeContainer):
+#     """The part of a CodeContainer that adds the virtual stuff"""
+
+#     def __init__(self, parent, level, **kwargs):
+#         super().__init__(parent, level, **kwargs)
+#         self._representatives = []
+
+#     def get_representatives(self):
+#         yield from self._representatives
+
+#     @log.wrap_call
+#     def build_all(self, data, builder, context, buildargs, **_):
+#         raise TypeError("VirtualContainer does not support build")
+
+#     @log.wrap_call
+#     def build_self(self, data, builder, context, buildargs, **_):
+#         raise TypeError("VirtualContainer does not support build")
+
+#     @log.wrap_call
+#     def build_children(self, data, builder, context, buildargs, **_):
+#         raise TypeError("VirtualContainer does not support build")
+
+
 """
 Important Containers:
 
@@ -633,3 +654,15 @@ if __name__ == "__main__":
         indent="# ",
     ):
         print(tline)
+
+    # class TestClass(VirtualContainer, StatementLine):
+    #     pass
+
+    # a = TestClass(None, 0)
+    # print(list(a.get_representatives()))
+
+    # Strategy: the generation of containers should be controlled from a builder.
+    # There might be an Builder.handle(self, instruction) routine that calls proper subroutines and
+    # actions, ultimately generating containers with the right arguments. Context is a attribute of
+    # the builder then. A language can be kept in terms of CodeContainers, while builders implement
+    # new strategies of combining them.

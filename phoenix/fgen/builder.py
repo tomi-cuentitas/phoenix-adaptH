@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 13/03/2025, 17:44
-# Version:     0.0.421
+# Last Update: 14/03/2025, 11:30
+# Version:     0.0.429
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -154,42 +154,41 @@ class Builder(Optimizer, identifier="GENERIC"):
             raise TypeError("Optimizer must be an instance of Optimizer")
         self._optimizers.append(optimizer)
 
+    # @log.wrap_call
+    # def find_container_match(self, instruction):
+    #     """find a matching container for instruction"""
+    #     for elder in instruction.__class__.__mro__:
+    #         # note: mro contains type(self) and then all parents
+
+    #         if elder in type(self)._not_supported_instruction_classes:
+    #             raise TypeError("Instruction class not supported")
+    #         if elder in type(self)._supported_instruction_classes:
+    #             return type(self)._supported_instruction_classes[elder]
+    #     return None
+
+    # @log.wrap_call_gen
+    # def build_from_instruction(
+    #     self,
+    #     instruction,
+    #     context,
+    #     **buildargs,
+    # ):
+    #     """takes an instruction and generate code containers from it"""
+    #     closest_match = self.find_container_match(instruction)
+
+    #     # there has to be a match, otherwise the builder cannot build this.
+    #     if closest_match is None:
+    #         raise TypeError("Instruction class not supported")
+
+    #     return closest_match.container_from_instruction(
+    #         instruction=instruction,
+    #         context=context,
+    #         buildargs=buildargs,
+    #     ).build(self, context, buildargs)
+    #     # fill with content. This is not done on init automatically to be able
+    #     # to implement that lazy as well.
+
     @log.wrap_call
-    def find_container_match(self, instruction):
-        """find a matching container for instruction"""
-        for elder in instruction.__class__.__mro__:
-            # note: mro contains type(self) and then all parents
-
-            if elder in type(self)._not_supported_instruction_classes:
-                raise TypeError("Instruction class not supported")
-            if elder in type(self)._supported_instruction_classes:
-                return type(self)._supported_instruction_classes[elder]
-        return None
-
-    @log.wrap_gen
-    def build_from_instruction(
-        self,
-        instruction,
-        context,
-        **buildargs,
-    ):
-        """takes an instruction and yields code containers from it"""
-        closest_match = self.find_container_match(instruction)
-
-        # there has to be a match, otherwise the builder cannot build this.
-        if closest_match is None:
-            raise TypeError("Instruction class not supported")
-
-        yield from (
-            closest_match.container_from_instruction(
-                instruction=instruction,
-                builder=self,
-                context=context,
-                buildargs=buildargs,
-            ).representatives()
-        )
-
-    @log.wrap_gen
     def generate_container_tree(self, instruction, **buildargs):
         """
         Build the code from the instruction tree. This is meant to be called
@@ -211,37 +210,38 @@ class Builder(Optimizer, identifier="GENERIC"):
         ]
 
         context = (0, InstructionEnvironment(), None, {})
-        yield from self.build_from_instruction(
+        return self.build_from_instruction(
             optimized_tree,
             context=context,
             **{**self._params, **buildargs},
         )
+        # TODO
         info("reached end of instruction build")
 
-    @log.wrap_call
-    def get_signature(
-        self,
-        instruction: Instruction,
-        known_variables: Dict[type, Tuple[str, LibRoutineVariable]] | None,
-    ):
-        """Get an instruction's call signature"""
+    # @log.wrap_call
+    # def get_signature(
+    #     self,
+    #     instruction: Instruction,
+    #     known_variables: Dict[type, Tuple[str, LibRoutineVariable]] | None,
+    # ):
+    #     """Get an instruction's call signature"""
 
-        if known_variables is None:
-            known_variables = {}
+    #     if known_variables is None:
+    #         known_variables = {}
 
-        # ADAA types of OUT, INOUT and IN. Or subsets of this. Can be purely INOUT.
-        # Builder class can decide on how to handle that.
-        #
-        # example for usage:
-        # When GPU uses mapped memory, write-only regions can be of performance advantage
-        # the mapping refers to instruction variables.
-        # InOut Variables might be treated differently w.r.t. parallelization and racing
-        # conditions than pure in or pure out variables.
-        return ((), (), ())
+    #     # ADAA types of OUT, INOUT and IN. Or subsets of this. Can be purely INOUT.
+    #     # Builder class can decide on how to handle that.
+    #     #
+    #     # example for usage:
+    #     # When GPU uses mapped memory, write-only regions can be of performance advantage
+    #     # the mapping refers to instruction variables.
+    #     # InOut Variables might be treated differently w.r.t. parallelization and racing
+    #     # conditions than pure in or pure out variables.
+    #     return ((), (), ())
 
-    @log.wrap_call
-    def generate_suffix(self):
-        """derive a name suffix from the parameters following a standardized pattern"""
+    # @log.wrap_call
+    # def generate_suffix(self):
+    #     """derive a name suffix from the parameters following a standardized pattern"""
 
 
 if __name__ == "__main__":

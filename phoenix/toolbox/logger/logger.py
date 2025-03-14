@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 13/03/2025, 13:45
-# Version:     0.0.764
+# Last Update: 14/03/2025, 10:41
+# Version:     0.0.770
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -142,7 +142,7 @@ class Logger:
 
         return wrapper
 
-    def wrap_gen(self, function):
+    def wrap_call_gen(self, function):
         """a decorator from a logger instance"""
 
         def wrapper(*args, **kwargs):
