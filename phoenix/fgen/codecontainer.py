@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 17/03/2025, 16:05
-# Version:     0.0.797
+# Last Update: 17/03/2025, 16:45
+# Version:     0.0.812
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -505,15 +505,6 @@ class DefinitionContainer(CaptureContainer):
     """
 
 
-class InitializationContainer(CaptureContainer):
-    """
-    As the definition container, but about whether a variable is initialized
-    from a value rather than only defined via datatype and more.
-    Constants are typically defined upon definition, but that has to be properly
-    done during container creation.
-    """
-
-
 class RoutineContainer(EnclosingContainer):
     """
     How a routine is defined, especially handles the section where the arguments
@@ -521,15 +512,15 @@ class RoutineContainer(EnclosingContainer):
     """
 
 
-class KernelContainer(RoutineContainer):
-    """
-    A KernelContainer represents a piece of code that is supposed to be called
-    in various memory locations, potentially simultaneously. KernelContainers
-    might map to parametrized auxilliary functions or actual kernels on GPUs.
+# class KernelContainer(RoutineContainer):
+#     """
+#     A KernelContainer represents a piece of code that is supposed to be called
+#     in various memory locations, potentially simultaneously. KernelContainers
+#     might map to parametrized auxilliary functions or actual kernels on GPUs.
 
-    An instruction block from a map instruction is preferably rendered into a
-    kernel. Kernels are treated as subtypes of functions
-    """
+#     An instruction block from a map instruction is preferably rendered into a
+#     kernel. Kernels are treated as subtypes of functions
+#     """
 
 
 class LibraryContainer(EnclosingContainer):
@@ -547,18 +538,35 @@ class LibraryContainer(EnclosingContainer):
         return True
 
 
-class ConditionalContainer(EnclosingContainer):
+class ConditionalContainer(CodeContainer):
     """Conditionals. If. You know what."""
 
     def __init__(self, parent, level, content, condition, **params):
-        super().__init__(content, parent=parent, level=level, **params)
-        self._condition = condition  # figure that out,
+        super().__init__(parent=parent, level=level, **params)
+        self._cases = {}
+        self.add_case(condition, content)
+
+    def add_case(self, condition, content):
+        """add a case to the conditional"""
+        self._cases[condition] = content
         # maybe sth like (libroutinevar, operator, libroutinevar)?
         # (would require a constant lrv)
 
 
 class CodeBlock(GroupContainer):
     """A block of code that can only contain codelines but no control structures"""
+
+    # should default to getting the content of body without any extras.
+    def append(self, content):
+        """append a container to the body"""
+        if not isinstance(content, (CodeLine, CodeBlock)):
+            raise TypeError("Only CodeLine can be added to CodeBlock")
+            # if a codeblock is added, it can only have codelines in it.
+            # or codeblocks, but those can only contain codelinexs themselves.
+            # or codeblocks, but those can only contain codelines themselves.
+            # ...
+            # you get it.
+        super().append(content)
 
 
 class CodeLine(CodeContainer):
