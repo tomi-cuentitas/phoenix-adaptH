@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 13/03/2025, 15:21
-# Version:     0.0.254
+# Last Update: 17/03/2025, 16:07
+# Version:     0.0.260
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -141,27 +141,22 @@ class LibRoutineLocalVariable(LibRoutineVariable):
     _CLASS_BASE = "loc"
 
 
-class LibRoutineCounter(LibRoutineLocalVariable):
+class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
     """An integer type variable made for iterating through an array"""
 
-    _VAR_IDENTIFIER = "COUNTER"
-    _CLASS_BASE = "cnt"
+    _VAR_IDENTIFIER = "FRAMESELECT"
+    _CLASS_BASE = "frm"
 
     # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
     # maybe let it rise like other variables and introduce a "handled" flag that is true once the
     # looping structure has been enabled, which may still require proper initialization.
-
-    # i need to make sure, that there cannot be a situation, where the counter rises from multiple
-    # blocks but is handled within only one of them. Maybe keep track of the to be handled counters
-    # in the CodeSegments rather than the variables?
-    # I could think of a pointer that remembers the last segment where the counter was actually
-    # needed and places it one segment above, once the counter is finally initialized even further
-    # up.
+    # this is the counter object, not the lookup object. Each parallel environment will have
+    # exactly one of these.
 
     def __init__(self, origin=None, size=None, namepool=None, prefix=None):
         super().__init__(size=size, namepool=namepool, prefix=prefix)
         if origin is None:
-            raise ValueError("Counter requires origin.")
+            raise ValueError("FrameSelector requires origin.")
         self._origin = origin
 
 

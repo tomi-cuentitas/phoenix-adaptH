@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 17/03/2025, 14:24
-# Version:     0.0.747
+# Last Update: 17/03/2025, 16:05
+# Version:     0.0.797
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -172,10 +172,16 @@ class CodeContainer:
     """
 
     _IND = "  "
+    _BODY_INDENT = False
+    _GLOBAL_CLASS_REFS = {
+        "COMMENT": None,
+    }
 
-    def __init__(self, parent, level, **_) -> None:
+    def __init__(self, parent, level, comment=None, **_) -> None:
         # all content that may or may not be useful
         # self._data: Dict[str, Any] = {}
+
+        # self._comment = comment
 
         # collect variables that are used here
         self._requirements: Set[LibRoutineVariable] = set()
@@ -189,9 +195,6 @@ class CodeContainer:
         self._wr_parent: wrReferenceType[CodeContainer] | None = None
         self._set_parent(parent)  # manage parent reference, might be weak
 
-        # indent body?
-        self._body_indent = False
-
         # hierarchy level
         # if self.parent is None:
         #     level = 0
@@ -199,6 +202,16 @@ class CodeContainer:
         #     level = self.parent.level
 
         self._level = level
+
+        if comment:
+            self.append_head(self.to_comment(comment))
+
+    def to_comment(self, comment, **extra):
+        """create a comment using the global class reference to a comment line"""
+        comment_class = type(self)._GLOBAL_CLASS_REFS.get("COMMENT")
+        return comment_class(
+            comment=comment, level=self._level, parent=self, **extra
+        )
 
     # @classmethod
     # def container_from_instruction(
@@ -260,7 +273,7 @@ class CodeContainer:
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         if self._container_body is not None:
-            indent += 1 if self._body_indent else 0
+            indent += 1 if self._BODY_INDENT else 0
             for content in self._container_body:
                 yield from content.get_codelines(indent=indent, **kwargs)
 
@@ -386,12 +399,12 @@ class GroupContainer(CodeContainer):
     delimiters and comments.
     """
 
-    def __init__(self, content, signature=None, parent=None, **params):
-        super().__init__(signature=signature, parent=parent, **params)
-        self._content = content
+    def __init__(self, content, parent=None, **params):
+        super().__init__(parent=parent, **params)
+        for cont in content:
+            self.append(cont)
 
     # should default to getting the content of body without any extras.
-
     def append(self, content):
         """append a container to the body"""
         self._container_body.append(content)
@@ -404,8 +417,26 @@ class EnclosingContainer(GroupContainer):
     Indent optional. Made for brackets, parenthesis, definitions, ...
     Brackets in brackets are treated, ignored or combined.
     As the group container requires, head and foot are defined by the Enclosing
-    class and are not occupied by actual content.
+    class and are not occupied by other content.
     """
+
+    def __init__(self, parent=None, **params):
+        super().__init__(parent=parent, **params)
+        self._fill_enclosing(**params)
+        self._locked = True
+
+    def _fill_enclosing(self, **params):
+        pass
+
+    def append_head(self, *containers):
+        if self._locked:
+            raise ValueError("Cannot append to head in EnclosingContainer")
+        super().append_head(*containers)
+
+    def append_foot(self, *containers):
+        if self._locked:
+            raise ValueError("Cannot append to foot in EnclosingContainer")
+        super().append_foot(*containers)
 
 
 class LoopContainer(EnclosingContainer):
@@ -483,15 +514,7 @@ class InitializationContainer(CaptureContainer):
     """
 
 
-class ParallelContainer(CaptureContainer):
-    """
-    The parallel capture container captures all variables that manage and realize
-    parallelization. It can render into a loop, a kernel or more.
-    The parallel container implements some context handling.
-    """
-
-
-class RoutineContainer(CaptureContainer):
+class RoutineContainer(EnclosingContainer):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
@@ -509,7 +532,7 @@ class KernelContainer(RoutineContainer):
     """
 
 
-class LibraryContainer(CaptureContainer):
+class LibraryContainer(EnclosingContainer):
     """
     A Library contains routines, constants and more.
     """
@@ -572,10 +595,12 @@ class CommentLine(CodeLine):
 
     _COMMENT_PREFIX = "#"
 
-    def __init__(self, text, parent, level, **params):
-        line = f"{self._COMMENT_PREFIX} {text}"
+    def __init__(self, comment, parent, level, **params):
+        line = f"{self._COMMENT_PREFIX} {comment}"
         super().__init__(line, parent=parent, level=level, **params)
 
+
+CodeContainer._GLOBAL_CLASS_REFS["COMMENT"] = CommentLine
 
 # class VirtualContainer(CodeContainer):
 #     """The part of a CodeContainer that adds the virtual stuff"""
@@ -618,7 +643,7 @@ if __name__ == "__main__":
         LibRoutineLocalVariable,
     )
 
-    foo = DefinitionContainer(None, 0)
+    foo = DefinitionContainer(None, 0, comment="foobar")
     print(foo.capture_check(LibRoutineConstant(name="foo", value=1337)))
     # False
 
@@ -650,13 +675,23 @@ if __name__ == "__main__":
     print(foo.capture_check(LibRoutineVariable(name="foo", size=2)))
     # True
 
-    SUMMARY = """
-    Definition section provides capture capability. Builder has mapping from instruction type to class. CRO is analyzed to find most specific fit among supported codecontainers. 
+    SUMMARY = (
+        "Definition section provides capture capability. Builder has mapping"
+        + "from instruction type to class. CRO is analyzed to find most specific"
+        + "fit among supported codecontainers. "
+    )
 
-    CodeLines do not contain other containers and break any recursion. In the end, anything is broken down into codelines, where indentation is handled.
-
-    I give up on the idea, that code containers are made from instruction. The assignment between instruction types and codecontainer subclasses is made by the Builder instance and only preceding Optimizers can influence the ultimate instruction tree.
-    """
+    SUMMARY += (
+        "\n"
+        + "CodeLines do not contain other containers and break any recursion. "
+        + "In the end, anything is broken down into codelines, where indentation is handled. "
+    )
+    SUMMARY += (
+        "\n"
+        + "I give up on the idea, that code containers are made from instruction. "
+        + "The assignment between instruction types and codecontainer subclasses is made by the "
+        + "Builder instance and only preceding Optimizers can influence the ultimate instruction tree."
+    )
     # print(SUMMARY)
 
     for tline in multiline_iterable(
@@ -693,3 +728,5 @@ if __name__ == "__main__":
     # actions, ultimately generating containers with the right arguments. Context is a attribute of
     # the builder then. A language can be kept in terms of CodeContainers, while builders implement
     # new strategies of combining them.
+
+    print(list(foo.content))

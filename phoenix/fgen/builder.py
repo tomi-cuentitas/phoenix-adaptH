@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 17/03/2025, 14:03
-# Version:     0.0.462
+# Last Update: 17/03/2025, 15:10
+# Version:     0.0.519
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -26,6 +26,94 @@ success = log.success
 debug = log.debug
 warn = log.warn
 error = log.error
+
+
+class Context:
+    """
+    A context indicating the intermediate state of a builder when going down
+    the instruction tree. Keep track of indentation level, local variables,
+    and variable environments. And maybe more (hence the class)
+    """
+
+    def __init__(self, copy_from=None, /, **parameters):
+        self._params = {}
+        if copy_from is not None:
+            if not isinstance(copy_from, (Context, dict)):
+                raise TypeError("can only copy from dict or context")
+            self._params.update(copy_from)
+            # if isinstance(copy_from, dict):
+            # elif isinstance(copy_from, Context):
+            #     self._params.update(copy_from._params)
+        self._params.update(parameters)
+
+    def __getitem__(self, key):
+        return self._params[key]
+
+    def __setitem__(self, key, value):
+        self._params[key] = value
+
+    def __contains__(self, key):
+        return key in self._params
+
+    def update(self, other):
+        """map to dicts update routine"""
+        self._params.update(other)
+
+    def keys(self):
+        """generator from dict's keys routine"""
+        yield from self._params.keys()
+
+    def items(self):
+        """generator from dict's items routine"""
+        yield from self._params.items()
+
+    def values(self):
+        """generator from dict's values routine"""
+        yield from self._params.values()
+
+    @property
+    def parent(self):
+        """access read-only attribute parent"""
+        return self._params["parent"]
+
+    @property
+    def level(self):
+        """access read-only attribute level"""
+        return self._params["level"]
+
+    @property
+    def environment(self):
+        """access read-only attribute environment"""
+        return self._params["environment"]
+
+    @property
+    def namespace(self):
+        """access read-only attribute namespace"""
+        return self._params["namespace"]
+
+    def copy(self, **more_params):
+        """make a copy, optionally overwrite"""
+        # if skipped is None:
+        #     skipped = []
+        # reduced_dict = {
+        #     key: value for key, value in self.items() if key not in skipped
+        # }
+        return type(self)(**self._params).update(more_params)
+
+    # def pop(self, key, exception=True):
+    #     """remove from context"""
+    #     if key not in self._params:
+    #         if exception:
+    #             raise KeyError(f"key {key} not found in context")
+    #         return None
+    #     value = self._params[key]
+    #     del self._params[key]
+    #     return value
+
+    # def without(self, *keys):
+    #     """get a copy that does not contain certain keys"""
+    #     copy = self.copy(skipped=keys)
+    #     return copy
 
 
 class Optimizer:
@@ -177,14 +265,29 @@ class Builder(Optimizer, identifier="GENERIC"):
         **buildargs,
     ):
         """takes an instruction and generate code containers from it"""
+
         closest_match = self.match_instruction(instruction)
 
         # there has to be a match, otherwise the builder cannot build this.
         if closest_match is None:
             raise TypeError("Instruction class not supported")
 
+        parent = context.parent
+        level = context.level
+        environment = context.environment
+        namespace = context.namespace
+
+        debug(f"\tTarget     : {instruction}")
+        debug(f"\tBuilder    : {self}")
+        debug(f"\tEnvironment: {environment}")
+        debug(f"\tLevel      : {level}")
+        debug(f"\tParent     : {parent}")
+        debug(f"\tNamespace  : {namespace}")
+        debug(f"\tbuild args : {buildargs}")
+
         yield from closest_match(
             instruction=instruction,
+            builder=self,
             context=context,
             buildargs=buildargs,
         )
@@ -208,11 +311,13 @@ class Builder(Optimizer, identifier="GENERIC"):
         info("start with root instruction node")
 
         # context = (level, environment, parent, namespace)
-        context: Tuple[
-            int, InstructionEnvironment, Instruction | None, Dict[str, Any]
-        ]
 
-        context = (0, InstructionEnvironment(), None, {})
+        context = Context(
+            level=0,
+            environment=InstructionEnvironment(),
+            parent=None,
+            namespace={},
+        )
 
         yield from self.containers_from_instruction(
             optimized_tree,
