@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 17/03/2025, 16:45
-# Version:     0.0.812
+# Last Update: 17/03/2025, 17:56
+# Version:     0.0.823
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -698,7 +698,8 @@ if __name__ == "__main__":
         "\n"
         + "I give up on the idea, that code containers are made from instruction. "
         + "The assignment between instruction types and codecontainer subclasses is made by the "
-        + "Builder instance and only preceding Optimizers can influence the ultimate instruction tree."
+        + "Builder instance and only preceding Optimizers can influence the ultimate instruction "
+        + "tree."
     )
     # print(SUMMARY)
 
@@ -737,4 +738,17 @@ if __name__ == "__main__":
     # the builder then. A language can be kept in terms of CodeContainers, while builders implement
     # new strategies of combining them.
 
+    print()
     print(list(foo.content))
+    print()
+    print(
+        "InstructionVariables are passed up in the tree towards the root. If the Variable "
+        "comes from a ParallelFrame subclass, it is either caught in a for-loop or in a kernel "
+        "definition. The order of the variables passed up should be standardized, so it can be "
+        "assiged to the proper loop generator such as kernel index or loop. If it is handled, it "
+        "is considered done and not passed up further."
+        "\n\n"
+        "For that reason there should only be a single parallelization block when a gpu kernel "
+        "is compiled, which maps all the FrameVariables onto outer for loops and blocks/threads."
+    )
+    print()
