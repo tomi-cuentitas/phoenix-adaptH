@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 14/03/2025, 11:30
-# Version:     0.0.429
+# Last Update: 17/03/2025, 14:03
+# Version:     0.0.462
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from typing import Dict, Set, Tuple, Any
+from typing import Dict, Set, Tuple, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable
@@ -107,7 +107,7 @@ class Builder(Optimizer, identifier="GENERIC"):
     """
 
     _CLSNAME_PREFIX = "Builder"
-    _supported_instruction_classes: Dict[type, type] = {}
+    _supported_instruction_classes: Dict[type, Generator] = {}
     _not_supported_instruction_classes: Set[type] = set()
 
     _VERSN = 0
@@ -124,24 +124,28 @@ class Builder(Optimizer, identifier="GENERIC"):
 
     def _detail_log_lines(self):
         yield from Optimizer._detail_log_lines(self)
-        yield f"supported ({len(type(self)._supported_instruction_classes)}):"
-        for instruction_type in type(self)._supported_instruction_classes:
-            yield f"  - {instruction_type}"
-        yield f"excluded ({len(type(self)._not_supported_instruction_classes)}):"
-        for instruction_type in type(self)._not_supported_instruction_classes:
+        supported = list(type(self)._supported_instruction_classes.keys())
+        yield f"supported ({len(supported)}):"
+        for instruction_type in supported:
+            yield f"  + {instruction_type}"
+        excluded = list(type(self)._not_supported_instruction_classes)
+        yield f"excluded ({len(excluded)}):"
+        for instruction_type in excluded:
             yield f"  - {instruction_type}"
 
     @classmethod
     @log.wrap_call
-    def add_supported_instruction_cls(cls, instruction_cls, target):
-        """add a new instruction class to recognize and assign a proper target"""
-        cls._supported_instruction_classes[instruction_cls] = target
+    def set_supported_instruction_cls(
+        cls, instruction_cls: type, generator: Generator
+    ):
+        """add a new instruction class to recognize and assign a proper generator"""
+        cls._supported_instruction_classes[instruction_cls] = generator
         if instruction_cls in cls._not_supported_instruction_classes:
             cls._not_supported_instruction_classes.remove(instruction_cls)
 
     @classmethod
     @log.wrap_call
-    def add_non_supported_instruction_cls(cls, instruction_cls):
+    def set_non_supported_instruction_cls(cls, instruction_cls):
         """remember that this kind of instruction is not supported"""
         cls._not_supported_instruction_classes.add(instruction_cls)
         if instruction_cls in cls._supported_instruction_classes:
@@ -154,41 +158,40 @@ class Builder(Optimizer, identifier="GENERIC"):
             raise TypeError("Optimizer must be an instance of Optimizer")
         self._optimizers.append(optimizer)
 
-    # @log.wrap_call
-    # def find_container_match(self, instruction):
-    #     """find a matching container for instruction"""
-    #     for elder in instruction.__class__.__mro__:
-    #         # note: mro contains type(self) and then all parents
-
-    #         if elder in type(self)._not_supported_instruction_classes:
-    #             raise TypeError("Instruction class not supported")
-    #         if elder in type(self)._supported_instruction_classes:
-    #             return type(self)._supported_instruction_classes[elder]
-    #     return None
-
-    # @log.wrap_call_gen
-    # def build_from_instruction(
-    #     self,
-    #     instruction,
-    #     context,
-    #     **buildargs,
-    # ):
-    #     """takes an instruction and generate code containers from it"""
-    #     closest_match = self.find_container_match(instruction)
-
-    #     # there has to be a match, otherwise the builder cannot build this.
-    #     if closest_match is None:
-    #         raise TypeError("Instruction class not supported")
-
-    #     return closest_match.container_from_instruction(
-    #         instruction=instruction,
-    #         context=context,
-    #         buildargs=buildargs,
-    #     ).build(self, context, buildargs)
-    #     # fill with content. This is not done on init automatically to be able
-    #     # to implement that lazy as well.
-
     @log.wrap_call
+    def match_instruction(self, instruction):
+        """find a matching container for instruction"""
+        for elder in instruction.__class__.__mro__:
+            # note: mro contains type(self) and then all parents
+            if elder in type(self)._not_supported_instruction_classes:
+                return None
+            if elder in type(self)._supported_instruction_classes:
+                return type(self)._supported_instruction_classes[elder]
+        return None
+
+    @log.wrap_call_gen
+    def containers_from_instruction(
+        self,
+        instruction,
+        context,
+        **buildargs,
+    ):
+        """takes an instruction and generate code containers from it"""
+        closest_match = self.match_instruction(instruction)
+
+        # there has to be a match, otherwise the builder cannot build this.
+        if closest_match is None:
+            raise TypeError("Instruction class not supported")
+
+        yield from closest_match(
+            instruction=instruction,
+            context=context,
+            buildargs=buildargs,
+        )
+        # fill with content. This is not done on init automatically to be able
+        # to implement that lazy as well.
+
+    @log.wrap_call_gen
     def generate_container_tree(self, instruction, **buildargs):
         """
         Build the code from the instruction tree. This is meant to be called
@@ -210,12 +213,13 @@ class Builder(Optimizer, identifier="GENERIC"):
         ]
 
         context = (0, InstructionEnvironment(), None, {})
-        return self.build_from_instruction(
+
+        yield from self.containers_from_instruction(
             optimized_tree,
             context=context,
             **{**self._params, **buildargs},
         )
-        # TODO
+
         info("reached end of instruction build")
 
     # @log.wrap_call

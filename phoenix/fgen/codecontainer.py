@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 14/03/2025, 11:30
-# Version:     0.0.738
+# Last Update: 17/03/2025, 14:24
+# Version:     0.0.747
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -415,18 +415,17 @@ class LoopContainer(EnclosingContainer):
     """
 
 
-class DefinitionContainer(CodeContainer):
+class CaptureContainer(CodeContainer):
     """
-    A code container that defines stuff and prevents them from getting passed
-    on during requirement iterator. Supports a filtering function that decides
-    on which type of requirements are implemented here or passed on.
+    Generalization of Definition and Initialization Container, important for class
+    hierarchy.
     """
 
     def __init__(self, parent, level, **params) -> None:
         super().__init__(parent=parent, level=level, **params)
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
-        self._provide: Set[LibRoutineVariable] = set()
+        self._captured: Set[LibRoutineVariable] = set()
 
     def add_capture(self, capture: str | Callable) -> None:
         """add a type of requirement to capture"""
@@ -448,10 +447,13 @@ class DefinitionContainer(CodeContainer):
             return True
         return False
 
-    def reset_provided_requirements(self):
+    def reset_requirements(self):
+        """
+        Resetting the requirements in self and children is required before update
+        """
         for content in self.content:
-            content.reset_provided()
-        self._provide = set()
+            content.reset_requirements()
+        self._captured = set()
 
     def update_requirements(
         self,
@@ -459,30 +461,55 @@ class DefinitionContainer(CodeContainer):
         """As parent, but keep the requirements that the filter catches"""
         for requirement in super().update_requirements():
             if self.capture_check(requirement):
-                self._provide.add(requirement)
+                self._captured.add(requirement)
             else:
                 yield requirement
 
 
-# class KernelContainer(DefinitionContainer):
-#     """
-#     A KernelContainer represents a piece of code that is supposed to be called
-#     in various memory locations, potentially simultaneously. KernelContainers
-#     might map to parametrized auxilliary functions or actual kernels on GPUs.
-
-#     An instruction block from a map instruction is preferably rendered into a
-#     kernel
-#     """
+class DefinitionContainer(CaptureContainer):
+    """
+    A code container that defines stuff and prevents them from getting passed
+    on during requirement iterator. Supports a filtering function that decides
+    on which type of requirements are implemented here or passed on.
+    """
 
 
-class RoutineContainer(DefinitionContainer):
+class InitializationContainer(CaptureContainer):
+    """
+    As the definition container, but about whether a variable is initialized
+    from a value rather than only defined via datatype and more.
+    Constants are typically defined upon definition, but that has to be properly
+    done during container creation.
+    """
+
+
+class ParallelContainer(CaptureContainer):
+    """
+    The parallel capture container captures all variables that manage and realize
+    parallelization. It can render into a loop, a kernel or more.
+    The parallel container implements some context handling.
+    """
+
+
+class RoutineContainer(CaptureContainer):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
     """
 
 
-class LibraryContainer(DefinitionContainer):
+class KernelContainer(RoutineContainer):
+    """
+    A KernelContainer represents a piece of code that is supposed to be called
+    in various memory locations, potentially simultaneously. KernelContainers
+    might map to parametrized auxilliary functions or actual kernels on GPUs.
+
+    An instruction block from a map instruction is preferably rendered into a
+    kernel. Kernels are treated as subtypes of functions
+    """
+
+
+class LibraryContainer(CaptureContainer):
     """
     A Library contains routines, constants and more.
     """
