@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 18/03/2025, 16:35
-# Version:     0.0.543
+# Last Update: 18/03/2025, 19:21
+# Version:     0.0.583
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,8 +16,8 @@
 from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
 
-# from phoenix.fgen.instruction import Instruction
-# from phoenix.fgen.libroutinevar import LibRoutineVariable
+from phoenix.fgen.instruction import Instruction
+from phoenix.fgen.libroutinevar import LibRoutineVariable
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
@@ -36,85 +36,82 @@ class Context:
     and variable environments. And maybe more (hence the class)
     """
 
-    def __init__(self, copy_from=None, /, **parameters):
-        self._params = {}
-        if copy_from is not None:
-            if not isinstance(copy_from, (Context, dict)):
-                raise TypeError("can only copy from dict or context")
-            self._params.update(copy_from)
-            # if isinstance(copy_from, dict):
-            # elif isinstance(copy_from, Context):
-            #     self._params.update(copy_from._params)
-        self._params.update(parameters)
+    def __init__(
+        self,
+        /,
+        *,
+        parent: Instruction | None = None,
+        level=0,
+        environment: InstructionEnvironment | None = None,
+        namespace: Set[LibRoutineVariable] | None = None,
+    ):
+        if environment is None:
+            environment = InstructionEnvironment()
+        if namespace is None:
+            namespace = set()
 
-    def __getitem__(self, key):
-        return self._params[key]
-
-    def __setitem__(self, key, value):
-        self._params[key] = value
-
-    def __contains__(self, key):
-        return key in self._params
-
-    def update(self, other):
-        """map to dicts update routine"""
-        self._params.update(other)
-
-    def keys(self):
-        """generator from dict's keys routine"""
-        yield from self._params.keys()
-
-    def items(self):
-        """generator from dict's items routine"""
-        yield from self._params.items()
-
-    def values(self):
-        """generator from dict's values routine"""
-        yield from self._params.values()
+        self._parent = parent
+        self._level = level
+        self._namespace = namespace
+        self._environment = environment
 
     @property
     def parent(self):
         """access read-only attribute parent"""
-        return self._params["parent"]
+        return self._parent
 
     @property
     def level(self):
         """access read-only attribute level"""
-        return self._params["level"]
+        return self._level
 
     @property
     def environment(self):
         """access read-only attribute environment"""
-        return self._params["environment"]
+        return self._environment
 
     @property
     def namespace(self):
         """access read-only attribute namespace"""
-        return self._params["namespace"]
+        return self._namespace
 
-    def copy(self, **more_params):
-        """make a copy, optionally overwrite"""
-        # if skipped is None:
-        #     skipped = []
-        # reduced_dict = {
-        #     key: value for key, value in self.items() if key not in skipped
-        # }
-        return type(self)(**self._params).update(more_params)
+    def inherit(
+        self,
+        parent,
+        link_namespace=False,
+        link_environment=True,
+        namespace=None,
+    ):
+        """
+        Inherit to a new context object.
+        Increment the level, optionally extend the namespace.
+        Default behaviour for previous namespace and environment
+        """
+        if link_namespace:
+            current_namespace = self.namespace
+        else:
+            current_namespace = set(self.namespace)
 
-    # def pop(self, key, exception=True):
-    #     """remove from context"""
-    #     if key not in self._params:
-    #         if exception:
-    #             raise KeyError(f"key {key} not found in context")
-    #         return None
-    #     value = self._params[key]
-    #     del self._params[key]
-    #     return value
+        if link_environment:
+            environment = self.environment
+        else:
+            environment = self.environment.copy()
 
-    # def without(self, *keys):
-    #     """get a copy that does not contain certain keys"""
-    #     copy = self.copy(skipped=keys)
-    #     return copy
+        if namespace is not None:
+            for var in namespace:
+                for obj in current_namespace:
+                    if obj.name == var.name:
+                        namespace.remove(obj)
+                        debug(f"overwrite duplicate namespace entry '{obj}'")
+                current_namespace.add(var)
+                debug(f"append namespace entry for '{var.name}'")
+
+        return Context(
+            level=self.level + 1,
+            namespace=namespace,
+            environment=environment,
+            parent=parent,
+        )
 
 
 class Optimizer:
@@ -313,17 +310,12 @@ class Builder(Optimizer, identifier="GENERIC"):
         if generating is None:
             raise TypeError("Instruction class not supported")
 
-        parent = context.parent
-        level = context.level
-        environment = context.environment
-        namespace = context.namespace
-
         debug(f"\tTarget     : {instruction}")
         debug(f"\tBuilder    : {self}")
-        debug(f"\tEnvironment: {environment}")
-        debug(f"\tLevel      : {level}")
-        debug(f"\tParent     : {parent}")
-        debug(f"\tNamespace  : {namespace}")
+        debug(f"\tEnvironment: {context.environment}")
+        debug(f"\tLevel      : {context.level}")
+        debug(f"\tParent     : {context.parent}")
+        debug(f"\tNamespace  : {context.namespace}")
         debug(f"\tbuild args : {buildargs}")
 
         yield from generating(
@@ -371,7 +363,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             level=0,
             environment=InstructionEnvironment(),
             parent=None,
-            namespace={},
+            namespace=set(),
         )
 
         yield from self.containers_from_instruction(

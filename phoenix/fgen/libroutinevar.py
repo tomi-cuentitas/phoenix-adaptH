@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 17/03/2025, 16:07
-# Version:     0.0.260
+# Last Update: 18/03/2025, 19:16
+# Version:     0.0.268
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -26,43 +26,46 @@ class LibRoutineVariable:
     _VAR_IDENTIFIER = "GENERIC"
     _CLASS_BASE = "var"
 
-    _class_namepool: Set[str] = set()
+    _class_namespace: Set[LibRoutineVariable] = set()
     # if this ever becomes a dict, it must be weak!
 
     def __init__(
         self,
         size=None,
         name=None,
-        namepool=None,
+        namespace=None,
         prefix=None,
         suffix=None,
     ):
-        if namepool is None:
-            namepool = type(self)._class_namepool
-        self._namepool = namepool
+        if namespace is None:
+            namespace = type(self)._class_namespace
+        self._namespace = namespace
         if name is None:
             name = type(self)._CLASS_BASE
         name = type(self).autoname(
-            namepool=namepool,
+            namespace=namespace,
             base=name,
             prefix=prefix,
             suffix=suffix,
         )
         assert name is not None
-        assert name not in namepool
+        assert name not in namespace
         self._name = name
-        self._namepool.add(name)
         self._size = size
+        self._namespace.add(self)
 
     def __str__(self):
         if self._size is None:
             return f"{self._name}"
         return f"{self._name}[{self._size}]"
 
+    def __repr__(self):
+        return str(self)
+
     @classmethod
     def autoname(
         cls,
-        namepool: Set[str] | None,
+        namespace: Set[LibRoutineVariable] | None,
         base=None,
         prefix=None,
         suffix=None,
@@ -75,22 +78,22 @@ class LibRoutineVariable:
             name = f"{prefix}_{name}"
         if suffix is not None:
             name = f"{name}_{suffix}"
-        if namepool is None:
-            namepool = cls._class_namepool
-        assert namepool is not None
+        if namespace is None:
+            namespace = cls._class_namespace
+        assert namespace is not None
         num = 0
         out = name
         while True:
-            if out not in namepool:
+            if out not in [var.name for var in namespace]:
                 break
             num += 1
             out = f"{name}{num}"
         return out
 
     def free_name(self):
-        """discard the name in the namepool"""
+        """discard the name in the namespace"""
         try:
-            self._namepool.remove(self._name)
+            self._namespace.remove(self)
         except KeyError:
             pass
         except AttributeError:
@@ -114,12 +117,12 @@ class LibRoutineVariable:
     def __del__(self):
         self.free_name()
 
-    def __init_subclass__(cls, prefix=None, namepool=None):
-        if namepool is None:
-            namepool = set()
+    def __init_subclass__(cls, prefix=None, namespace=None):
+        if namespace is None:
+            namespace = set()
         if prefix is not None:
             cls._CLASS_BASE = prefix
-        cls._class_namepool = namepool
+        cls._class_namespace = namespace
 
     def expr_at_offset(self, offset):
         """expression at offset"""
@@ -153,8 +156,8 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
     # this is the counter object, not the lookup object. Each parallel environment will have
     # exactly one of these.
 
-    def __init__(self, origin=None, size=None, namepool=None, prefix=None):
-        super().__init__(size=size, namepool=namepool, prefix=prefix)
+    def __init__(self, origin=None, size=None, namespace=None, prefix=None):
+        super().__init__(size=size, namespace=namespace, prefix=prefix)
         if origin is None:
             raise ValueError("FrameSelector requires origin.")
         self._origin = origin
@@ -221,7 +224,7 @@ class LibRoutineConstant(LibRoutineVariable):
         super().__init__(
             name=name,
             size=None,
-            namepool=None,
+            namespace=None,
             prefix=None,
             suffix=None,
         )
@@ -246,7 +249,7 @@ class LibRoutineConstant(LibRoutineVariable):
 
 
 if __name__ == "__main__":
-    othernamepool: Set[str] = set()
+    othernamespace: Set[str] = set()
     a = None
     b = None
     c = None
@@ -255,88 +258,88 @@ if __name__ == "__main__":
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     b = LibRoutineInputVariable(42)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     c = LibRoutineLocalVariable()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     a = None
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     a = LibRoutineLocalVariable(1)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     d = LibRoutineLocalVariable(1)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     a = None
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     c = None
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
-    y = LibRoutineLocalVariable(8, namepool=othernamepool)
+    y = LibRoutineLocalVariable(8, namespace=othernamespace)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
-    x = LibRoutineLocalVariable(8, namepool=othernamepool)
+    x = LibRoutineLocalVariable(8, namespace=othernamespace)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
     x.free_name()
     del x
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
-        LibRoutineLocalVariable._class_namepool,
-        len(LibRoutineLocalVariable._class_namepool),
-        othernamepool,
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
     )
