@@ -5,18 +5,19 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 17/03/2025, 15:10
-# Version:     0.0.519
+# Last Update: 18/03/2025, 15:30
+# Version:     0.0.535
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from typing import Dict, Set, Tuple, Any, Generator
+from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
-from phoenix.fgen.instruction import Instruction
-from phoenix.fgen.libroutinevar import LibRoutineVariable
+
+# from phoenix.fgen.instruction import Instruction
+# from phoenix.fgen.libroutinevar import LibRoutineVariable
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
@@ -189,6 +190,29 @@ class Optimizer:
         return instruction_tree.deepcopy()
 
 
+class ValidationError(Exception):
+    """An Error exception class thrown from validator"""
+
+    def __init__(self, message):
+        super().__init__(self, message)
+
+
+class Validator:
+    """Validators check whether an instruction tree matches all requirements"""
+
+    def __init__(self, **parameters):
+        self._params = parameters
+
+    def apply(self, instruction_tree):
+        """apply the validator to an instruction tree"""
+        # check if all requirements are fulfilled
+        return True
+
+    def raise_exception(self, message):
+        """raise an exception from the tree"""
+        return ValidationError(message)
+
+
 class Builder(Optimizer, identifier="GENERIC"):
     """
     Make codecontainer from instruction tree
@@ -197,6 +221,9 @@ class Builder(Optimizer, identifier="GENERIC"):
     _CLSNAME_PREFIX = "Builder"
     _supported_instruction_classes: Dict[type, Generator] = {}
     _not_supported_instruction_classes: Set[type] = set()
+
+    _class_optimizers: List[Optimizer] = []
+    _class_validators: List[Validator] = []
 
     _VERSN = 0
     _BUILD = 0
@@ -209,6 +236,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         if _log_welcome:
             self._welcome_log()
         self._optimizers = []
+        self._validators = []
 
     def _detail_log_lines(self):
         yield from Optimizer._detail_log_lines(self)
@@ -240,11 +268,18 @@ class Builder(Optimizer, identifier="GENERIC"):
             del cls._supported_instruction_classes[instruction_cls]
 
     @log.wrap_call
-    def use_optimizer(self, optimizer):
+    def include_optimizer(self, optimizer):
         """append an optimizer to the list"""
         if not isinstance(optimizer, Optimizer):
             raise TypeError("Optimizer must be an instance of Optimizer")
         self._optimizers.append(optimizer)
+
+    @log.wrap_call
+    def include_validator(self, validator):
+        """append an validator to the list"""
+        if not isinstance(validator, Validator):
+            raise TypeError("validator must be an instance of Validator")
+        self._validators.append(validator)
 
     @log.wrap_call
     def match_instruction(self, instruction):
@@ -307,6 +342,20 @@ class Builder(Optimizer, identifier="GENERIC"):
         for num, optimizer in enumerate(self._optimizers):
             info(f"apply optimizer #{num + 1}")
             optimized_tree = optimizer.apply(optimized_tree)
+
+        for num, optimizer in enumerate(type(self)._class_optimizers):
+            info(f"apply class optimizer #{num + 1}")
+            optimized_tree = optimizer.apply(optimized_tree)
+
+        for num, validator in enumerate(self._validators):
+            info(f"apply validator #{num + 1}")
+            if not validator.apply(optimized_tree):
+                raise validator.raise_exception(optimized_tree)
+
+        for num, validator in enumerate(type(self)._class_validators):
+            info(f"apply class validator #{num + 1}")
+            if not validator.apply(optimized_tree):
+                raise validator.raise_exception(optimized_tree)
 
         info("start with root instruction node")
 
@@ -423,3 +472,9 @@ if __name__ == "__main__":
     # - generate the code container with the current information known,
     #   implementing the proper libroutine variables and handle all
     #   dependencies, calls, ...
+
+
+# required optimizers
+# - GPU: resolve parallel environments that contain multiple other parallel environments
+# - translate the most inner group into a parallel group
+#   -> group.unpack() to MapOffset
