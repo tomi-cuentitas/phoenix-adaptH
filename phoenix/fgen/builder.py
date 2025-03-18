@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 18/03/2025, 16:23
-# Version:     0.0.539
+# Last Update: 18/03/2025, 16:35
+# Version:     0.0.543
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -298,10 +298,19 @@ class Builder(Optimizer, identifier="GENERIC"):
     ):
         """takes an instruction and generate code containers from it"""
 
-        closest_match = self.match_instruction(instruction)
+        generating = self.match_instruction(instruction)
+        # match instruction returns a callable referred to as generating.
+        # generating takes the instruction, the builder, a context object and
+        # buildargs as arguments and yields all code containers that are built
+        # from there. The code containers are filled already, so calling that
+        # routine on the tree root will recursively trigger all children to be
+        # built recursively.
+        # As builder is passed as an argument and the context is updated upon
+        # traversing the branches, the generating callables can call
+        # containers_from_instruction on the children.
 
         # there has to be a match, otherwise the builder cannot build this.
-        if closest_match is None:
+        if generating is None:
             raise TypeError("Instruction class not supported")
 
         parent = context.parent
@@ -317,7 +326,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         debug(f"\tNamespace  : {namespace}")
         debug(f"\tbuild args : {buildargs}")
 
-        yield from closest_match(
+        yield from generating(
             instruction=instruction,
             builder=self,
             context=context,
@@ -372,31 +381,6 @@ class Builder(Optimizer, identifier="GENERIC"):
         )
 
         info("reached end of instruction build")
-
-    # @log.wrap_call
-    # def get_signature(
-    #     self,
-    #     instruction: Instruction,
-    #     known_variables: Dict[type, Tuple[str, LibRoutineVariable]] | None,
-    # ):
-    #     """Get an instruction's call signature"""
-
-    #     if known_variables is None:
-    #         known_variables = {}
-
-    #     # ADAA types of OUT, INOUT and IN. Or subsets of this. Can be purely INOUT.
-    #     # Builder class can decide on how to handle that.
-    #     #
-    #     # example for usage:
-    #     # When GPU uses mapped memory, write-only regions can be of performance advantage
-    #     # the mapping refers to instruction variables.
-    #     # InOut Variables might be treated differently w.r.t. parallelization and racing
-    #     # conditions than pure in or pure out variables.
-    #     return ((), (), ())
-
-    # @log.wrap_call
-    # def generate_suffix(self):
-    #     """derive a name suffix from the parameters following a standardized pattern"""
 
 
 if __name__ == "__main__":
