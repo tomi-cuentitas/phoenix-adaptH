@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 18/03/2025, 15:30
-# Version:     0.0.535
+# Last Update: 18/03/2025, 16:23
+# Version:     0.0.539
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -192,9 +192,6 @@ class Optimizer:
 
 class ValidationError(Exception):
     """An Error exception class thrown from validator"""
-
-    def __init__(self, message):
-        super().__init__(self, message)
 
 
 class Validator:
@@ -441,7 +438,7 @@ if __name__ == "__main__":
     info("now let's do a critical one")
     try:
         mybuilder.test_the_log2("test")
-    except ValueError as e:
+    except ValueError:
         pass
     success("This line should be visible")
     warn("now it's getting serious...")
