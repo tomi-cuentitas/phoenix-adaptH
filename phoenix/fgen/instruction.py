@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 13/03/2025, 12:37
-# Version:     0.0.2831
+# Last Update: 19/03/2025, 17:36
+# Version:     0.0.2858
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -342,6 +342,11 @@ class Instruction:
         """get the instruction variables that are included in the instruction"""
         return
         yield
+
+    @classmethod
+    def class_identifier(cls):
+        """access the class identifier"""
+        return cls._ftype
 
 
 ###############################################################################
@@ -783,12 +788,17 @@ class ContentInstruction(Instruction, ftype="content"):
     @property
     def instructions(self):
         """access instructions"""
-        yield from self._content.instructions
+        yield self._content
+
+    @property
+    def content(self):
+        """access the content"""
+        return self._content
 
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
             memo = {}
-        copied_content = self._content.deepcopy(memo=memo, **kwargs)
+        copied_content = self.content.deepcopy(memo=memo, **kwargs)
         return type(self)(
             copied_content,
             itype=self.itype,
@@ -806,7 +816,7 @@ class ContentInstruction(Instruction, ftype="content"):
         self, the environment and a flag whether it is a leaf
         """
         # an environment does not count as recursive step!!
-        yield from self._content.walk(
+        yield from self.content.walk(
             environment=environment,
             recursive=recursive,
             include_groups=include_groups,
@@ -817,7 +827,7 @@ class ContentInstruction(Instruction, ftype="content"):
     ) -> Instruction:
         # environments are replaced by their transformed content
         return type(self)(
-            self._content.apply_environment(environment, memo=memo),
+            self.content.apply_environment(environment, memo=memo),
             **kwargs,
         )
 
@@ -849,9 +859,14 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
         super().__init__(content, itype=itype)
         self._environment = environment
 
+    @property
+    def environment(self):
+        """access read-only attribute environment"""
+        return self._environment
+
     def _dict_update(self):
         """get a full dict-like object"""
-        return {"environment": self._environment}
+        return {"environment": self.environment}
 
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
@@ -864,7 +879,7 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
                     if isinstance(val, Instruction)
                     else val
                 )
-                for key, val in self._environment.items()
+                for key, val in self.environment.items()
             },
             **kwargs,
         )
@@ -872,9 +887,9 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
     def _apply_environment(
         self, environment: InstructionEnvironment, memo: dict, **kwargs
     ) -> Instruction:
-        combined_environment = environment.merge(self._environment)
+        combined_environment = environment.merge(self.environment)
         # environments are replaced by their transformed content
-        return self._content.apply_environment(
+        return self.content.apply_environment(
             combined_environment, memo=memo, **kwargs
         )
 
@@ -891,7 +906,7 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
         # an environment does not count as recursive step!!
         if environment is None:
             environment = InstructionEnvironment()
-        combined_environment = environment.merge(self._environment)
+        combined_environment = environment.merge(self.environment)
         yield from super().walk(
             environment=combined_environment,
             recursive=recursive,
@@ -934,7 +949,7 @@ class OffsetEnvironmentInstruction(EnvironmentInstruction, ftype="offset"):
             raise TypeError(
                 "Outer variable must be of type InstructionVariable"
             )
-        self._environment.update(inner_class, outer_variable)
+        self.environment.update(inner_class, outer_variable)
         return self
 
 
@@ -961,56 +976,14 @@ class LinkVariableEnvironmentInstruction(
     def connect(self, inner_class, outer_class):
         """set the offset of a target class in content"""
         if isinstance(outer_class, type):
-            self._environment.update(inner_class, outer_class())
+            self.environment.update(inner_class, outer_class())
         elif isinstance(outer_class, InstructionVariable):
-            self._environment.update(inner_class, outer_class)
+            self.environment.update(inner_class, outer_class)
         else:
             raise TypeError(
                 "Assignment target must be variable class or variable instance"
             )
         return self
-
-
-###############################################################################
-#
-# SUBROUTINE ENVIRONMENT
-# ======================
-
-
-class SubroutineEnvironmentInstruction(
-    EnvironmentInstruction, ftype="subroutine"
-):
-    """
-    SubroutineGroup
-
-    suggests that upon implementation these instructions are grouped in a
-    subroutine
-    """
-
-    def __init__(self, operations, inp_variables, out_variables, itype=None):
-        super().__init__(operations, environment=None, itype=itype)
-        self._inp_variables = inp_variables
-        self._out_variables = out_variables
-
-    def _dict_update(self):
-        """get a full dict-like object"""
-        return {
-            "inp_vars": self._inp_variables,
-            "out_vars": self._out_variables,
-        }
-
-    @property
-    def inp_variables(self):
-        return tuple(self._inp_variables)
-
-    @property
-    def out_variables(self):
-        return tuple(self._out_variables)
-
-    def __deepcopy__(self, memo=None):
-        copied_environment = super().__deepcopy__(memo=memo)
-        copied_environment._inp_variables = tuple(self.inp_variables)
-        copied_environment._inp_variables = tuple(self.inp_variables)
 
 
 ###############################################################################
@@ -1043,6 +1016,11 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         super().__init__(content, itype=itype)
         self._environments = environments
 
+    @property
+    def environments(self):
+        """access read-only environments"""
+        yield from self._environments
+
     def _dict_update(self):
         """get a full dict-like object"""
         return {"environments": self._environments}
@@ -1050,21 +1028,16 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
     def __len__(self):
         return len(self._content) * len(self._environments)
 
-    @property
-    def instructions(self):
-        """access instructions"""
-        yield from self._content.instructions
-
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
             memo = {}
-        copied_content = self._content.deepcopy(memo=memo, **kwargs)
+        copied_content = self.content.deepcopy(memo=memo, **kwargs)
         return type(self)(
             copied_content,
             itype=self.itype,
             environments=[
-                environment.__deepcopy__()
-                for environment in self._environments
+                environment.deepcopy(memo=memo, **kwargs)
+                for environment in self.environments
             ],
             **kwargs,
         )
@@ -1080,9 +1053,9 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         self, the environment and a flag whether it is a leaf
         """
         # an environment does not count as recursive step!!
-        for thisenv in self._environments:
+        for thisenv in self.environments:
             combined_environment = environment.merge(thisenv)
-            yield from self._content.walk(
+            yield from self.content.walk(
                 environment=combined_environment,
                 recursive=recursive,
                 include_groups=include_groups,
@@ -1094,10 +1067,10 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         # environments are replaced by their transformed content
         return InstructionGroup(
             [
-                self._content._apply_environment(
+                self.content._apply_environment(
                     environment.merge(env), memo=memo, **kwargs
                 )
-                for env in self._environments
+                for env in self.environments
             ]
         )
 
@@ -1135,6 +1108,7 @@ class VariationInstruction(ContentInstruction, ftype="variation"):
         self._content = self._variations[key]
 
 
+_ = '''
 ###############################################################################
 #
 # BUILD PARAMETER
@@ -1178,6 +1152,47 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
         return super()._apply_environment(
             environment, memo=memo, buildargs={**self._buildargs}, **kwargs
         )
+'''
+
+
+###############################################################################
+#
+# SUBROUTINE ENVIRONMENT
+# ======================
+
+
+class RoutineInstruction(ContentInstruction, ftype="subroutine"):
+    """
+    SubroutineGroup
+
+    suggests that upon implementation these instructions are grouped in a
+    subroutine
+    """
+
+    def __init__(self, operations, inp_variables, out_variables, itype=None):
+        super().__init__(operations, itype=itype)
+        self._inp_variables = inp_variables
+        self._out_variables = out_variables
+
+    def _dict_update(self):
+        """get a full dict-like object"""
+        return {
+            "inp_vars": self._inp_variables,
+            "out_vars": self._out_variables,
+        }
+
+    @property
+    def inp_variables(self):
+        return tuple(self._inp_variables)
+
+    @property
+    def out_variables(self):
+        return tuple(self._out_variables)
+
+    def __deepcopy__(self, memo=None):
+        copied_environment = super().__deepcopy__(memo=memo)
+        copied_environment._inp_variables = tuple(self.inp_variables)
+        copied_environment._inp_variables = tuple(self.inp_variables)
 
 
 ###############################################################################
@@ -1377,7 +1392,7 @@ if __name__ == "__main__":
     for instruction in test_instructions.instructions:
         print(instruction._obj_id)
 
-    print(SubroutineEnvironmentInstruction._obj_id_count)
+    print(RoutineInstruction._obj_id_count)
     print(PolynomialInstruction._obj_id_count)
     print(LinearOperationInstruction._obj_id_count)
     print(AffineOperationInstruction._obj_id_count)

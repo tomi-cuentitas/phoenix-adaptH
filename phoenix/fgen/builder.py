@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 18/03/2025, 19:21
-# Version:     0.0.583
+# Last Update: 19/03/2025, 17:33
+# Version:     0.0.692
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,6 +19,19 @@ from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
+
+from phoenix.fgen.instruction import (
+    GenericInstruction,
+    EnvironmentInstruction,
+    MapApplyInstruction,
+    InstructionGroup,
+    RoutineInstruction,
+    ContentInstruction,
+    VariationInstruction,
+    KeyMapInstruction,
+    LinkVariableEnvironmentInstruction,
+    OffsetEnvironmentInstruction,
+)
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
 
@@ -77,40 +90,39 @@ class Context:
 
     def inherit(
         self,
-        parent,
-        link_namespace=False,
-        link_environment=True,
-        namespace=None,
+        parent=None,
+        extend_environment=None,
+        extend_namespace=None,
     ):
         """
         Inherit to a new context object.
         Increment the level, optionally extend the namespace.
         Default behaviour for previous namespace and environment
         """
-        if link_namespace:
-            current_namespace = self.namespace
-        else:
-            current_namespace = set(self.namespace)
+        namespace = set(self.namespace)
 
-        if link_environment:
-            environment = self.environment
-        else:
-            environment = self.environment.copy()
+        if parent is None:
+            parent = self.parent
 
-        if namespace is not None:
-            for var in namespace:
-                for obj in current_namespace:
-                    if obj.name == var.name:
-                        namespace.remove(obj)
-                        debug(f"overwrite duplicate namespace entry '{obj}'")
-                current_namespace.add(var)
-                debug(f"append namespace entry for '{var.name}'")
+        if extend_environment is None:
+            extend_environment = InstructionEnvironment()
+
+        if extend_namespace is None:
+            extend_namespace = set()
+
+        for var in extend_namespace:
+            for obj in namespace:
+                if obj.name == var.name:
+                    namespace.remove(obj)
+                    debug(f"overwrite duplicate namespace entry '{obj}'")
+            namespace.add(var)
+            debug(f"append namespace entry for '{var.name}'")
 
         return Context(
+            parent=parent,
             level=self.level + 1,
             namespace=namespace,
-            environment=environment,
-            parent=parent,
+            environment=self.environment.merge(extend_environment),
         )
 
 
@@ -213,6 +225,7 @@ class Builder(Optimizer, identifier="GENERIC"):
     """
 
     _CLSNAME_PREFIX = "Builder"
+
     _supported_instruction_classes: Dict[type, Generator] = {}
     _not_supported_instruction_classes: Set[type] = set()
 
@@ -232,34 +245,44 @@ class Builder(Optimizer, identifier="GENERIC"):
         self._optimizers = []
         self._validators = []
 
+        self._local_instruction_classes: Dict[type, Generator] = {}
+        self._forbidden_instruction_classes: Set[type] = set()
+
     def _detail_log_lines(self):
         yield from Optimizer._detail_log_lines(self)
         supported = list(type(self)._supported_instruction_classes.keys())
         yield f"supported ({len(supported)}):"
         for instruction_type in supported:
-            yield f"  + {instruction_type}"
+            yield f"  + {instruction_type.class_identifier()}"
         excluded = list(type(self)._not_supported_instruction_classes)
         yield f"excluded ({len(excluded)}):"
         for instruction_type in excluded:
             yield f"  - {instruction_type}"
 
-    @classmethod
-    @log.wrap_call
-    def set_supported_instruction_cls(
-        cls, instruction_cls: type, generator: Generator
-    ):
-        """add a new instruction class to recognize and assign a proper generator"""
-        cls._supported_instruction_classes[instruction_cls] = generator
-        if instruction_cls in cls._not_supported_instruction_classes:
-            cls._not_supported_instruction_classes.remove(instruction_cls)
+    def add_supported_instruction_class(self, instruction_class, handler):
+        """add a supported instruction class and its handler"""
+        # force cast a generator
+        self._local_instruction_classes[instruction_class] = handler
+
+    def add_forbidden_instruction_class(self, instruction_class):
+        """add a forbidden instruction class and its handler"""
+        self._forbidden_instruction_classes.add(instruction_class)
 
     @classmethod
     @log.wrap_call
-    def set_non_supported_instruction_cls(cls, instruction_cls):
+    def set_default_handler(cls, instruction_class: type, handler: Generator):
+        """add a new instruction class to recognize and assign a proper handler"""
+        cls._supported_instruction_classes[instruction_class] = handler
+        if instruction_class in cls._not_supported_instruction_classes:
+            cls._not_supported_instruction_classes.remove(instruction_class)
+
+    @classmethod
+    @log.wrap_call
+    def set_default_forbidden(cls, instruction_class):
         """remember that this kind of instruction is not supported"""
-        cls._not_supported_instruction_classes.add(instruction_cls)
-        if instruction_cls in cls._supported_instruction_classes:
-            del cls._supported_instruction_classes[instruction_cls]
+        cls._not_supported_instruction_classes.add(instruction_class)
+        if instruction_class in cls._supported_instruction_classes:
+            del cls._supported_instruction_classes[instruction_class]
 
     @log.wrap_call
     def include_optimizer(self, optimizer):
@@ -280,6 +303,14 @@ class Builder(Optimizer, identifier="GENERIC"):
         """find a matching container for instruction"""
         for elder in instruction.__class__.__mro__:
             # note: mro contains type(self) and then all parents
+
+            # check local classes
+            if elder in self._forbidden_instruction_classes:
+                return None
+            if elder in self._local_instruction_classes:
+                return self._local_instruction_classes[elder]
+
+            # check defaults
             if elder in type(self)._not_supported_instruction_classes:
                 return None
             if elder in type(self)._supported_instruction_classes:
@@ -295,7 +326,9 @@ class Builder(Optimizer, identifier="GENERIC"):
     ):
         """takes an instruction and generate code containers from it"""
 
-        generating = self.match_instruction(instruction)
+        handler = None
+
+        handler = self.match_instruction(instruction)
         # match instruction returns a callable referred to as generating.
         # generating takes the instruction, the builder, a context object and
         # buildargs as arguments and yields all code containers that are built
@@ -307,7 +340,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         # containers_from_instruction on the children.
 
         # there has to be a match, otherwise the builder cannot build this.
-        if generating is None:
+        if handler is None:
             raise TypeError("Instruction class not supported")
 
         debug(f"\tTarget     : {instruction}")
@@ -318,9 +351,9 @@ class Builder(Optimizer, identifier="GENERIC"):
         debug(f"\tNamespace  : {context.namespace}")
         debug(f"\tbuild args : {buildargs}")
 
-        yield from generating(
-            instruction=instruction,
+        yield from handler(
             builder=self,
+            instruction=instruction,
             context=context,
             buildargs=buildargs,
         )
@@ -374,8 +407,122 @@ class Builder(Optimizer, identifier="GENERIC"):
 
         info("reached end of instruction build")
 
+    def handle_basic_instruction(self, instruction, context, buildargs):
+        """default handler for basic instruction"""
+        raise NotImplementedError(
+            f"No handler for instruction {instruction}. "
+            "This base class should have never been invoked. "
+            f"Original instruction type: {instruction.class_identifier()}"
+        )
+        yield
+
+    def handle_group_instruction(self, instruction, context, buildargs):
+        """default handler for group instruction"""
+        for child in instruction.instructions:
+            yield from self.containers_from_instruction(
+                child,
+                context=context.inherit(),
+                **buildargs,
+            )
+
+    def handle_content_instruction(self, instruction, context, buildargs):
+        """default handler for content instruction"""
+        yield from self.containers_from_instruction(
+            instruction.content,
+            context=context.inherit(),
+            **buildargs,
+        )
+
+    def handle_generic_instruction(self, instruction, context, buildargs):
+        """default handler for generic instruction"""
+        return
+        yield
+
+    def handle_keymap_instruction(self, instruction, context, buildargs):
+        """default handler for keymap instruction"""
+        yield from self.handle_generic_instruction(
+            instruction, context, buildargs
+        )
+
+    def handle_routine_instruction(self, instruction, context, buildargs):
+        """default handler for routine instruction"""
+        return
+        yield
+
+    def handle_mapapply_instruction(self, instruction, context, buildargs):
+        """default handler for mapapply instruction"""
+        for environment in instruction.environments:
+            yield from self.containers_from_instruction(
+                instruction.content,
+                context=context.inherit(extra_environment=environment),
+                **buildargs,
+            )
+
+    def handle_variation_instruction(self, instruction, context, buildargs):
+        """default handler for variation instruction"""
+        yield from self.containers_from_instruction(
+            instruction.content,
+            context=context.inherit(),
+            **buildargs,
+        )
+
+    def handle_environment_instruction(self, instruction, context, buildargs):
+        """default handler for environment instruction"""
+        yield from self.containers_from_instruction(
+            instruction.content,
+            context=context.inherit(extra_environment=instruction.environment),
+            **buildargs,
+        )
+
+    def handle_offsetenv_instruction(self, instruction, context, buildargs):
+        """default handler for offsetenv instruction"""
+        yield from self.handle_environment_instruction(
+            instruction, context, buildargs
+        )
+
+    def handle_linkvar_instruction(self, instruction, context, buildargs):
+        """default handler for linkvar instruction"""
+        yield from self.handle_environment_instruction(
+            instruction, context, buildargs
+        )
+
+
+mappings = [
+    # base instruction
+    (Instruction, Builder.handle_basic_instruction),
+    #
+    # first order subclasses
+    (InstructionGroup, Builder.handle_group_instruction),
+    (ContentInstruction, Builder.handle_content_instruction),
+    #
+    # leaf instruction
+    (GenericInstruction, Builder.handle_generic_instruction),
+    (KeyMapInstruction, Builder.handle_keymap_instruction),
+    #
+    # content based
+    (RoutineInstruction, Builder.handle_routine_instruction),
+    (MapApplyInstruction, Builder.handle_mapapply_instruction),
+    (VariationInstruction, Builder.handle_variation_instruction),
+    #
+    # environments
+    (EnvironmentInstruction, Builder.handle_environment_instruction),
+    (LinkVariableEnvironmentInstruction, Builder.handle_linkvar_instruction),
+    (OffsetEnvironmentInstruction, Builder.handle_offsetenv_instruction),
+]
+
+for instruction_class, class_handler in mappings:
+    Builder.set_default_handler(instruction_class, class_handler)
 
 if __name__ == "__main__":
+    import sys
+
+    a = Builder()
+
+    test = InstructionGroup([])
+
+    a.containers_from_instruction(test)
+
+    sys.exit()
 
     class TestBuilder(Builder, identifier="TEST"):
         """A builder for pure testing purposes"""
