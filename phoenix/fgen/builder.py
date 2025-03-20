@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 20/03/2025, 14:13
-# Version:     0.0.788
+# Last Update: 20/03/2025, 16:15
+# Version:     0.0.803
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,7 +17,7 @@ from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
 
 from phoenix.fgen.instruction import Instruction
-from phoenix.fgen.libroutinevar import LibRoutineVariable
+from phoenix.fgen.libroutinevar import LibRoutineVariable, Namespace
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
 from phoenix.fgen.instruction import (
@@ -58,12 +58,10 @@ class Context:
         parent: Instruction | None = None,
         level=0,
         environment: InstructionEnvironment | None = None,
-        namespace: Set[LibRoutineVariable] | None = None,
+        namespace: Namespace | None = None,
     ):
         if environment is None:
             environment = InstructionEnvironment()
-        if namespace is None:
-            namespace = set()
 
         self._parent = parent
         self._level = level
@@ -94,14 +92,13 @@ class Context:
         self,
         parent=None,
         extend_environment=None,
-        extend_namespace=None,
+        namespace=None,
     ):
         """
         Inherit to a new context object.
         Increment the level, optionally extend the namespace.
         Default behaviour for previous namespace and environment
         """
-        namespace = set(self.namespace)
 
         if parent is None:
             parent = self.parent
@@ -109,16 +106,8 @@ class Context:
         if extend_environment is None:
             extend_environment = InstructionEnvironment()
 
-        if extend_namespace is None:
-            extend_namespace = set()
-
-        for var in extend_namespace:
-            for obj in namespace:
-                if obj.name == var.name:
-                    namespace.remove(obj)
-                    debug(f"overwrite duplicate namespace entry '{obj}'")
-            namespace.add(var)
-            debug(f"append namespace entry for '{var.name}'")
+        if namespace is None:
+            namespace = self.namespace
 
         return Context(
             parent=parent,

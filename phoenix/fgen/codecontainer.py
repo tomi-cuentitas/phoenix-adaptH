@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 20/03/2025, 14:20
-# Version:     0.0.866
+# Last Update: 20/03/2025, 16:58
+# Version:     0.0.910
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,7 +23,7 @@ from weakref import ReferenceType as wrReferenceType
 
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.instructionvar import InstructionEnvironment
-from phoenix.fgen.libroutinevar import LibRoutineVariable
+from phoenix.fgen.libroutinevar import LibRoutineVariable, Namespace
 
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
@@ -199,6 +199,32 @@ class CodeContainer:
 
         self._level = level
 
+    def requires(self, variable: LibRoutineVariable) -> None:
+        """request to use a variable"""
+        # potentially gets stuck in CaptureContainer
+        if not isinstance(variable, LibRoutineVariable):
+            raise TypeError("Dependencies must be LibRoutineVariables")
+        # self._requirements.add(variable)
+        self.send_variable(variable)
+
+    # def get_requirements(self):
+    #     """request required variables"""
+    #     self.send_required()
+    #     for container in self.content:
+    #         container.get_requirements()
+
+    # def send_required(self):
+    #     """send all required variables"""
+    #     for variable in self._requirements:
+    #         self._send_variable(variable)
+
+    def send_variable(self, variable):
+        """send the required variables up the tree"""
+        if self.parent is None:
+            return
+            raise ValueError("variable request got lost!")
+        self.parent.send_variable(variable)
+
     def _set_parent(self, parent):
         """private method to manage the parent reference"""
         if parent is None:
@@ -329,20 +355,14 @@ class CodeContainer:
         for container in containers:
             self._container_foot.append(container)
 
-    def requires(self, requirement: LibRoutineVariable) -> None:
-        """add a requirement to the codeblock"""
-        if not isinstance(requirement, LibRoutineVariable):
-            raise TypeError("Dependencies must be LibRoutineVariables")
-        self._requirements.add(requirement)
-
     def add_capture(self, capture: str | Callable) -> None:
         """add a type of requirement to capture"""
         raise TypeError(f"Cannot have caputure in class {type(self)}.")
 
-    def capture_check(self, requirement):
-        """perform a capture check for the requirement"""
-        # if not overwritten, generic CodeContainers do not captere anything
-        return False
+    # def capture_check(self, requirement):
+    #     """perform a capture check for the requirement"""
+    #     # if not overwritten, generic CodeContainers do not captere anything
+    #     return False
 
     # @classmethod
     # def compatibility_check(cls, signature):
@@ -412,11 +432,16 @@ class CaptureContainer(CodeContainer):
     hierarchy.
     """
 
-    def __init__(self, parent, level, **params) -> None:
+    def __init__(self, parent, level, namespace=None, **params) -> None:
         super().__init__(parent=parent, level=level, **params)
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
         self._captured: Set[LibRoutineVariable] = set()
+        if namespace is None:
+            assert self.parent is None
+            self._namespace = Namespace(self, None)
+        else:
+            self._namespace = namespace.inherit(self)
 
     def add_capture(self, capture: str | Callable) -> None:
         """add a type of requirement to capture"""
@@ -438,23 +463,38 @@ class CaptureContainer(CodeContainer):
             return True
         return False
 
-    def reset_requirements(self):
+    def provides(self, variable):
         """
-        Resetting the requirements in self and children is required before update
+        This CaptureContainer provides a variable.
+        It is also added to the namespace
         """
-        for content in self.content:
-            content.reset_requirements()
-        self._captured = set()
+        self._captured.add(variable)
+        self._namespace.add(variable)
 
-    def update_requirements(
-        self,
-    ) -> Generator[LibRoutineVariable, None, None]:
-        """As parent, but keep the requirements that the filter catches"""
-        for requirement in super().update_requirements():
-            if self.capture_check(requirement):
-                self._captured.add(requirement)
-            else:
-                yield requirement
+    # def reset_requirements(self):
+    #     """
+    #     Resetting the requirements in self and children is required before update
+    #     """
+    #     for content in self.content:
+    #         content.reset_requirements()
+    #     self._captured = set()
+
+    # def update_requirements(
+    #     self,
+    # ) -> Generator[LibRoutineVariable, None, None]:
+    #     """As parent, but keep the requirements that the filter catches"""
+    #     for requirement in super().update_requirements():
+    #         if self.capture_check(requirement):
+    #             self._captured.add(requirement)
+    #         else:
+    #             yield requirement
+
+    def send_variable(self, variable):
+        """send the required variables up the tree"""
+        if self.capture_check(variable):
+            self.provides(variable)
+        else:
+            super().send_variable(variable)
 
 
 class DefinitionContainer(CaptureContainer):

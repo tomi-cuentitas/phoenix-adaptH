@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 20/03/2025, 14:23
-# Version:     0.0.134
+# Last Update: 20/03/2025, 17:00
+# Version:     0.0.167
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -27,7 +27,7 @@ from phoenix.fgen.codecontainer import (
     RoutineContainer,
     ConditionalContainer,
 )
-
+from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
 
 ###############################################################################
 #
@@ -46,14 +46,24 @@ from phoenix.fgen.codecontainer import (
 class PTCodeLine(CodeLine):
     """Plain Text version of a StatementLine"""
 
+    some_aux_variable = LibRoutineLocalVariable("foobar")
+
     def get_codelines_body(self, indent, **kwargs):
         yield indent * "  " + self._line
+
+    def __init__(self, line, *args, **kwargs):
+        sline = f"{line} + {type(self).some_aux_variable}"
+        super().__init__(sline, *args, **kwargs)
+        self.requires(type(self).some_aux_variable)
+        print("self._requirements:", self._requirements)
 
 
 class PTCommentLine(CommentLine):
     """Plain Text version of a CommentLine"""
 
     _COMMENT_PREFIX = "#> "
+
+    # some_aux_variable = LibRoutineLocalVariable("testvar")
 
 
 class PTBracketContainer(EnclosingContainer):
@@ -65,7 +75,7 @@ class PTBracketContainer(EnclosingContainer):
         yield indent * "  " + "("
 
     def get_codelines_foot(self, indent, **kwargs):
-        yield indent * "  " + "("
+        yield indent * "  " + ")"
 
 
 class PTLoopContainer(LoopContainer):
@@ -131,20 +141,20 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         )
 
     def handle_generic_instruction(self, instruction, context, buildargs):
-        yield from self.comment(
+        yield PTCodeLine(
             f"identifier: {instruction.identifier}",
-            context=context,
-            buildargs=buildargs,
+            parent=context.parent,
+            level=context.level,
         )
-        yield from self.comment(
+        yield PTCodeLine(
             f"       foo: {instruction['foo']}",
-            context=context,
-            buildargs=buildargs,
+            parent=context.parent,
+            level=context.level,
         )
-        yield from self.comment(
+        yield PTCodeLine(
             f"    answer: {instruction['answer']}",
-            context=context,
-            buildargs=buildargs,
+            parent=context.parent,
+            level=context.level,
         )
 
     def handle_routine_instruction(self, instruction, context, buildargs):
@@ -174,6 +184,7 @@ PlainTextBuilder.set_comment_class(PTCommentLine)
 from phoenix.fgen.builder import Context
 import sys
 from phoenix.fgen.instruction import GenericInstruction, InstructionGroup
+from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
 
 
 print("START")
@@ -193,6 +204,7 @@ ctxt = Context()
 largegroup = InstructionGroup([test, test, test])
 
 for cont in a.containers_from_instruction(largegroup, context=ctxt):
+    # cont.get_requirements()
     for line in cont.get_codelines():
         print(line)
 

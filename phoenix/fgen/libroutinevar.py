@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 18/03/2025, 19:16
-# Version:     0.0.268
+# Last Update: 20/03/2025, 17:00
+# Version:     0.0.316
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,9 +15,58 @@
 
 from __future__ import annotations
 
-from typing import Set
+import gc
 
-# import weakref
+import weakref
+
+
+class Namespace:
+    """manages the handling of namespaces"""
+
+    def __init__(self, associated_container, parent=None):
+        self._content: weakref.WeakValueDictionary[
+            str, LibRoutineVariable
+        ] = weakref.WeakValueDictionary()
+        self._parent = parent
+        self._associated_container = associated_container
+
+    def __contains__(self, element: LibRoutineVariable) -> bool:
+        if element in self._content:
+            return True
+        if self._parent is not None:
+            return self._parent.__contains__(element)
+        return False
+
+    def add(self, variable: LibRoutineVariable):
+        """add a variable to the namespace"""
+        self._content[variable.name] = variable
+
+    def remove(self, variable: LibRoutineVariable):
+        """add a variable to the namespace"""
+        del self._content[variable.name]
+
+    def autoname(self, name, prefix=None, suffix=None):
+        """automatically generate a name from base, prefix and suffix"""
+        if prefix is not None:
+            name = f"{prefix}_{name}"
+        if suffix is not None:
+            name = f"{name}_{suffix}"
+        num = 0
+        out = name
+        while out in self._content:
+            num += 1
+            out = f"{name}{num}"
+        return out
+
+    def __len__(self) -> int:
+        return len(self._content)
+
+    def __str__(self):
+        return str(list(self._content.values()))
+
+    def inherit(self, container):
+        """inherit into a new namespace that is contained in self"""
+        return type(self)(container, self._parent)
 
 
 class LibRoutineVariable:
@@ -26,7 +75,7 @@ class LibRoutineVariable:
     _VAR_IDENTIFIER = "GENERIC"
     _CLASS_BASE = "var"
 
-    _class_namespace: Set[LibRoutineVariable] = set()
+    _class_namespace = Namespace(None, None)
     # if this ever becomes a dict, it must be weak!
 
     def __init__(
@@ -42,14 +91,13 @@ class LibRoutineVariable:
         self._namespace = namespace
         if name is None:
             name = type(self)._CLASS_BASE
-        name = type(self).autoname(
-            namespace=namespace,
-            base=name,
+        name = self._namespace.autoname(
+            name,
             prefix=prefix,
             suffix=suffix,
         )
         assert name is not None
-        assert name not in namespace
+        assert name not in self._namespace
         self._name = name
         self._size = size
         self._namespace.add(self)
@@ -62,42 +110,42 @@ class LibRoutineVariable:
     def __repr__(self):
         return str(self)
 
-    @classmethod
-    def autoname(
-        cls,
-        namespace: Set[LibRoutineVariable] | None,
-        base=None,
-        prefix=None,
-        suffix=None,
-    ):
-        """autogenerate a name"""
-        if base is None:
-            base = cls._CLASS_BASE
-        name = base
-        if prefix is not None:
-            name = f"{prefix}_{name}"
-        if suffix is not None:
-            name = f"{name}_{suffix}"
-        if namespace is None:
-            namespace = cls._class_namespace
-        assert namespace is not None
-        num = 0
-        out = name
-        while True:
-            if out not in [var.name for var in namespace]:
-                break
-            num += 1
-            out = f"{name}{num}"
-        return out
+    # @classmethod
+    # def autoname(
+    #     cls,
+    #     namespace: Set[LibRoutineVariable] | None,
+    #     base=None,
+    #     prefix=None,
+    #     suffix=None,
+    # ):
+    #     """autogenerate a name"""
+    #     if base is None:
+    #         base = cls._CLASS_BASE
+    #     name = base
+    #     if prefix is not None:
+    #         name = f"{prefix}_{name}"
+    #     if suffix is not None:
+    #         name = f"{name}_{suffix}"
+    #     if namespace is None:
+    #         namespace = cls._class_namespace
+    #     assert namespace is not None
+    #     num = 0
+    #     out = name
+    #     while True:
+    #         if out not in [var.name for var in namespace]:
+    #             break
+    #         num += 1
+    #         out = f"{name}{num}"
+    #     return out
 
     def free_name(self):
         """discard the name in the namespace"""
         try:
             self._namespace.remove(self)
         except KeyError:
-            pass
+            print("not found in namespace")
         except AttributeError:
-            print("fooo")
+            print("this should not have happened.")
 
     @property
     def name(self):
@@ -117,12 +165,9 @@ class LibRoutineVariable:
     def __del__(self):
         self.free_name()
 
-    def __init_subclass__(cls, prefix=None, namespace=None):
-        if namespace is None:
-            namespace = set()
+    def __init_subclass__(cls, prefix=None):
         if prefix is not None:
             cls._CLASS_BASE = prefix
-        cls._class_namespace = namespace
 
     def expr_at_offset(self, offset):
         """expression at offset"""
@@ -132,9 +177,9 @@ class LibRoutineVariable:
         """expression for the variable"""
         return f"{self._name}"
 
-    def __format__(self, formatstr):
-        """here happens the magic"""
-        # TODO
+    # def __format__(self, formatstr):
+    #     """here happens the magic"""
+    #     # TODO
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):
@@ -249,7 +294,7 @@ class LibRoutineConstant(LibRoutineVariable):
 
 
 if __name__ == "__main__":
-    othernamespace: Set[str] = set()
+    othernamespace = Namespace(None, None)
     a = None
     b = None
     c = None
@@ -279,6 +324,8 @@ if __name__ == "__main__":
         othernamespace,
     )
     a = None
+    gc.collect()
+    print("resetted a")
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -287,6 +334,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     a = LibRoutineLocalVariable(1)
+    gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -295,6 +343,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     d = LibRoutineLocalVariable(1)
+    gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -303,6 +352,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     a = None
+    gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -311,6 +361,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     c = None
+    gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -319,6 +370,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     y = LibRoutineLocalVariable(8, namespace=othernamespace)
+    gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -327,6 +379,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     x = LibRoutineLocalVariable(8, namespace=othernamespace)
+    gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -342,4 +395,8 @@ if __name__ == "__main__":
         LibRoutineLocalVariable._class_namespace,
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
+    )
+
+    print(
+        len(LibRoutineLocalVariable._class_namespace),
     )
