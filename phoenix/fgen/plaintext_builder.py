@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 10/03/2025, 16:55
-# Version:     0.0.25
+# Last Update: 20/03/2025, 14:23
+# Version:     0.0.134
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,64 +19,183 @@ from typing import Any, Dict
 
 from phoenix.fgen.builder import Builder
 from phoenix.fgen.codecontainer import (
-    StatementLine,
+    CodeLine,
     CommentLine,
-    GroupContainer,
+    EnclosingContainer,
     DefinitionContainer,
     LoopContainer,
     RoutineContainer,
+    ConditionalContainer,
 )
 
 
-class PTStatementLine(StatementLine):
+###############################################################################
+#
+# .oPYo.                   o            o
+# 8    8                   8
+# 8       .oPYo.  odYo.   o8P  .oPYo.  o8  odYo.  .oPYo.  oPYo.  .oPYo.
+# 8       8    8  8' `8    8   .oooo8   8  8' `8  8oooo8  8  `'  Yb..
+# 8    8  8    8  8   8    8   8    8   8  8   8  8.      8        'Yb.
+# `YooP'  `YooP'  8   8    8   `YooP8   8  8   8  `Yooo'  8      `YooP'
+# :.....: :.....: ..::.. ::..: :.....: :.. ..::.. :.....: ..:::: :.....:
+# ::::::: ::::::: :::::: ::::: ::::::: ::: :::::: ::::::: :::::: :::::::
+# ::::::: ::::::: :::::: ::::: ::::::: ::: :::::: ::::::: :::::: :::::::
+###############################################################################
+
+
+class PTCodeLine(CodeLine):
     """Plain Text version of a StatementLine"""
 
-    _DEFAULTS: Dict[str, Any] = {}
-
-    def __init__(self, signature=None, parent=None, **other):
-        super().__init__(signature=signature, parent=parent, **other)
+    def get_codelines_body(self, indent, **kwargs):
+        yield indent * "  " + self._line
 
 
 class PTCommentLine(CommentLine):
     """Plain Text version of a CommentLine"""
 
-    _DEFAULTS: Dict[str, Any] = {}
+    _COMMENT_PREFIX = "#> "
 
 
-class PTGroupContainer(GroupContainer):
-    """Plain Text version of a GroupContainer"""
-
-    _DEFAULTS: Dict[str, Any] = {}
-
-
-class PTEnvironmentContainer(GroupContainer):
+class PTBracketContainer(EnclosingContainer):
     """Plain Text version of a EnvironmentContainer"""
 
-    # do not resolve environments, verbose them
+    _BODY_INDENT = True
 
-    _DEFAULTS: Dict[str, Any] = {}
+    def get_codelines_head(self, indent, **kwargs):
+        yield indent * "  " + "("
+
+    def get_codelines_foot(self, indent, **kwargs):
+        yield indent * "  " + "("
 
 
 class PTLoopContainer(LoopContainer):
     """Plain Text version of a DefinitionContainer"""
 
-    _DEFAULTS: Dict[str, Any] = {}
+    _BODY_INDENT = True
+
+    def get_codelines_head(self, indent, **kwargs):
+        yield indent * "  " + "LOOP!"
 
 
 class PTDefinitionContainer(DefinitionContainer):
     """Plain Text version of a DefinitionContainer"""
 
-    _DEFAULTS: Dict[str, Any] = {}
-
 
 class PTRoutineDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
-    _DEFAULTS: Dict[str, Any] = {}
 
-    def __init__(self, signature=None, parent=None, **other):
-        super().__init__(signature=signature, parent=parent, **other)
+class PTConditionalContainer(ConditionalContainer):
+    """Plain Text version of a RoutineDefinition"""
+
+
+###############################################################################
+#
+#  .oPYo.           o  8       8
+#  8   `8              8       8
+# o8YooP'  o    o  o8  8  .oPYo8  .oPYo.  oPYo.
+#  8   `b  8    8   8  8  8    8  8oooo8  8  `'
+#  8    8  8    8   8  8  8    8  8.      8
+#  8oooP'  `YooP'   8  8  `YooP'  `Yooo'  8
+# :......: :.....: :.. .. :.....: :.....: ..::::
+# :::::::: ::::::: ::: :: ::::::: ::::::: ::::::
+# :::::::: ::::::: ::: :: ::::::: ::::::: ::::::
+###############################################################################
 
 
 class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
     """PlainTextBuilder"""
+
+    def handle_basic_instruction(self, instruction, context, buildargs):
+        yield PTCodeLine(
+            f"Unknown instruction {instruction}",
+            parent=context.parent,
+            level=context.level,
+        )
+
+    def handle_group_instruction(self, instruction, context, buildargs):
+        outer = PTBracketContainer(parent=context.parent, level=context.level)
+        inside_context = context.inherit(parent=outer)
+        for inner_instruction in instruction.instructions:
+            for inner_container in self.containers_from_instruction(
+                inner_instruction,
+                inside_context,
+                **buildargs,
+            ):
+                outer.append(inner_container)
+        yield outer
+
+    def handle_content_instruction(self, instruction, context, buildargs):
+        yield from super().handle_content_instruction(
+            instruction, context, buildargs
+        )
+
+    def handle_generic_instruction(self, instruction, context, buildargs):
+        yield from self.comment(
+            f"identifier: {instruction.identifier}",
+            context=context,
+            buildargs=buildargs,
+        )
+        yield from self.comment(
+            f"       foo: {instruction['foo']}",
+            context=context,
+            buildargs=buildargs,
+        )
+        yield from self.comment(
+            f"    answer: {instruction['answer']}",
+            context=context,
+            buildargs=buildargs,
+        )
+
+    def handle_routine_instruction(self, instruction, context, buildargs):
+        yield from super().handle_routine_instruction(
+            instruction, context, buildargs
+        )
+
+    def handle_mapapply_instruction(self, instruction, context, buildargs):
+        yield from super().handle_mapapply_instruction(
+            instruction, context, buildargs
+        )
+
+    def handle_variation_instruction(self, instruction, context, buildargs):
+        yield from super().handle_variation_instruction(
+            instruction, context, buildargs
+        )
+
+    def handle_environment_instruction(self, instruction, context, buildargs):
+        yield from super().handle_environment_instruction(
+            instruction, context, buildargs
+        )
+
+
+PlainTextBuilder.set_comment_class(PTCommentLine)
+
+
+from phoenix.fgen.builder import Context
+import sys
+from phoenix.fgen.instruction import GenericInstruction, InstructionGroup
+
+
+print("START")
+a = PlainTextBuilder()
+
+test = InstructionGroup(
+    [
+        GenericInstruction(foo="bar", answer=42.1),
+        GenericInstruction(foo="bar", answer=42.2),
+        GenericInstruction(foo="bar", answer=42.3),
+        GenericInstruction(foo="bar", answer=42.4),
+        GenericInstruction(foo="bar", answer=42.5),
+    ]
+)
+ctxt = Context()
+
+largegroup = InstructionGroup([test, test, test])
+
+for cont in a.containers_from_instruction(largegroup, context=ctxt):
+    for line in cont.get_codelines():
+        print(line)
+
+
+print("END")
+sys.exit()

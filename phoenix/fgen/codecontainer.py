@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 17/03/2025, 17:56
-# Version:     0.0.823
+# Last Update: 20/03/2025, 14:20
+# Version:     0.0.866
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -171,13 +171,9 @@ class CodeContainer:
 
     """
 
-    _IND = "  "
     _BODY_INDENT = False
-    _GLOBAL_CLASS_REFS = {
-        "COMMENT": None,
-    }
 
-    def __init__(self, parent, level, comment=None, **_) -> None:
+    def __init__(self, parent, level, **_) -> None:
         # all content that may or may not be useful
         # self._data: Dict[str, Any] = {}
 
@@ -203,58 +199,6 @@ class CodeContainer:
 
         self._level = level
 
-        if comment:
-            self.append_head(self.to_comment(comment))
-
-    def to_comment(self, comment, **extra):
-        """create a comment using the global class reference to a comment line"""
-        comment_class = type(self)._GLOBAL_CLASS_REFS.get("COMMENT")
-        return comment_class(
-            comment=comment, level=self._level, parent=self, **extra
-        )
-
-    # @classmethod
-    # def container_from_instruction(
-    #     cls,
-    #     instruction: Instruction,
-    #     context,
-    #     buildargs,
-    # ):
-    #     """Request necessary data from instruction to generate a container."""
-    #     (level, _, parent, _) = context  # (level, env, parent, namespace)
-    #     return cls(
-    #         parent=parent,  # keep a way back to the roots
-    #         level=level,  # consider tree depth
-    #         **instruction.to_dict(),  # take what you need for initialization
-    #         **buildargs,
-    #     )
-
-    # def get_representatives(self):
-    #     """
-    #     Get the representatives of this container, which might be only Self.
-    #     However, some instructions MIGHT render into multiple containers. These
-    #     can be representatives of a 'virtual' container.
-    #     """
-    #     yield self
-
-    # @log.wrap_call
-    # def build(self, builder, context, buildargs, **_):
-    #     """
-    #     Complete the instruction from the builder in the proper environment.
-    #     This does not involve the built of children, but it at least prepares them!
-    #     """
-    #     (environment, level, parent, namespace) = context
-    #     debug("start container build")
-    #     debug(f"\tTarget     : {self}")
-    #     debug(f"\tData       : {self._data}")
-    #     debug(f"\tBuilder    : {builder}")
-    #     debug(f"\tEnvironment: {environment}")
-    #     debug(f"\tLevel      : {level}")
-    #     debug(f"\tParent     : {parent}")
-    #     debug(f"\tNamespace  : {namespace}")
-    #     debug(f"\tbuild args : {buildargs}")
-    #     return self
-
     def _set_parent(self, parent):
         """private method to manage the parent reference"""
         if parent is None:
@@ -262,24 +206,35 @@ class CodeContainer:
         else:
             self._wr_parent = ref(parent)
 
-    def _get_code_container_lines_head(
-        self, indent: int = 0, **kwargs: Any
+    def get_codelines_head(
+        self, indent: int, **kwargs: Any
     ) -> Generator[str, None, None]:
+        """
+        Get the codelines from the head section of the container.
+        This yields text and/or forwards into other containers.
+        """
         if self._container_head is not None:
             for content in self._container_head:
                 yield from content.get_codelines(indent=indent, **kwargs)
 
-    def _get_code_container_lines_body(
-        self, indent: int = 0, **kwargs: Any
+    def get_codelines_body(
+        self, indent: int, **kwargs: Any
     ) -> Generator[str, None, None]:
+        """
+        Get the codelines from the body section of the container.
+        This yields text and/or forwards into other containers.
+        """
         if self._container_body is not None:
-            indent += 1 if self._BODY_INDENT else 0
             for content in self._container_body:
                 yield from content.get_codelines(indent=indent, **kwargs)
 
-    def _get_code_container_lines_foot(
-        self, indent: int = 0, **kwargs: Any
+    def get_codelines_foot(
+        self, indent: int, **kwargs: Any
     ) -> Generator[str, None, None]:
+        """
+        Get the codelines from the foot section of the container.
+        This yields text and/or forwards into other containers.
+        """
         if self._container_foot is not None:
             for content in self._container_foot:
                 yield from content.get_codelines(indent=indent, **kwargs)
@@ -288,9 +243,11 @@ class CodeContainer:
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
-        yield from self._get_code_container_lines_head(indent, **kwargs)
-        yield from self._get_code_container_lines_body(indent, **kwargs)
-        yield from self._get_code_container_lines_foot(indent, **kwargs)
+        yield from self.get_codelines_head(indent, **kwargs)
+        yield from self.get_codelines_body(
+            indent + int(self._BODY_INDENT), **kwargs
+        )
+        yield from self.get_codelines_foot(indent, **kwargs)
 
     @property
     def level(self):
@@ -310,6 +267,8 @@ class CodeContainer:
     def parent(self, parent: CodeContainer) -> None:
         """safe-set parent, IF ALLOWED"""
         if not ALLOW_FOSTER_PARENTING:
+            if self.parent == parent:
+                return
             raise RuntimeError("The Lord does not allow that!")
         if self._wr_parent is None:
             if isinstance(parent, CodeContainer):
@@ -399,10 +358,11 @@ class GroupContainer(CodeContainer):
     delimiters and comments.
     """
 
-    def __init__(self, content, parent=None, **params):
+    def __init__(self, content=None, parent=None, **params):
         super().__init__(parent=parent, **params)
-        for cont in content:
-            self.append(cont)
+        if content is not None:
+            for cont in content:
+                self.append(cont)
 
     # should default to getting the content of body without any extras.
     def append(self, content):
@@ -560,7 +520,7 @@ class CodeBlock(GroupContainer):
     def append(self, content):
         """append a container to the body"""
         if not isinstance(content, (CodeLine, CodeBlock)):
-            raise TypeError("Only CodeLine can be added to CodeBlock")
+            raise TypeError("Can only add CodeLine leaf nodes to CodeBlock")
             # if a codeblock is added, it can only have codelines in it.
             # or codeblocks, but those can only contain codelinexs themselves.
             # or codeblocks, but those can only contain codelines themselves.
@@ -575,6 +535,9 @@ class CodeLine(CodeContainer):
     def __init__(self, line, parent, level, **params):
         super().__init__(parent=parent, level=level, **params)
         self._line = line
+
+    def get_codelines_body(self, indent, **kwargs):
+        yield indent * "  " + self._line
 
 
 class StatementLine(CodeLine):
@@ -603,12 +566,9 @@ class CommentLine(CodeLine):
 
     _COMMENT_PREFIX = "#"
 
-    def __init__(self, comment, parent, level, **params):
-        line = f"{self._COMMENT_PREFIX} {comment}"
-        super().__init__(line, parent=parent, level=level, **params)
+    def get_codelines_body(self, indent, **kwargs):
+        yield type(self)._COMMENT_PREFIX + indent * "  " + self._line
 
-
-CodeContainer._GLOBAL_CLASS_REFS["COMMENT"] = CommentLine
 
 # class VirtualContainer(CodeContainer):
 #     """The part of a CodeContainer that adds the virtual stuff"""

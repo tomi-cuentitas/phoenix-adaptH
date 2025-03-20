@@ -2,7 +2,15 @@
      1: @..oolbox.logger.logger: info: Hello from Builder 'TEST' (v0.0)
                                        parameters (1):
                                          - foo=bar
-                                       supported (0):
+                                       supported (8):
+                                         + instruction
+                                         + instruction.group
+                                         + instruction.content
+                                         + instruction.generic
+                                         + instruction.content.subroutine
+                                         + instruction.content.map
+                                         + instruction.content.variation
+                                         + instruction.content.environment
                                        excluded (0):
      2: @..oolbox.logger.logger: info:   foobar was here
      3: @..oolbox.logger.logger: info:   foobar was here

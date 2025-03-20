@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 19/03/2025, 17:33
-# Version:     0.0.692
+# Last Update: 20/03/2025, 14:13
+# Version:     0.0.788
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,6 +32,8 @@ from phoenix.fgen.instruction import (
     LinkVariableEnvironmentInstruction,
     OffsetEnvironmentInstruction,
 )
+
+from phoenix.fgen.codecontainer import CommentLine
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
 
@@ -226,14 +228,20 @@ class Builder(Optimizer, identifier="GENERIC"):
 
     _CLSNAME_PREFIX = "Builder"
 
-    _supported_instruction_classes: Dict[type, Generator] = {}
-    _not_supported_instruction_classes: Set[type] = set()
+    _supp_instr_handler: Dict[type, Generator] = {}
+    _excl_instr_classes: Set[type] = set()
+
+    _comment_class = None
 
     _class_optimizers: List[Optimizer] = []
     _class_validators: List[Validator] = []
 
     _VERSN = 0
     _BUILD = 0
+
+    def __init_subclass__(cls, identifier=None):
+        super().__init_subclass__(identifier=identifier)
+        cls.set_default_handlers()
 
     def __init__(self, _internal=None, **params):
         super().__init__(**params, _internal={"_log_welcome": False})
@@ -245,16 +253,16 @@ class Builder(Optimizer, identifier="GENERIC"):
         self._optimizers = []
         self._validators = []
 
-        self._local_instruction_classes: Dict[type, Generator] = {}
-        self._forbidden_instruction_classes: Set[type] = set()
+        self._extra_instr_handler: Dict[type, Generator] = {}
+        self._avoid_instr_classes: Set[type] = set()
 
     def _detail_log_lines(self):
         yield from Optimizer._detail_log_lines(self)
-        supported = list(type(self)._supported_instruction_classes.keys())
+        supported = list(type(self)._supp_instr_handler.keys())
         yield f"supported ({len(supported)}):"
         for instruction_type in supported:
             yield f"  + {instruction_type.class_identifier()}"
-        excluded = list(type(self)._not_supported_instruction_classes)
+        excluded = list(type(self)._excl_instr_classes)
         yield f"excluded ({len(excluded)}):"
         for instruction_type in excluded:
             yield f"  - {instruction_type}"
@@ -262,27 +270,27 @@ class Builder(Optimizer, identifier="GENERIC"):
     def add_supported_instruction_class(self, instruction_class, handler):
         """add a supported instruction class and its handler"""
         # force cast a generator
-        self._local_instruction_classes[instruction_class] = handler
+        self._extra_instr_handler[instruction_class] = handler
 
     def add_forbidden_instruction_class(self, instruction_class):
         """add a forbidden instruction class and its handler"""
-        self._forbidden_instruction_classes.add(instruction_class)
+        self._avoid_instr_classes.add(instruction_class)
 
     @classmethod
     @log.wrap_call
     def set_default_handler(cls, instruction_class: type, handler: Generator):
         """add a new instruction class to recognize and assign a proper handler"""
-        cls._supported_instruction_classes[instruction_class] = handler
-        if instruction_class in cls._not_supported_instruction_classes:
-            cls._not_supported_instruction_classes.remove(instruction_class)
+        cls._supp_instr_handler[instruction_class] = handler
+        if instruction_class in cls._excl_instr_classes:
+            cls._excl_instr_classes.remove(instruction_class)
 
     @classmethod
     @log.wrap_call
     def set_default_forbidden(cls, instruction_class):
         """remember that this kind of instruction is not supported"""
-        cls._not_supported_instruction_classes.add(instruction_class)
-        if instruction_class in cls._supported_instruction_classes:
-            del cls._supported_instruction_classes[instruction_class]
+        cls._excl_instr_classes.add(instruction_class)
+        if instruction_class in cls._supp_instr_handler:
+            del cls._supp_instr_handler[instruction_class]
 
     @log.wrap_call
     def include_optimizer(self, optimizer):
@@ -305,16 +313,16 @@ class Builder(Optimizer, identifier="GENERIC"):
             # note: mro contains type(self) and then all parents
 
             # check local classes
-            if elder in self._forbidden_instruction_classes:
+            if elder in self._avoid_instr_classes:
                 return None
-            if elder in self._local_instruction_classes:
-                return self._local_instruction_classes[elder]
+            if elder in self._extra_instr_handler:
+                return self._extra_instr_handler[elder]
 
             # check defaults
-            if elder in type(self)._not_supported_instruction_classes:
+            if elder in type(self)._excl_instr_classes:
                 return None
-            if elder in type(self)._supported_instruction_classes:
-                return type(self)._supported_instruction_classes[elder]
+            if elder in type(self)._supp_instr_handler:
+                return type(self)._supp_instr_handler[elder]
         return None
 
     @log.wrap_call_gen
@@ -352,7 +360,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         debug(f"\tbuild args : {buildargs}")
 
         yield from handler(
-            builder=self,
+            self,
             instruction=instruction,
             context=context,
             buildargs=buildargs,
@@ -407,6 +415,24 @@ class Builder(Optimizer, identifier="GENERIC"):
 
         info("reached end of instruction build")
 
+    @classmethod
+    def set_comment_class(cls, comment_class):
+        """set the comment class for the builder"""
+        cls._comment_class = comment_class
+
+    def comment(self, *lines, context: Context, buildargs):
+        """generate one or multiple comment lines"""
+        comment_class: type(CommentLine) | None = type(self)._comment_class
+        if comment_class is not None:
+            assert issubclass(comment_class, CommentLine)
+            for line in lines:
+                yield comment_class(
+                    line,
+                    parent=context.parent,
+                    level=context.level,
+                    **buildargs,
+                )
+
     def handle_basic_instruction(self, instruction, context, buildargs):
         """default handler for basic instruction"""
         raise NotImplementedError(
@@ -435,13 +461,8 @@ class Builder(Optimizer, identifier="GENERIC"):
 
     def handle_generic_instruction(self, instruction, context, buildargs):
         """default handler for generic instruction"""
-        return
-        yield
-
-    def handle_keymap_instruction(self, instruction, context, buildargs):
-        """default handler for keymap instruction"""
-        yield from self.handle_generic_instruction(
-            instruction, context, buildargs
+        yield from self.comment(
+            str(instruction.to_dict()), context=context, buildargs=buildargs
         )
 
     def handle_routine_instruction(self, instruction, context, buildargs):
@@ -474,55 +495,52 @@ class Builder(Optimizer, identifier="GENERIC"):
             **buildargs,
         )
 
-    def handle_offsetenv_instruction(self, instruction, context, buildargs):
-        """default handler for offsetenv instruction"""
-        yield from self.handle_environment_instruction(
-            instruction, context, buildargs
-        )
+    @classmethod
+    def remove_handler(cls, instruction_class):
+        """remove a handler"""
+        if instruction_class in cls._supp_instr_handler:
+            del cls._supp_instr_handler[instruction_class]
 
-    def handle_linkvar_instruction(self, instruction, context, buildargs):
-        """default handler for linkvar instruction"""
-        yield from self.handle_environment_instruction(
-            instruction, context, buildargs
-        )
+    @classmethod
+    def include_instruction_class(cls, instruction_class):
+        """remove a handler"""
+        if instruction_class in cls._excl_instr_classes:
+            cls._excl_instr_classes.remove(instruction_class)
+
+    @classmethod
+    def set_default_handlers(cls):
+        """set the instruction handlers to a default"""
+        handler_mappings = [
+            # base instruction
+            (Instruction, cls.handle_basic_instruction),
+            #
+            # first order subclasses
+            (InstructionGroup, cls.handle_group_instruction),
+            (ContentInstruction, cls.handle_content_instruction),
+            #
+            # leaf instruction
+            (GenericInstruction, cls.handle_generic_instruction),
+            #
+            # content based
+            (RoutineInstruction, cls.handle_routine_instruction),
+            (MapApplyInstruction, cls.handle_mapapply_instruction),
+            (VariationInstruction, cls.handle_variation_instruction),
+            #
+            # environments
+            (EnvironmentInstruction, cls.handle_environment_instruction),
+        ]
+        cls.set_handlers(handler_mappings)
+
+    @classmethod
+    def set_handlers(cls, handler_mappings):
+        """set the mappings of instruction classes to handlers"""
+        for instruction_class, class_handler in handler_mappings:
+            cls.set_default_handler(instruction_class, class_handler)
 
 
-mappings = [
-    # base instruction
-    (Instruction, Builder.handle_basic_instruction),
-    #
-    # first order subclasses
-    (InstructionGroup, Builder.handle_group_instruction),
-    (ContentInstruction, Builder.handle_content_instruction),
-    #
-    # leaf instruction
-    (GenericInstruction, Builder.handle_generic_instruction),
-    (KeyMapInstruction, Builder.handle_keymap_instruction),
-    #
-    # content based
-    (RoutineInstruction, Builder.handle_routine_instruction),
-    (MapApplyInstruction, Builder.handle_mapapply_instruction),
-    (VariationInstruction, Builder.handle_variation_instruction),
-    #
-    # environments
-    (EnvironmentInstruction, Builder.handle_environment_instruction),
-    (LinkVariableEnvironmentInstruction, Builder.handle_linkvar_instruction),
-    (OffsetEnvironmentInstruction, Builder.handle_offsetenv_instruction),
-]
-
-for instruction_class, class_handler in mappings:
-    Builder.set_default_handler(instruction_class, class_handler)
+Builder.set_default_handlers()
 
 if __name__ == "__main__":
-    import sys
-
-    a = Builder()
-
-    test = InstructionGroup([])
-
-    a.containers_from_instruction(test)
-
-    sys.exit()
 
     class TestBuilder(Builder, identifier="TEST"):
         """A builder for pure testing purposes"""

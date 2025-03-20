@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 14/03/2025, 10:41
-# Version:     0.0.770
+# Last Update: 20/03/2025, 12:59
+# Version:     0.0.772
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -193,7 +193,6 @@ class Logger:
                 # if self._loglevel > 2:
                 self._indentlevel -= 1
                 self.debug(f"END of generator {function.__name__}")
-            return ret
 
         # potential TODO: tidy the stacktrace from the logger parts
 

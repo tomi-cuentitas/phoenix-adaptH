@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 07/03/2025, 17:00
-# Version:     0.0.1113
+# Last Update: 20/03/2025, 11:51
+# Version:     0.0.1120
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -401,11 +401,26 @@ class InstructionEnvironment:
         """display as a dictionary"""
         return {key: val for key, val in self.items()}
 
-    def copy(self) -> InstructionEnvironment:
+    def copy(self, **_) -> InstructionEnvironment:
         """make a proper copy"""
         copied = type(self)()
         for key, variable in self.items():
             copied.update(key, variable.copy())
+        return copied
+
+    def deepcopy(self, memo=None, **kwargs):
+        """deepcopy implementation"""
+        if memo is None:
+            memo = {}
+        return self.deepcopy(memo=memo, **kwargs)
+
+    def __deepcopy__(self, memo=None, **kwargs):
+        if memo is None:
+            memo = {}
+        if id(self) in memo:
+            return id(self)
+        copied = self.copy(**kwargs)
+        memo[id(self)] = copied
         return copied
 
     def __str__(self):
