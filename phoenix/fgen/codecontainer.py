@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 21/03/2025, 13:42
-# Version:     0.0.1074
+# Last Update: 21/03/2025, 16:16
+# Version:     0.0.1130
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -165,7 +165,6 @@ class CodeContainer:
     """
 
     INDENT_BODY = False
-    _auxilliaries: Dict[str, LibRoutineVariable] = {}
 
     def __init__(self, context, **_) -> None:
         # all content that may or may not be useful
@@ -174,7 +173,7 @@ class CodeContainer:
         # self._comment = comment
 
         # collect variables that are used here
-        # self._requirements: Set[LibRoutineVariable] = set()
+        self._requirements: Set[str] = set()
 
         # content, divided in three sections, head, body, foot
         self._container_head: list[CodeContainer] = []
@@ -189,33 +188,31 @@ class CodeContainer:
         #     context.parent
         # )  # manage parent reference, might be weak
 
-    def aux(self, name: str) -> LibRoutineVariable:
-        """request an auxiliary variable"""
-        var = type(self)._auxilliaries.get(name)
-        self.requires(var)
-        return var
-
-    @classmethod
-    def __init_subclass__(cls, aux=None):
-        if aux is None:
-            aux = {}
-        cls._auxilliaries = {**cls._auxilliaries, **aux}
+    def request_temp(self, name, generating, **genargs):
+        """
+        Request a local variable from a namespace
+        """
+        # if variable is known to namespace already, get a new one.
+        # the counter of local variables of the proper type tells
+        # if a new variable has to be made.
+        temp = self.namespace.get_temp(
+            generating,
+            name=name,
+            origin=self,
+            **genargs,
+        )
+        self.requires(temp)
+        return temp
 
     def requires(self, variable: LibRoutineVariable) -> None:
         """request to use a variable"""
         # potentially gets stuck in CaptureContainer
+        self._requirements.add(variable.name)
         if not isinstance(variable, LibRoutineVariable):
             raise TypeError("Dependencies must be LibRoutineVariables")
         if self.parent is None:
             raise ValueError("variable request got lost!")
         self.parent.requires(variable)
-
-    # def _set_parent(self, parent):
-    #     """private method to manage the parent reference"""
-    #     if parent is None:
-    #         self._wr_parent = None
-    #     else:
-    #         self._wr_parent = ref(parent)
 
     def inherit_context(self):
         """inherit the context"""
@@ -583,6 +580,7 @@ class CaptureContainer(CodeContainer):
         It is also added to the namespace
         """
         self._captured.add(variable)
+        self.namespace.add(variable)
 
     def requires(self, variable):
         """send the required variables up the tree"""

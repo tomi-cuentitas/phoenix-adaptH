@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 21/03/2025, 13:42
-# Version:     0.0.239
+# Last Update: 21/03/2025, 16:12
+# Version:     0.0.287
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,12 +43,21 @@ from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
 ###############################################################################
 
 
-aux = {"foobar": LibRoutineLocalVariable("foobar", size=42)}
+# aux = {"foobar": LibRoutineLocalVariable("foobar", size=42)}
+# ind1 = LibRoutineLocalVariable("index1", dtype="i32")
+# ind2 = LibRoutineLocalVariable("index2", dtype="i32")
 
 
-class TestLineWithVariable(CodeLine, aux=aux):
+class TestLineWithVariable(CodeLine):
     def set_line(self, line):
-        return super().set_line(f"{line} + {self.aux('foobar')}")
+        temp1 = self.request_temp("test_temporary1", LibRoutineLocalVariable, size=None, dtype="i53")
+        temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
+        super().set_line(
+            f"{line} + {temp1.expr_at_offset(
+                1, 2, 3, 4)} + {temp2.expr_at_offset(
+                1, 2, 3, 4, simplify=False)}")
+        return self
+
 
 
 class PTCodeLine(CodeLine):

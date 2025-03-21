@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 21/03/2025, 13:42
-# Version:     0.0.329
+# Last Update: 21/03/2025, 16:30
+# Version:     0.0.440
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -24,10 +24,12 @@ class Namespace:
     """manages the handling of namespaces"""
 
     def __init__(self, parent=None):
-        self._content: weakref.WeakValueDictionary[
-            str, LibRoutineVariable
-        ] = weakref.WeakValueDictionary()
+        # self._content: weakref.WeakValueDictionary[
+        #     str, LibRoutineVariable
+        # ] = weakref.WeakValueDictionary()
+        self._content = {}
         self._parent = parent
+        self._temps = {}
 
     def __contains__(self, element: LibRoutineVariable) -> bool:
         if element in self._content:
@@ -44,18 +46,52 @@ class Namespace:
         """add a variable to the namespace"""
         del self._content[variable.name]
 
-    def autoname(self, name, prefix=None, suffix=None):
-        """automatically generate a name from base, prefix and suffix"""
+    def get_all(self):
+        """get all content from self and parents"""
+        yield from self._content.values()
+        if self._parent is not None:
+            yield from self._parent.get_all()
+
+    def combine_name(self, base, prefix=None, suffix=None):
+        """combine a name from prefix, base and suffix"""
+        name = base
         if prefix is not None:
             name = f"{prefix}_{name}"
         if suffix is not None:
             name = f"{name}_{suffix}"
+        return name
+
+    def autoname(self, name, prefix=None, suffix=None):
+        """automatically generate a name from base, prefix and suffix"""
+        name = self.combine_name(name, prefix=prefix, suffix=suffix)
         num = 0
         out = name
         while out in self._content:
             num += 1
             out = f"{name}{num}"
         return out
+
+    def find(self, name):
+        """find a variable in the namespace"""
+        if name in self._content:
+            return self._content[name]
+        if self._parent is not None:
+            return self._parent.find(name)
+        raise KeyError(f"variable {name} not found")
+
+    def temp_name(self, name, origin):
+        """generate a temporary variable name from a standardized recipe"""
+        caps = "".join([c for c in type(origin).__name__ if c.isupper()])
+        myhash = f"{caps.lower()}"
+        return f"{name}_{myhash}L{origin.level}"
+
+    def get_temp(self, generating, name, origin, **genargs):
+        """get a temporary variable. Look it up or generate."""
+        name = self.temp_name(name, origin)
+        if name in self:
+            return self.find(name)
+        temp = generating(name=name, **genargs)
+        return temp
 
     def __len__(self) -> int:
         return len(self._content)
@@ -69,7 +105,7 @@ class Namespace:
 
     def inherit(self):
         """inherit into a new namespace that is contained in self"""
-        return type(self)(self._parent)
+        return type(self)(parent=self)
 
 
 class LibRoutineVariable:
@@ -84,7 +120,6 @@ class LibRoutineVariable:
     def __init__(
         self,
         name=None,
-        /,
         size=None,
         namespace=None,
         prefix=None,
@@ -186,17 +221,50 @@ class LibRoutineVariable:
         if prefix is not None:
             cls._CLASS_BASE = prefix
 
-    def expr_at_offset(self, offset):
+    def expr_at_offset(
+        self, *offsets, callback=None, simplify=True, allow_strings=False
+    ):
         """expression at offset"""
-        return f"{self._name}[{offset}]"
+        offset_str_list = []
+        offset_int = 0
+        for offset in offsets:
+            if isinstance(offset, int):
+                if simplify:
+                    offset_int += offset
+                else:
+                    offset_str_list.append(str(offset))
+            elif isinstance(offset, LibRoutineVariable):
+                if offset.size is not None:
+                    raise ValueError(
+                        "only scalar offsets are allowed in this context"
+                    )
+                if callback is not None:
+                    callback(self)
+                    callback(offset)
+                offset_str_list.append(str(offset))
+            else:
+                if allow_strings:
+                    offset_str_list.append(str(offset))
+                else:
+                    raise ValueError(
+                        f"offset {offset} is not an integer or LibRoutineVariable"
+                    )
+        if simplify:
+            if offset_int > 0:
+                offset_str_list.append(str(offset_int))
+        if not offset_str_list:
+            offset_str_list = ["0"]
+        offset_str = " + ".join(offset_str_list)
+        return f"{self._name}[{offset_str}]"
 
     def expr(self):
         """expression for the variable"""
         return f"{self._name}"
 
-    # def __format__(self, formatstr):
-    #     """here happens the magic"""
-    #     # TODO
+    # def __format__(self, format_spec):
+    #     if format_spec:
+    #         print(format_spec)
+    #     return str(self)
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):
@@ -316,7 +384,7 @@ if __name__ == "__main__":
     b = None
     c = None
     d = None
-    a = LibRoutineLocalVariable(1)
+    a = LibRoutineLocalVariable(size=1)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -324,7 +392,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    b = LibRoutineInputVariable(42)
+    b = LibRoutineInputVariable(size=42)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
@@ -350,7 +418,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    a = LibRoutineLocalVariable(1)
+    a = LibRoutineLocalVariable(size=1)
     gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
@@ -359,7 +427,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    d = LibRoutineLocalVariable(1)
+    d = LibRoutineLocalVariable(size=1)
     gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
@@ -386,7 +454,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    y = LibRoutineLocalVariable(8, namespace=othernamespace)
+    y = LibRoutineLocalVariable(size=8, namespace=othernamespace)
     gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
@@ -395,7 +463,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    x = LibRoutineLocalVariable(8, namespace=othernamespace)
+    x = LibRoutineLocalVariable(size=8, namespace=othernamespace)
     gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
