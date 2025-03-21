@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 20/03/2025, 16:58
-# Version:     0.0.910
+# Last Update: 21/03/2025, 13:42
+# Version:     0.0.1074
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,10 +16,6 @@ from __future__ import annotations
 
 from typing import Generator, Any, Set, Callable, List, Dict, Tuple
 
-from weakref import ref
-
-# from weakref import WeakSet as wrWeakSet
-from weakref import ReferenceType as wrReferenceType
 
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.instructionvar import InstructionEnvironment
@@ -38,9 +34,6 @@ __doc__ = """
 CodeContainer module description
 
 """
-
-# you cannot change your parents once you're born
-ALLOW_FOSTER_PARENTING = False
 
 
 def multiline_iterable(
@@ -171,66 +164,68 @@ class CodeContainer:
 
     """
 
-    _BODY_INDENT = False
+    INDENT_BODY = False
+    _auxilliaries: Dict[str, LibRoutineVariable] = {}
 
-    def __init__(self, parent, level, **_) -> None:
+    def __init__(self, context, **_) -> None:
         # all content that may or may not be useful
         # self._data: Dict[str, Any] = {}
 
         # self._comment = comment
 
         # collect variables that are used here
-        self._requirements: Set[LibRoutineVariable] = set()
+        # self._requirements: Set[LibRoutineVariable] = set()
 
         # content, divided in three sections, head, body, foot
         self._container_head: list[CodeContainer] = []
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
 
-        # parent link
-        self._wr_parent: wrReferenceType[CodeContainer] | None = None
-        self._set_parent(parent)  # manage parent reference, might be weak
+        self._context = context
 
-        # hierarchy level
-        # if self.parent is None:
-        #     level = 0
-        # else:
-        #     level = self.parent.level
+        # # parent link
+        # self._wr_parent: wrReferenceType[CodeContainer] | None = None
+        # self._set_parent(
+        #     context.parent
+        # )  # manage parent reference, might be weak
 
-        self._level = level
+    def aux(self, name: str) -> LibRoutineVariable:
+        """request an auxiliary variable"""
+        var = type(self)._auxilliaries.get(name)
+        self.requires(var)
+        return var
+
+    @classmethod
+    def __init_subclass__(cls, aux=None):
+        if aux is None:
+            aux = {}
+        cls._auxilliaries = {**cls._auxilliaries, **aux}
 
     def requires(self, variable: LibRoutineVariable) -> None:
         """request to use a variable"""
         # potentially gets stuck in CaptureContainer
         if not isinstance(variable, LibRoutineVariable):
             raise TypeError("Dependencies must be LibRoutineVariables")
-        # self._requirements.add(variable)
-        self.send_variable(variable)
-
-    # def get_requirements(self):
-    #     """request required variables"""
-    #     self.send_required()
-    #     for container in self.content:
-    #         container.get_requirements()
-
-    # def send_required(self):
-    #     """send all required variables"""
-    #     for variable in self._requirements:
-    #         self._send_variable(variable)
-
-    def send_variable(self, variable):
-        """send the required variables up the tree"""
         if self.parent is None:
-            return
             raise ValueError("variable request got lost!")
-        self.parent.send_variable(variable)
+        self.parent.requires(variable)
 
-    def _set_parent(self, parent):
-        """private method to manage the parent reference"""
-        if parent is None:
-            self._wr_parent = None
-        else:
-            self._wr_parent = ref(parent)
+    # def _set_parent(self, parent):
+    #     """private method to manage the parent reference"""
+    #     if parent is None:
+    #         self._wr_parent = None
+    #     else:
+    #         self._wr_parent = ref(parent)
+
+    def inherit_context(self):
+        """inherit the context"""
+        return self.context.inherit(parent=self)
+
+    def from_text(self, text: str) -> CodeContainer:
+        """generate a plain codeline from text"""
+        return CodeLine(
+            context=self.inherit_context(),
+        ).set_line(text)
 
     def get_codelines_head(
         self, indent: int, **kwargs: Any
@@ -271,36 +266,64 @@ class CodeContainer:
         """get the codelines from the container"""
         yield from self.get_codelines_head(indent, **kwargs)
         yield from self.get_codelines_body(
-            indent + int(self._BODY_INDENT), **kwargs
+            indent + int(self.INDENT_BODY), **kwargs
         )
         yield from self.get_codelines_foot(indent, **kwargs)
+
+    def get_indent(self, level: int = 0) -> str:
+        """convert the indent level into a string"""
+        return "  " * level
+
+    def append(self, content):
+        """append to the container body"""
+        self.append_body(content)
+
+    @property
+    def context(self):
+        """access the context but prohibit setting it manually"""
+        return self._context
 
     @property
     def level(self):
         """access the level but prohibit setting it manually"""
-        return self._level
+        return self.context.level
 
     @property
-    def parent(self) -> CodeContainer | None:
-        """access the parent"""
-        if self._wr_parent is None:
-            return None
-        if (parent := self._wr_parent()) is None:
-            raise ValueError("Parent has been garbage collected")
-        return parent
+    def namespace(self):
+        """access the namespace but prohibit setting it manually"""
+        return self.context.namespace
 
-    @parent.setter
-    def parent(self, parent: CodeContainer) -> None:
-        """safe-set parent, IF ALLOWED"""
-        if not ALLOW_FOSTER_PARENTING:
-            if self.parent == parent:
-                return
-            raise RuntimeError("The Lord does not allow that!")
-        if self._wr_parent is None:
-            if isinstance(parent, CodeContainer):
-                self._wr_parent = ref(parent)
-        else:
-            raise ValueError("Parent already set")
+    @property
+    def environment(self):
+        """access the environment but prohibit setting it manually"""
+        return self.context.environment
+
+    @property
+    def parent(self):
+        """access the parent but prohibit setting it manually"""
+        return self.context.parent
+
+    # @property
+    # def parent(self) -> CodeContainer | None:
+    #     """access the parent"""
+    #     if self._wr_parent is None:
+    #         return None
+    #     if (parent := self._wr_parent()) is None:
+    #         raise ValueError("Parent has been garbage collected")
+    #     return parent
+
+    # @parent.setter
+    # def parent(self, parent: CodeContainer) -> None:
+    #     """safe-set parent, IF ALLOWED"""
+    #     if not ALLOW_FOSTER_PARENTING:
+    #         if self.parent == parent:
+    #             return
+    #         raise RuntimeError("The Lord does not allow that!")
+    #     if self._wr_parent is None:
+    #         if isinstance(parent, CodeContainer):
+    #             self._wr_parent = ref(parent)
+    #     else:
+    #         raise ValueError("Parent already set")
 
     @property
     def body(self):
@@ -355,9 +378,9 @@ class CodeContainer:
         for container in containers:
             self._container_foot.append(container)
 
-    def add_capture(self, capture: str | Callable) -> None:
-        """add a type of requirement to capture"""
-        raise TypeError(f"Cannot have caputure in class {type(self)}.")
+    # def add_capture(self, capture: str | Callable) -> None:
+    #     """add a type of requirement to capture"""
+    #     raise TypeError(f"Cannot have caputure in class {type(self)}.")
 
     # def capture_check(self, requirement):
     #     """perform a capture check for the requirement"""
@@ -378,17 +401,122 @@ class GroupContainer(CodeContainer):
     delimiters and comments.
     """
 
-    def __init__(self, content=None, parent=None, **params):
-        super().__init__(parent=parent, **params)
-        if content is not None:
-            for cont in content:
-                self.append(cont)
+
+class CodeBlock(GroupContainer):
+    """A block of code that can only contain codelines but no control structures"""
 
     # should default to getting the content of body without any extras.
     def append(self, content):
         """append a container to the body"""
-        self._container_body.append(content)
-        content.parent = self
+        if not isinstance(content, (CodeLine, CodeBlock)):
+            raise TypeError("Can only add CodeLine leaf nodes to CodeBlock")
+            # if a codeblock is added, it can only have codelines in it.
+            # or codeblocks, but those can only contain codelinexs themselves.
+            # or codeblocks, but those can only contain codelines themselves.
+            # ...
+            # you get it.
+        super().append(content)
+
+
+class CodeLine(CodeContainer):
+    """Recursion-Breaking. Literally a single line."""
+
+    def __init__(self, *, context, **params):
+        super().__init__(context=context, **params)
+        self._line = None
+
+    def get_codelines_body(self, indent, **kwargs):
+        for line in self.construct_code_lines(**kwargs):
+            yield indent, line
+
+    def get_codelines_head(self, indent, **kwargs):
+        return
+        yield
+
+    def get_codelines_foot(self, indent, **kwargs):
+        return
+        yield
+
+    def construct_code_lines(self, **_):
+        """construct the code line"""
+        # this is a generator to include line breaks if necessary
+        yield self.line
+
+    @property
+    def line(self):
+        """access hidden attribute line"""
+        if self._line is None:
+            raise ValueError("CodeLine not set!")
+        return self._line
+
+    @line.setter
+    def line(self, line):
+        if not isinstance(line, str):
+            raise TypeError("Line must be a string")
+        if "\n" in line:
+            raise ValueError("Line cannot contain newline")
+        self._line = line
+
+    def append_head(self, *_):
+        raise ValueError("Cannot append to head in StatementLine")
+
+    def append_body(self, *_):
+        raise ValueError("Cannot append to head in StatementLine")
+
+    def append_foot(self, *_):
+        raise ValueError("Cannot append to head in StatementLine")
+
+    def set_line(self, line):
+        """set the line"""
+        self.line = line
+        return self
+
+
+class StatementLine(CodeLine):
+    """
+    A statement of form
+      output = somefunction(input1, ...)
+      output = input[index]
+      output = input
+      output = input1 some_operator input2
+
+    Serves as base class for more specific statements, but handles the variable
+    dependencies
+    """
+
+    _BLUEPRINT = ""
+
+    def finalize(self, **value_dict):
+        """construct the content from a value dictionary"""
+        self.line = type(self)._BLUEPRINT.format(**value_dict)
+        return self
+
+
+class CommentLine(CodeLine):
+    """
+    This line represents a comment
+    """
+
+    COMMENT_PREFIX = "#"
+
+    def construct_code_lines(self, **_):
+        yield type(self).COMMENT_PREFIX + self.line
+
+    def set_comment(self, text):
+        """set the comment text"""
+        self.line = text
+        return self
+
+
+class DefinitionLine(CodeLine):
+    """
+    This line represents a comment
+    """
+
+    def set_variable(self, variable):
+        """set the comment text"""
+        self.line = variable.get_definition_line()
+        return self
 
 
 class EnclosingContainer(GroupContainer):
@@ -400,23 +528,14 @@ class EnclosingContainer(GroupContainer):
     class and are not occupied by other content.
     """
 
-    def __init__(self, parent=None, **params):
-        super().__init__(parent=parent, **params)
-        self._fill_enclosing(**params)
-        self._locked = True
+    def __init__(self, context, **buildargs) -> None:
+        super().__init__(context, **buildargs)
 
-    def _fill_enclosing(self, **params):
-        pass
-
-    def append_head(self, *containers):
-        if self._locked:
-            raise ValueError("Cannot append to head in EnclosingContainer")
-        super().append_head(*containers)
-
-    def append_foot(self, *containers):
-        if self._locked:
-            raise ValueError("Cannot append to foot in EnclosingContainer")
-        super().append_foot(*containers)
+    def fill_enclosings(self, **buildargs):
+        """this method defines the enclosing characters."""
+        self.append_head(self.from_text("(", **buildargs))
+        self.append_foot(self.from_text(")", **buildargs))
+        return self
 
 
 class LoopContainer(EnclosingContainer):
@@ -432,16 +551,11 @@ class CaptureContainer(CodeContainer):
     hierarchy.
     """
 
-    def __init__(self, parent, level, namespace=None, **params) -> None:
-        super().__init__(parent=parent, level=level, **params)
+    def __init__(self, context, **buildargs) -> None:
+        super().__init__(context=context, **buildargs)
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
         self._captured: Set[LibRoutineVariable] = set()
-        if namespace is None:
-            assert self.parent is None
-            self._namespace = Namespace(self, None)
-        else:
-            self._namespace = namespace.inherit(self)
 
     def add_capture(self, capture: str | Callable) -> None:
         """add a type of requirement to capture"""
@@ -469,32 +583,13 @@ class CaptureContainer(CodeContainer):
         It is also added to the namespace
         """
         self._captured.add(variable)
-        self._namespace.add(variable)
 
-    # def reset_requirements(self):
-    #     """
-    #     Resetting the requirements in self and children is required before update
-    #     """
-    #     for content in self.content:
-    #         content.reset_requirements()
-    #     self._captured = set()
-
-    # def update_requirements(
-    #     self,
-    # ) -> Generator[LibRoutineVariable, None, None]:
-    #     """As parent, but keep the requirements that the filter catches"""
-    #     for requirement in super().update_requirements():
-    #         if self.capture_check(requirement):
-    #             self._captured.add(requirement)
-    #         else:
-    #             yield requirement
-
-    def send_variable(self, variable):
+    def requires(self, variable):
         """send the required variables up the tree"""
         if self.capture_check(variable):
             self.provides(variable)
         else:
-            super().send_variable(variable)
+            super().requires(variable)
 
 
 class DefinitionContainer(CaptureContainer):
@@ -503,6 +598,22 @@ class DefinitionContainer(CaptureContainer):
     on during requirement iterator. Supports a filtering function that decides
     on which type of requirements are implemented here or passed on.
     """
+
+    DEFCLASS = DefinitionLine
+
+    def build(self):
+        """build head and tail section of the definition container"""
+        # append all definition lines in head
+        for variable in self._captured:
+            defline = (
+                type(self)
+                .DEFCLASS(context=self.inherit_context())
+                .set_variable(variable)
+            )
+            self.append_head(defline)
+        # perform potential allocations in head
+        # perform potential deallocations in tail
+        return self
 
 
 class RoutineContainer(EnclosingContainer):
@@ -541,73 +652,15 @@ class LibraryContainer(EnclosingContainer):
 class ConditionalContainer(CodeContainer):
     """Conditionals. If. You know what."""
 
-    def __init__(self, parent, level, content, condition, **params):
-        super().__init__(parent=parent, level=level, **params)
+    def __init__(self, *, context, **params):
+        super().__init__(context=context, **params)
         self._cases = {}
-        self.add_case(condition, content)
 
     def add_case(self, condition, content):
         """add a case to the conditional"""
         self._cases[condition] = content
         # maybe sth like (libroutinevar, operator, libroutinevar)?
         # (would require a constant lrv)
-
-
-class CodeBlock(GroupContainer):
-    """A block of code that can only contain codelines but no control structures"""
-
-    # should default to getting the content of body without any extras.
-    def append(self, content):
-        """append a container to the body"""
-        if not isinstance(content, (CodeLine, CodeBlock)):
-            raise TypeError("Can only add CodeLine leaf nodes to CodeBlock")
-            # if a codeblock is added, it can only have codelines in it.
-            # or codeblocks, but those can only contain codelinexs themselves.
-            # or codeblocks, but those can only contain codelines themselves.
-            # ...
-            # you get it.
-        super().append(content)
-
-
-class CodeLine(CodeContainer):
-    """Recursion-Breaking. Literally a single line."""
-
-    def __init__(self, line, parent, level, **params):
-        super().__init__(parent=parent, level=level, **params)
-        self._line = line
-
-    def get_codelines_body(self, indent, **kwargs):
-        yield indent * "  " + self._line
-
-
-class StatementLine(CodeLine):
-    """
-    A statement of form
-      output = somefunction(input1, ...)
-      output = input[index]
-      output = input
-      output = input1 some_operator input2
-
-    Serves as base class for more specific statements, but handles the variable
-    dependencies
-    """
-
-    _BLUEPRINT = ""
-
-    def __init__(self, parent, level, **params):
-        line = type(self)._BLUEPRINT.format(**params)
-        super().__init__(line, parent=parent, level=level, **params)
-
-
-class CommentLine(CodeLine):
-    """
-    This line represents a comment
-    """
-
-    _COMMENT_PREFIX = "#"
-
-    def get_codelines_body(self, indent, **kwargs):
-        yield type(self)._COMMENT_PREFIX + indent * "  " + self._line
 
 
 # class VirtualContainer(CodeContainer):
@@ -650,8 +703,11 @@ if __name__ == "__main__":
         LibRoutineConstant,
         LibRoutineLocalVariable,
     )
+    from phoenix.fgen.builder import Context
 
-    foo = DefinitionContainer(None, 0, comment="foobar")
+    context = Context()
+
+    foo = DefinitionContainer(context=context)
     print(foo.capture_check(LibRoutineConstant(name="foo", value=1337)))
     # False
 

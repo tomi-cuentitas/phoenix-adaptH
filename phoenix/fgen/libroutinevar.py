@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 20/03/2025, 17:00
-# Version:     0.0.316
+# Last Update: 21/03/2025, 13:42
+# Version:     0.0.329
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,12 +23,11 @@ import weakref
 class Namespace:
     """manages the handling of namespaces"""
 
-    def __init__(self, associated_container, parent=None):
+    def __init__(self, parent=None):
         self._content: weakref.WeakValueDictionary[
             str, LibRoutineVariable
         ] = weakref.WeakValueDictionary()
         self._parent = parent
-        self._associated_container = associated_container
 
     def __contains__(self, element: LibRoutineVariable) -> bool:
         if element in self._content:
@@ -62,11 +61,15 @@ class Namespace:
         return len(self._content)
 
     def __str__(self):
-        return str(list(self._content.values()))
+        return (
+            "{"
+            + str(", ".join(var.name for var in self._content.values()))
+            + "}"
+        )
 
-    def inherit(self, container):
+    def inherit(self):
         """inherit into a new namespace that is contained in self"""
-        return type(self)(container, self._parent)
+        return type(self)(self._parent)
 
 
 class LibRoutineVariable:
@@ -75,16 +78,18 @@ class LibRoutineVariable:
     _VAR_IDENTIFIER = "GENERIC"
     _CLASS_BASE = "var"
 
-    _class_namespace = Namespace(None, None)
+    _class_namespace = Namespace(None)
     # if this ever becomes a dict, it must be weak!
 
     def __init__(
         self,
-        size=None,
         name=None,
+        /,
+        size=None,
         namespace=None,
         prefix=None,
         suffix=None,
+        dtype="f64",
     ):
         if namespace is None:
             namespace = type(self)._class_namespace
@@ -100,6 +105,7 @@ class LibRoutineVariable:
         assert name not in self._namespace
         self._name = name
         self._size = size
+        self._dtype = dtype
         self._namespace.add(self)
 
     def __str__(self):
@@ -109,6 +115,12 @@ class LibRoutineVariable:
 
     def __repr__(self):
         return str(self)
+
+    def get_definition_line(self) -> str:
+        """create the line that defines the variable"""
+        if self.size is None:
+            return f"DEFINE {self._dtype} {self._name}"
+        return f"DEFINE {self._dtype} {self._name}[{self.size}]"
 
     # @classmethod
     # def autoname(
@@ -156,6 +168,11 @@ class LibRoutineVariable:
     def size(self):
         """access size attribute"""
         return self._size
+
+    @property
+    def dtype(self):
+        """access datatype attribute"""
+        return self._dtype
 
     @property
     def vtype(self):
@@ -294,7 +311,7 @@ class LibRoutineConstant(LibRoutineVariable):
 
 
 if __name__ == "__main__":
-    othernamespace = Namespace(None, None)
+    othernamespace = Namespace(None)
     a = None
     b = None
     c = None

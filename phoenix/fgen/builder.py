@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 20/03/2025, 16:15
-# Version:     0.0.803
+# Last Update: 21/03/2025, 13:38
+# Version:     0.0.831
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,7 +33,8 @@ from phoenix.fgen.instruction import (
     OffsetEnvironmentInstruction,
 )
 
-from phoenix.fgen.codecontainer import CommentLine
+from weakref import ref
+from phoenix.fgen.codecontainer import CommentLine, DefinitionContainer
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
 
@@ -63,7 +64,10 @@ class Context:
         if environment is None:
             environment = InstructionEnvironment()
 
-        self._parent = parent
+        if parent is None:
+            self._parent = None
+        else:
+            self._parent = ref(parent)
         self._level = level
         self._namespace = namespace
         self._environment = environment
@@ -71,7 +75,10 @@ class Context:
     @property
     def parent(self):
         """access read-only attribute parent"""
-        return self._parent
+        if self._parent is None:
+            return None
+        # weakref
+        return self._parent()
 
     @property
     def level(self):
@@ -91,7 +98,7 @@ class Context:
     def inherit(
         self,
         parent=None,
-        extend_environment=None,
+        environment=None,
         namespace=None,
     ):
         """
@@ -103,17 +110,20 @@ class Context:
         if parent is None:
             parent = self.parent
 
-        if extend_environment is None:
-            extend_environment = InstructionEnvironment()
+        if environment is None:
+            environment = self.environment
 
         if namespace is None:
-            namespace = self.namespace
+            if self.namespace is None:
+                namespace = Namespace()
+            else:
+                namespace = self.namespace.inherit()
 
         return Context(
             parent=parent,
             level=self.level + 1,
             namespace=namespace,
-            environment=self.environment.merge(extend_environment),
+            environment=environment,
         )
 
 
@@ -357,7 +367,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         # fill with content. This is not done on init automatically to be able
         # to implement that lazy as well.
 
-    @log.wrap_call_gen
+    @log.wrap_call
     def generate_container_tree(self, instruction, **buildargs):
         """
         Build the code from the instruction tree. This is meant to be called
@@ -393,16 +403,20 @@ class Builder(Optimizer, identifier="GENERIC"):
             level=0,
             environment=InstructionEnvironment(),
             parent=None,
-            namespace=set(),
+            namespace=Namespace(),
         )
 
-        yield from self.containers_from_instruction(
+        definition_section = DefinitionContainer(context=context)
+        definition_section.add_capture(lambda x: True)
+        for container in self.containers_from_instruction(
             optimized_tree,
-            context=context,
+            context=definition_section.inherit_context(),
             **{**self._params, **buildargs},
-        )
+        ):
+            definition_section.append(container)
 
         info("reached end of instruction build")
+        return definition_section.build()
 
     @classmethod
     def set_comment_class(cls, comment_class):
@@ -416,11 +430,9 @@ class Builder(Optimizer, identifier="GENERIC"):
             assert issubclass(comment_class, CommentLine)
             for line in lines:
                 yield comment_class(
-                    line,
-                    parent=context.parent,
-                    level=context.level,
+                    context=context,
                     **buildargs,
-                )
+                ).set_comment(line)
 
     def handle_basic_instruction(self, instruction, context, buildargs):
         """default handler for basic instruction"""
