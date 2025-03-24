@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 21/03/2025, 13:38
-# Version:     0.0.831
+# Last Update: 24/03/2025, 15:08
+# Version:     0.0.839
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -95,6 +95,13 @@ class Context:
         """access read-only attribute namespace"""
         return self._namespace
 
+    def new_namespace_node(self):
+        """provide a new namespace node"""
+        if self._namespace is None:
+            self._namespace = Namespace()
+        else:
+            self._namespace = self._namespace.inherit()
+
     def inherit(
         self,
         parent=None,
@@ -117,7 +124,7 @@ class Context:
             if self.namespace is None:
                 namespace = Namespace()
             else:
-                namespace = self.namespace.inherit()
+                namespace = self.namespace  # .inherit()
 
         return Context(
             parent=parent,

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 21/03/2025, 16:12
-# Version:     0.0.287
+# Last Update: 24/03/2025, 16:47
+# Version:     0.0.298
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -51,7 +51,7 @@ from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
 class TestLineWithVariable(CodeLine):
     def set_line(self, line):
         temp1 = self.request_temp("test_temporary1", LibRoutineLocalVariable, size=None, dtype="i53")
-        temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
+        # temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
         super().set_line(
             f"{line} + {temp1.expr_at_offset(
                 1, 2, 3, 4)} + {temp2.expr_at_offset(
@@ -147,6 +147,9 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         yield PTCodeLine(context=context, **buildargs).set_line(
             line=f"answer: {instruction['answer']}"
         )
+        yield PTCodeLine(context=context, **buildargs).set_line(
+            line=f"namesp: {id(context.namespace)}"
+        )
         yield (TestLineWithVariable(context=context).set_line("foofoofoo"))
 
     def handle_routine_instruction(self, instruction, context, buildargs):
@@ -195,6 +198,10 @@ ctxt = Context()
 largegroup = InstructionGroup([test, test, test])
 
 container_tree = a.generate_container_tree(largegroup)
+
+print(id(container_tree.context.namespace))
+for node in container_tree.content:
+    print(id(node.context.namespace))
 
 for indent, line in container_tree.get_codelines():
     print(indent * "  " + line)

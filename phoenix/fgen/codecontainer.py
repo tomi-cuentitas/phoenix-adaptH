@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 21/03/2025, 16:16
-# Version:     0.0.1130
+# Last Update: 24/03/2025, 15:09
+# Version:     0.0.1138
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -207,16 +207,16 @@ class CodeContainer:
     def requires(self, variable: LibRoutineVariable) -> None:
         """request to use a variable"""
         # potentially gets stuck in CaptureContainer
-        self._requirements.add(variable.name)
+        # self._requirements.add(variable.name)
         if not isinstance(variable, LibRoutineVariable):
             raise TypeError("Dependencies must be LibRoutineVariables")
         if self.parent is None:
             raise ValueError("variable request got lost!")
         self.parent.requires(variable)
 
-    def inherit_context(self):
+    def inherit_context(self, **kwargs):
         """inherit the context"""
-        return self.context.inherit(parent=self)
+        return self.context.inherit(parent=self, **kwargs)
 
     def from_text(self, text: str) -> CodeContainer:
         """generate a plain codeline from text"""
@@ -550,6 +550,8 @@ class CaptureContainer(CodeContainer):
 
     def __init__(self, context, **buildargs) -> None:
         super().__init__(context=context, **buildargs)
+        # new namespace node in capture container
+        self._context.new_namespace_node()
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
         self._captured: Set[LibRoutineVariable] = set()

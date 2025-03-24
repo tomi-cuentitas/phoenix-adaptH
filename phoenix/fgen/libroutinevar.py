@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 24/03/2025, 12:02
-# Version:     0.0.441
+# Last Update: 24/03/2025, 14:46
+# Version:     0.0.442
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -79,7 +79,7 @@ class Namespace:
             return self._parent.find(name)
         raise KeyError(f"variable {name} not found")
 
-    def temp_name(self, name, origin):
+    def _get_temp_name(self, name, origin):
         """generate a temporary variable name from a standardized recipe"""
         caps = "".join([c for c in type(origin).__name__ if c.isupper()])
         myhash = f"{caps.lower()}"
@@ -87,7 +87,7 @@ class Namespace:
 
     def get_temp(self, generating, name, origin, **genargs):
         """get a temporary variable. Look it up or generate."""
-        name = self.temp_name(name, origin)
+        name = self._get_temp_name(name, origin)
         if name in self:
             return self.find(name)
         temp = generating(name=name, **genargs)
