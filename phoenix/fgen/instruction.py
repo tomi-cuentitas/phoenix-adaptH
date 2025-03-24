@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 19/03/2025, 17:36
-# Version:     0.0.2858
+# Last Update: 24/03/2025, 12:01
+# Version:     0.0.2921
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -54,6 +54,57 @@ from phoenix.fgen.instructionvar import (
 #         if key in self:
 #             return super().__getitem__(key)
 #         return "{" + key + "}"
+
+
+def _next_recursive(recursive):
+    """
+    The recursive keyword allows both numbers and booleans.
+    recursive == True means infinite recursive execution
+    recursive == False means only this one execution
+    recursive == number means number executions.
+    To clean the code, the iteration, i.e. the argument of the next recursive call,
+    is generated in this auxilliary function.
+    """
+    if isinstance(recursive, bool):
+        if recursive is True:
+            return True
+        assert (
+            False
+        ), "you should not be here. You forgot to implement _interpret_recursive"
+    elif isinstance(recursive, int):
+        if recursive < 0:
+            raise ValueError(
+                "Number of recursive executions must be non-negative."
+            )
+        return recursive - 1
+    raise TypeError(
+        "The recursive argument must be a boolean or a non-negative integer."
+    )
+
+
+def _interpret_recursive(recursive):
+    """
+    The recursive keyword allows both numbers and booleans.
+    recursive == True means infinite recursive execution
+    recursive == False means only this one execution
+    recursive == number means number executions.
+    To clean the code, the check of validity of the present recursive iteration,
+    is put in this auxilliary function.
+    """
+    if isinstance(recursive, bool):
+        if recursive is True:
+            return True
+        # False is treated as a single recursion
+        return 1
+    elif isinstance(recursive, int):
+        if recursive < 0:
+            raise ValueError(
+                "Number of recursive executions must be non-negative."
+            )
+        return recursive
+    raise TypeError(
+        "The recursive argument must be a boolean or a non-negative integer."
+    )
 
 
 ###############################################################################
@@ -125,8 +176,8 @@ class Instruction:
         data_dict = {}  # _PartialFormatDict
         provided = {}
         for cls in reversed(self.__class__.__mro__):
-            if hasattr(cls, "_dict_update"):
-                provided.update(cls._dict_update(self))
+            if hasattr(cls, "_export_dict"):
+                provided.update(cls._export_dict(self))
         if keys:
             data_dict.update(
                 {
@@ -198,7 +249,7 @@ class Instruction:
         yield self
 
     # pylint: disable=unused-argument
-    def unpack(self, recursive: bool | int = True, environment=None):
+    def unpack(self, environment=None):
         """
         Unpacking goes through the instructions but interprets them wrt an environment.
 
@@ -209,34 +260,32 @@ class Instruction:
 
         :param environment: optional environment.
         """
-        for is_leaf, ref, ref_env in self.walk(
-            recursive=recursive,
+        if environment is None:
+            environment = InstructionEnvironment()
+        for _, is_leaf, ref, ref_env in self.walk(
+            recursive=True,
             environment=environment,
-            include_groups=False,
+            include_control=False,
         ):
-            if is_leaf:
-                yield ref.apply_environment(ref_env)
+            assert is_leaf
+            yield ref.apply_environment(ref_env)
 
     def walk(
         self,
         environment=None,
         recursive: bool | int = True,
-        include_groups=True,
+        include_control=True,
+        level=0,
     ):
         """
         walk the instruction tree. A generator that yields information on
         self, the environment and a flag whether it is a leaf
         """
-        if environment is None:
-            environment = InstructionEnvironment()
-        if isinstance(recursive, int):
-            if recursive == 0:
-                return
-        yield True, self, environment
+        raise NotImplementedError("subclass must implement this method")
 
     # pylint: enable=unused-argument
 
-    def _dict_update(self) -> Dict[str, Any]:
+    def _export_dict(self) -> Dict[str, Any]:
         """get a dictionary from self"""
         return {
             "identifier": self.identifier,
@@ -370,7 +419,7 @@ class GenericInstruction(Instruction, ftype="generic"):
     supported for flexible entry access without creating duplicates.
     """
 
-    # _alias: dict[str, str] = {}
+    _alias: dict[str, str] = {}
 
     def __init__(self, itype=None, **params):
         if itype is None:
@@ -403,16 +452,16 @@ class GenericInstruction(Instruction, ftype="generic"):
     def __getitem__(self, key):
         if key in self._params:
             return self._params[key]
-        raise KeyError(f"Key '{key}' not found in instruction parameters")
-        # return self._from_alias(key)
+        # raise KeyError(f"Key '{key}' not found in instruction parameters")
+        return self._from_alias(key)
 
     def __setitem__(self, key, value):
         self.set(key, value)
 
-    # @classmethod
-    # def set_alias(cls, alias, reference):
-    #     """add an alias to the class"""
-    #     cls._alias[alias] = reference
+    @classmethod
+    def set_alias(cls, alias, reference):
+        """add an alias to the class"""
+        cls._alias[alias] = reference
 
     def checksum(self):
         test_tuple = (
@@ -427,27 +476,19 @@ class GenericInstruction(Instruction, ftype="generic"):
         return tuple(self.values())
 
     def get(self, *in_args):
-        """mimic the get behaviour of dicts"""
-        match in_args:
-            case (key, default):
-                if key in self._params:
-                    return self._params[key]
-                # try:
-                #     return self._from_alias(key)
-                # except KeyError:
-                #     return default
-                return default
-            case (key,):
-                if key in self._params:
-                    return self._params[key]
-                # return self._from_alias(key)
-                raise KeyError(
-                    f"Key '{key}' not found in instruction parameters"
-                )
-            case _:
-                raise ValueError(
-                    "get requires a key and an optional default value to return"
-                )
+        """mimic the get behaviour of dicts, but consider set alias"""
+        key, *default = in_args
+        if key in type(self)._alias:
+            return self._from_alias(key)
+        if key in self._params:
+            return self._params[key]
+        if len(default) == 0:
+            raise KeyError(f"Key '{key}' not found in instruction parameters")
+        if len(default) == 1:
+            return default[0]
+        raise ValueError(
+            "get requires a key and an optional default value to return"
+        )
 
     def set(self, key, value):
         """set a value, consider protection"""
@@ -457,9 +498,13 @@ class GenericInstruction(Instruction, ftype="generic"):
             )
         self._params[key] = value
 
-    def _dict_update(self):
+    def _export_dict(self):
         """access the full dict representation, which is params for any generic instruction"""
-        return self._params  # + alias if included
+        mapped_alias = {
+            alias: self._params[target]
+            for alias, target in type(self)._alias.items()
+        }
+        return {**self._params, **mapped_alias}
 
     def to_tuple(self, *keys, defaults: dict | None = None):
         """get a data tuple from keys in the order the keys are requested"""
@@ -474,12 +519,12 @@ class GenericInstruction(Instruction, ftype="generic"):
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
 
-    # def _from_alias(self, key):
-    #     print(f"look up potential alias {key} in {type(self).__name__}")
-    #     if key in type(self)._alias:
-    #         # don't call self._params here, so alias can chain
-    #         return self._params[type(self)._alias[key]]
-    #     raise KeyError(f"Key '{key}' not found in dict nor alias map")
+    def _from_alias(self, key):
+        #     print(f"look up potential alias {key} in {type(self).__name__}")
+        if key in type(self)._alias:
+            # don't call self._params here, so alias can chain
+            return self._params[type(self)._alias[key]]
+        raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
     def __deepcopy__(self, memo=None):
         if memo is None:
@@ -497,6 +542,23 @@ class GenericInstruction(Instruction, ftype="generic"):
         Consider renaming here
         """
         return cls(**params)
+
+    def walk(
+        self,
+        environment=None,
+        recursive: bool | int = True,
+        include_control=True,
+        level=0,
+    ):
+        """
+        walk the instruction tree. Generic is a prototype of a leaf instruction
+        """
+        recursions = _interpret_recursive(recursive)
+        if not recursions:
+            return
+        if environment is None:
+            environment = InstructionEnvironment()
+        yield level, True, self, environment
 
 
 ###############################################################################
@@ -598,7 +660,7 @@ class InstructionGroup(Instruction, ftype="group"):
         memo[id(self)] = weakref.ref(copied_group)
         return copied_group
 
-    def _dict_update(self):
+    def _export_dict(self):
         """get a full dict-like object"""
         return {"instructions": self._instructions}
 
@@ -615,30 +677,35 @@ class InstructionGroup(Instruction, ftype="group"):
         self,
         environment=None,
         recursive: bool | int = True,
-        include_groups=True,
+        include_control=True,
+        level=0,
     ):
         """
         walk the instruction tree. A generator that yields information on
         self, the environment and a flag whether it is a leaf
         """
+        recursions = _interpret_recursive(recursive)
+        if not recursions:
+            return
         if environment is None:
             environment = InstructionEnvironment()
-        if include_groups:
-            if recursive is False or recursive:
-                yield False, self, environment
-        if recursive is True:
+        if include_control:
+            yield level, False, self, environment
             for instr in self.instructions:
+                # iterate level and recursion parameter, as control structure itself has been yielded
                 yield from instr.walk(
                     environment=environment,
-                    recursive=True,
-                    include_groups=include_groups,
+                    recursive=_next_recursive(recursions),
+                    include_control=include_control,
+                    level=level + 1,
                 )
-        elif recursive >= 1:
+        else:
             for instr in self.instructions:
                 yield from instr.walk(
                     environment=environment,
-                    recursive=recursive - int(include_groups),
-                    include_groups=include_groups,
+                    recursive=recursions,
+                    include_control=include_control,
+                    level=level,
                 )
 
     def flatten(self):
@@ -778,7 +845,7 @@ class ContentInstruction(Instruction, ftype="content"):
             )
         self._content = content
 
-    def _dict_update(self):
+    def _export_dict(self):
         """get a full dict-like object"""
         return {"content": self._content}
 
@@ -809,18 +876,37 @@ class ContentInstruction(Instruction, ftype="content"):
         self,
         environment=None,
         recursive: bool | int = True,
-        include_groups=True,
+        include_control=True,
+        level=0,
     ):
         """
         walk the instruction tree. A generator that yields information on
         self, the environment and a flag whether it is a leaf
         """
         # an environment does not count as recursive step!!
-        yield from self.content.walk(
-            environment=environment,
-            recursive=recursive,
-            include_groups=include_groups,
-        )
+        recursions = _interpret_recursive(recursive)
+        if not recursions:
+            return
+        if environment is None:
+            environment = InstructionEnvironment()
+        if include_control:
+            yield level, False, self, environment
+            for instr in self.instructions:
+                # iterate level and recursion parameter, as control structure itself has been yielded
+                yield from instr.walk(
+                    environment=environment,
+                    recursive=_next_recursive(recursions),
+                    include_control=include_control,
+                    level=level + 1,
+                )
+        else:
+            for instr in self.instructions:
+                yield from instr.walk(
+                    environment=environment,
+                    recursive=recursions,
+                    include_control=include_control,
+                    level=level,
+                )
 
     def _apply_environment(
         self, environment: InstructionEnvironment, memo: dict, **kwargs
@@ -864,7 +950,7 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
         """access read-only attribute environment"""
         return self._environment
 
-    def _dict_update(self):
+    def _export_dict(self):
         """get a full dict-like object"""
         return {"environment": self.environment}
 
@@ -897,21 +983,38 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
         self,
         environment=None,
         recursive: bool | int = True,
-        include_groups=True,
+        include_control=True,
+        level=0,
     ):
         """
         walk the instruction tree. A generator that yields information on
         self, the environment and a flag whether it is a leaf
         """
-        # an environment does not count as recursive step!!
+
+        recursions = _interpret_recursive(recursive)
+        if not recursions:
+            return
         if environment is None:
             environment = InstructionEnvironment()
         combined_environment = environment.merge(self.environment)
-        yield from super().walk(
-            environment=combined_environment,
-            recursive=recursive,
-            include_groups=include_groups,
-        )
+        if include_control:
+            yield level, False, self, environment
+            for instr in self.instructions:
+                # iterate level and recursion parameter, as control structure itself has been yielded
+                yield from instr.walk(
+                    environment=combined_environment,
+                    recursive=_next_recursive(recursions),
+                    include_control=include_control,
+                    level=level + 1,
+                )
+        else:
+            for instr in self.instructions:
+                yield from instr.walk(
+                    environment=combined_environment,
+                    recursive=recursions,
+                    include_control=include_control,
+                    level=level,
+                )
 
 
 ###############################################################################
@@ -1021,7 +1124,7 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         """access read-only environments"""
         yield from self._environments
 
-    def _dict_update(self):
+    def _export_dict(self):
         """get a full dict-like object"""
         return {"environments": self._environments}
 
@@ -1046,20 +1149,41 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         self,
         environment=None,
         recursive: bool | int = True,
-        include_groups=True,
+        include_control=True,
+        level=0,
     ):
         """
         walk the instruction tree. A generator that yields information on
         self, the environment and a flag whether it is a leaf
         """
-        # an environment does not count as recursive step!!
-        for thisenv in self.environments:
-            combined_environment = environment.merge(thisenv)
-            yield from self.content.walk(
-                environment=combined_environment,
-                recursive=recursive,
-                include_groups=include_groups,
-            )
+
+        recursions = _interpret_recursive(recursive)
+        if not recursions:
+            return
+        if environment is None:
+            environment = InstructionEnvironment()
+        if include_control:
+            yield level, False, self, environment
+            for thisenv in self.environments:
+                combined_environment = environment.merge(thisenv)
+                for instr in self.instructions:
+                    # iterate level and recursion parameter, as control structure itself has been yielded
+                    yield from instr.walk(
+                        environment=combined_environment,
+                        recursive=_next_recursive(recursions),
+                        include_control=include_control,
+                        level=level + 1,
+                    )
+        else:
+            for thisenv in self.environments:
+                combined_environment = environment.merge(thisenv)
+                for instr in self.instructions:
+                    yield from instr.walk(
+                        environment=combined_environment,
+                        recursive=recursions,
+                        include_control=include_control,
+                        level=level,
+                    )
 
     def _apply_environment(
         self, environment: InstructionEnvironment, memo: dict, **kwargs
@@ -1136,7 +1260,7 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
             buildargs = {}
         self._buildargs = buildargs
 
-    def _dict_update(self):
+    def _export_dict(self):
         """get a full dict-like object"""
         return {"content": self._content, "buildargs": self._buildargs}
 
@@ -1174,7 +1298,7 @@ class RoutineInstruction(ContentInstruction, ftype="subroutine"):
         self._inp_variables = inp_variables
         self._out_variables = out_variables
 
-    def _dict_update(self):
+    def _export_dict(self):
         """get a full dict-like object"""
         return {
             "inp_vars": self._inp_variables,
@@ -1410,81 +1534,87 @@ if __name__ == "__main__":
     import sys
 
     print("unpack, 0 recursive")
-    for isleaf, el, env in printed_instructions.walk(recursive=0):
+    for level, isleaf, el, env in printed_instructions.walk(recursive=0):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
                 "\t",
+                level,
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
-            print("\t", el, env)
+            print("\t", level, el, env)
 
     print("unpack, non recursive")
-    for isleaf, el, env in printed_instructions.walk(recursive=False):
+    for level, isleaf, el, env in printed_instructions.walk(recursive=False):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
                 "\t",
+                level,
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
-            print("\t", el, env)
+            print("\t", level, el, env)
 
     print("unpack, 1 recursive")
-    for isleaf, el, env in printed_instructions.walk(recursive=1):
+    for level, isleaf, el, env in printed_instructions.walk(recursive=1):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
                 "\t",
+                level,
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
-            print("\t", el, env)
+            print("\t", level, el, env)
 
     print("unpack, 2 recursive")
-    for isleaf, el, env in printed_instructions.walk(recursive=2):
+    for level, isleaf, el, env in printed_instructions.walk(recursive=2):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
                 "\t",
+                level,
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
-            print("\t", el, env)
+            print("\t", level, el, env)
 
     print("unpack, 3 recursive")
-    for isleaf, el, env in printed_instructions.walk(recursive=3):
+    for level, isleaf, el, env in printed_instructions.walk(recursive=3):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
                 "\t",
+                level,
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
                 env_el["coeff_x1"],
             )
         else:
-            print("\t", el, env)
+            print("\t", level, el, env)
 
     print("unpack, True recursive")
-    for isleaf, el, env in printed_instructions.walk(recursive=True):
+    for level, isleaf, el, env in printed_instructions.walk(recursive=True):
         if isleaf:
             env_el = el.apply_environment(env)
             print(
                 "\t",
+                level,
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
@@ -1493,18 +1623,18 @@ if __name__ == "__main__":
                 env_el["coeff_x1"],
             )
         else:
-            print("\t", el, env)
+            print("\t", level, el, env)
 
     some_value_x = SymbolicOffset("some_offset")
     some_value_x.associate_variable("x")
 
     print("unpack, True recursive, extra tests on variable variables")
-    for el in printed_instructions.unpack(recursive=True):
-        print(
-            "\t",
-            el["tgt0"] + some_value_x,
-            (el["tgt0"] + some_value_x).offsets,
-        )
+    for el in printed_instructions.unpack():
+        print("\t", el["tgt0"])
+        print("\t", el["tgt0"].offsets)
+
+        print("\t", el["tgt0"] + some_value_x)
+        print("\t", (el["tgt0"] + some_value_x).offsets)
 
     print(len(printed_instructions))
 
