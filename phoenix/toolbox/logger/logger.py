@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 20/03/2025, 12:59
-# Version:     0.0.772
+# Last Update: 24/03/2025, 17:34
+# Version:     0.0.805
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,10 +19,12 @@ import traceback as tb
 from sys import stdout, stderr
 
 # global log levels
-ERROR = 0
-WARNING = 1
-INFO = 2
-DEBUG = 3
+_LOG_LEVELS = {
+    "ERROR": 0,
+    "WARNING": 1,
+    "INFO": 2,
+    "DEBUG": 3,
+}
 
 _COLORS = {
     "fg black": "\033[30m",
@@ -64,6 +66,9 @@ _COLORS = {
     "default": "\033[0m",
 }
 _COLOR_RESET = ["default"]
+
+
+_EXCEPTION_LOGGED_MARKER = "_exception_logged"
 
 
 class Logger:
@@ -116,21 +121,28 @@ class Logger:
                     f"kwargs: {kwargs}",
                 ]
                 if self._alerted:
-                    lines.append("traceback:")
-                    for num, segment in enumerate(
-                        tb.format_tb(exc.__traceback__, limit=None)
-                    ):
-                        # if num == 0:
-                        #     continue
-                        for line in segment.split("\n"):
-                            if line.strip():
-                                lines.append(f"  {line}")
                     self.error(*lines)
                 else:
                     self.warn(*lines)
-                exc.add_note(
-                    f"Information has been written to the log file '{self._file}'"
-                )
+                lines = []
+                if not hasattr(exc, _EXCEPTION_LOGGED_MARKER):
+                    if self._alerted:
+                        lines.append("traceback:")
+                        for num, segment in enumerate(
+                            tb.format_tb(exc.__traceback__, limit=None)
+                        ):
+                            # if num == 0:
+                            #     continue
+                            for line in segment.split("\n"):
+                                if line.strip():
+                                    lines.append(f"  {line}")
+                        self.error(*lines)
+                    else:
+                        self.warn(*lines)
+                    exc.add_note(
+                        f"Information has been written to the log file '{self._file}'"
+                    )
+                    setattr(exc, _EXCEPTION_LOGGED_MARKER, True)
                 raise exc
             finally:
                 # if self._loglevel > 2:
@@ -173,21 +185,29 @@ class Logger:
                     f"kwargs: {kwargs}",
                 ]
                 if self._alerted:
-                    lines.append("traceback:")
-                    for num, segment in enumerate(
-                        tb.format_tb(exc.__traceback__, limit=None)
-                    ):
-                        # if num == 0:
-                        #     continue
-                        for line in segment.split("\n"):
-                            if line.strip():
-                                lines.append(f"  {line}")
                     self.error(*lines)
                 else:
                     self.warn(*lines)
-                exc.add_note(
-                    f"Information has been written to the log file '{self._file}'"
-                )
+                lines = []
+                if not hasattr(exc, _EXCEPTION_LOGGED_MARKER):
+                    if self._alerted:
+                        lines.append("traceback:")
+                        for num, segment in enumerate(
+                            tb.format_tb(exc.__traceback__, limit=None)
+                        ):
+                            # if num == 0:
+                            #     continue
+                            for line in segment.split("\n"):
+                                if line.strip():
+                                    lines.append(f"  {line}")
+
+                        self.error(*lines)
+                    else:
+                        self.warn(*lines)
+                    exc.add_note(
+                        f"Information has been written to the log file '{self._file}'"
+                    )
+                    setattr(exc, _EXCEPTION_LOGGED_MARKER, True)
                 raise exc
             finally:
                 # if self._loglevel > 2:
@@ -235,7 +255,10 @@ class Logger:
         2: also include info (default)
         3: also include debug info
         """
-        self._loglevel = min(3, max(0, loglevel))
+        if isinstance(loglevel, int):
+            self._loglevel = min(3, max(0, loglevel))
+        else:
+            self._loglevel = _LOG_LEVELS[loglevel]
 
     def set_logfile(self, filename, path=None, reset=True):
         """
@@ -271,7 +294,7 @@ class Logger:
 
     def _write_to_file(self, acstr, typestr, mline, msgtype, level, srcstr):
         indent = level * "  "
-        line = f"{acstr}{srcstr}{typestr}{indent}{mline}"
+        line = f"{acstr}{srcstr}{typestr}| {indent}{mline}"
         if self._file:
             with open(self._file, "a") as file:
                 file.write(line + "\n")
@@ -298,7 +321,7 @@ class Logger:
             first = True
             for mline in message_lines:
                 acstr = f"{acount:>6}" + ": "
-                typestr = f"{type(self)._LOG_REPR[msgtype.upper()]: <4}" + ": "
+                typestr = f"{type(self)._LOG_REPR[msgtype.upper()]: <4}" + " "
                 lsrcstr = f"@{lsource:<22}: "
                 ssrcstr = f"@{ssource:<12}: "
                 if not first:

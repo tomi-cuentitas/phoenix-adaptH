@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 24/03/2025, 15:08
-# Version:     0.0.839
+# Last Update: 24/03/2025, 17:22
+# Version:     0.0.847
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -426,10 +426,12 @@ class Builder(Optimizer, identifier="GENERIC"):
         return definition_section.build()
 
     @classmethod
+    @log.wrap_call
     def set_comment_class(cls, comment_class):
         """set the comment class for the builder"""
         cls._comment_class = comment_class
 
+    @log.wrap_call
     def comment(self, *lines, context: Context, buildargs):
         """generate one or multiple comment lines"""
         comment_class: type(CommentLine) | None = type(self)._comment_class
@@ -441,6 +443,7 @@ class Builder(Optimizer, identifier="GENERIC"):
                     **buildargs,
                 ).set_comment(line)
 
+    @log.wrap_call_gen
     def handle_basic_instruction(self, instruction, context, buildargs):
         """default handler for basic instruction"""
         raise NotImplementedError(
@@ -450,6 +453,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         )
         yield
 
+    @log.wrap_call_gen
     def handle_group_instruction(self, instruction, context, buildargs):
         """default handler for group instruction"""
         for child in instruction.instructions:
@@ -459,6 +463,7 @@ class Builder(Optimizer, identifier="GENERIC"):
                 **buildargs,
             )
 
+    @log.wrap_call_gen
     def handle_content_instruction(self, instruction, context, buildargs):
         """default handler for content instruction"""
         yield from self.containers_from_instruction(
@@ -467,17 +472,20 @@ class Builder(Optimizer, identifier="GENERIC"):
             **buildargs,
         )
 
+    @log.wrap_call_gen
     def handle_generic_instruction(self, instruction, context, buildargs):
         """default handler for generic instruction"""
         yield from self.comment(
             str(instruction.to_dict()), context=context, buildargs=buildargs
         )
 
+    @log.wrap_call_gen
     def handle_routine_instruction(self, instruction, context, buildargs):
         """default handler for routine instruction"""
         return
         yield
 
+    @log.wrap_call_gen
     def handle_mapapply_instruction(self, instruction, context, buildargs):
         """default handler for mapapply instruction"""
         for environment in instruction.environments:
@@ -487,6 +495,7 @@ class Builder(Optimizer, identifier="GENERIC"):
                 **buildargs,
             )
 
+    @log.wrap_call_gen
     def handle_variation_instruction(self, instruction, context, buildargs):
         """default handler for variation instruction"""
         yield from self.containers_from_instruction(
@@ -495,6 +504,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             **buildargs,
         )
 
+    @log.wrap_call_gen
     def handle_environment_instruction(self, instruction, context, buildargs):
         """default handler for environment instruction"""
         yield from self.containers_from_instruction(
@@ -504,11 +514,13 @@ class Builder(Optimizer, identifier="GENERIC"):
         )
 
     @classmethod
+    @log.wrap_call
     def remove_handler(cls, instruction_class):
         """remove a handler"""
         if instruction_class in cls._supp_instr_handler:
             del cls._supp_instr_handler[instruction_class]
 
+    @log.wrap_call
     @classmethod
     def include_instruction_class(cls, instruction_class):
         """remove a handler"""
@@ -516,6 +528,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             cls._excl_instr_classes.remove(instruction_class)
 
     @classmethod
+    @log.wrap_call
     def set_default_handlers(cls):
         """set the instruction handlers to a default"""
         handler_mappings = [
@@ -540,6 +553,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         cls.set_handlers(handler_mappings)
 
     @classmethod
+    @log.wrap_call
     def set_handlers(cls, handler_mappings):
         """set the mappings of instruction classes to handlers"""
         for instruction_class, class_handler in handler_mappings:

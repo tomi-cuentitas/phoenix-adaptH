@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 24/03/2025, 16:47
-# Version:     0.0.298
+# Last Update: 24/03/2025, 17:27
+# Version:     0.0.302
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,6 +28,11 @@ from phoenix.fgen.codecontainer import (
     ConditionalContainer,
 )
 from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
+
+from phoenix.toolbox.logger import GLOBAL_LOGGER
+
+GLOBAL_LOGGER.set_logfile("plaintextbuilder")
+GLOBAL_LOGGER.set_loglevel("DEBUG")
 
 ###############################################################################
 #
