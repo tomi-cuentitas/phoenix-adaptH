@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 25/03/2025, 16:38
-# Version:     0.0.358
+# Last Update: 25/03/2025, 18:21
+# Version:     0.0.359
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -115,6 +115,9 @@ class PTDefinitionContainer(DefinitionContainer):
     def build(self):
         self.append_head(PTCodeLine(context=self.context).set_line(
             "BEGIN DEFINITION CONTAINER"))
+        if self._captured:
+            self.append_head(PTCodeLine(context=self.context).set_line(
+                "defines:"))
         self.append_foot(PTCodeLine(context=self.context).set_line(
             "END OF DEFINITION CONTAINER"))
         return super().build()
