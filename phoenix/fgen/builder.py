@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 24/03/2025, 17:22
-# Version:     0.0.847
+# Last Update: 25/03/2025, 16:28
+# Version:     0.0.851
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -238,6 +238,7 @@ class Builder(Optimizer, identifier="GENERIC"):
     _excl_instr_classes: Set[type] = set()
 
     _comment_class = None
+    _defcon_class = DefinitionContainer
 
     _class_optimizers: List[Optimizer] = []
     _class_validators: List[Validator] = []
@@ -413,7 +414,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             namespace=Namespace(),
         )
 
-        definition_section = DefinitionContainer(context=context)
+        definition_section = type(self)._defcon_class(context=context)
         definition_section.add_capture(lambda x: True)
         for container in self.containers_from_instruction(
             optimized_tree,
@@ -430,6 +431,12 @@ class Builder(Optimizer, identifier="GENERIC"):
     def set_comment_class(cls, comment_class):
         """set the comment class for the builder"""
         cls._comment_class = comment_class
+
+    @classmethod
+    @log.wrap_call
+    def set_defcon_class(cls, defcon_class):
+        """set the comment class for the builder"""
+        cls._defcon_class = defcon_class
 
     @log.wrap_call
     def comment(self, *lines, context: Context, buildargs):

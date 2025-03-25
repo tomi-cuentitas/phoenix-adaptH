@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 25/03/2025, 12:47
-# Version:     0.0.1143
+# Last Update: 25/03/2025, 16:14
+# Version:     0.0.1144
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -162,7 +162,7 @@ class CodeContainer:
         #     context.parent
         # )  # manage parent reference, might be weak
 
-    def request_temp(self, name, generating, **genargs):
+    def request_temp(self, name, generating, autorequire=True, **genargs):
         """
         Request a local variable from a namespace
         """
@@ -175,7 +175,8 @@ class CodeContainer:
             origin=self,
             **genargs,
         )
-        self.requires(temp)
+        if autorequire:
+            self.requires(temp)
         return temp
 
     def requires(self, variable: LibRoutineVariable) -> None:

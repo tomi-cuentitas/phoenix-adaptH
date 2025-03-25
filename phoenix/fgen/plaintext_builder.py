@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 25/03/2025, 13:19
-# Version:     0.0.315
+# Last Update: 25/03/2025, 16:38
+# Version:     0.0.358
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,7 +32,7 @@ from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
 from phoenix.toolbox.logger import GLOBAL_LOGGER
 
 GLOBAL_LOGGER.set_logfile("plaintextbuilder")
-GLOBAL_LOGGER.set_loglevel("DEBUG")
+GLOBAL_LOGGER.set_loglevel("INFO")
 GLOBAL_LOGGER.add_note(
     """
     This is the plain container build that is supposed to be
@@ -43,6 +43,7 @@ GLOBAL_LOGGER.add_note(
 GLOBAL_LOGGER.add_note(
     "So far I have not implemented a proper library environment either"
 )
+GLOBAL_LOGGER.log_to_stdout(False)
 
 
 ###############################################################################
@@ -69,11 +70,10 @@ class TestLineWithVariable(CodeLine):
         temp1 = self.request_temp(
             "test_temporary1", LibRoutineLocalVariable, size=None, dtype="i53"
         )
-        # temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
-        # super().set_line(
-        #     f"{line} + {temp1.expr_at_offset(
-        #         1, 2, 3, 4)} + {temp2.expr_at_offset(
-        #         1, 2, 3, 4, simplify=False)}")
+        temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
+        super().set_line(
+            f"{line} yadayada 42 + {temp2.expr_at_offset(
+                1, temp1, 3, 4, simplify=True)}")
         return self
 
 
@@ -94,6 +94,12 @@ class PTBracketContainer(EnclosingContainer):
 
     INDENT_BODY = True
 
+    def fill_enclosings(self, open_string, close_string, **buildargs):
+        """this method defines the enclosing characters."""
+        self.append_head(self.from_text(open_string, **buildargs))
+        self.append_foot(self.from_text(close_string, **buildargs))
+        return self
+
 
 class PTLoopContainer(LoopContainer):
     """Plain Text version of a DefinitionContainer"""
@@ -104,6 +110,14 @@ class PTLoopContainer(LoopContainer):
 class PTDefinitionContainer(DefinitionContainer):
     """Plain Text version of a DefinitionContainer"""
 
+    INDENT_BODY = True
+
+    def build(self):
+        self.append_head(PTCodeLine(context=self.context).set_line(
+            "BEGIN DEFINITION CONTAINER"))
+        self.append_foot(PTCodeLine(context=self.context).set_line(
+            "END OF DEFINITION CONTAINER"))
+        return super().build()
 
 class PTRoutineDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
@@ -138,7 +152,10 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
     def handle_group_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
             context=context, **buildargs
-        ).fill_enclosings()
+        ).fill_enclosings(
+            open_string=f"BEGIN Group {instruction.identifier} {{ ",
+            close_string=f"END Group {instruction.identifier} }} ",
+        )
         inside_context = context.inherit(parent=outer)
         for inner_instruction in instruction.instructions:
             for inner_container in self.containers_from_instruction(
@@ -150,24 +167,41 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         yield outer
 
     def handle_content_instruction(self, instruction, context, buildargs):
-        yield from super().handle_content_instruction(
-            instruction, context, buildargs
+        outer = PTBracketContainer(
+            context=context, **buildargs
+        ).fill_enclosings(
+            open_string=f"BEGIN Group {instruction.identifier} {{ ",
+            close_string=f"END Group {instruction.identifier} }} ",
         )
+        for key, value in instruction.items():
+            if key in ["identifier", "content"]:
+                continue
+            outer.append(
+                PTCodeLine(context=context, **buildargs).set_line(
+                    line=f":{key}={value}"
+                )
+            )
+        inside_context = context.inherit(parent=outer)
+        for inner_instruction in instruction.content:
+            for inner_container in self.containers_from_instruction(
+                inner_instruction,
+                inside_context,
+                **buildargs,
+            ):
+                outer.append(inner_container)
+        yield outer
 
     def handle_generic_instruction(self, instruction, context, buildargs):
         yield PTCodeLine(context=context, **buildargs).set_line(
-            line=f"idntfr: {instruction.identifier}"
+            line=f"generic instruction: {instruction.identifier}"
         )
-        yield PTCodeLine(context=context, **buildargs).set_line(
-            line=f"fooval: {instruction['foo']}"
-        )
-        yield PTCodeLine(context=context, **buildargs).set_line(
-            line=f"answer: {instruction['answer']}"
-        )
-        yield PTCodeLine(context=context, **buildargs).set_line(
-            line=f"namesp: {id(context.namespace)}"
-        )
-        yield (TestLineWithVariable(context=context).set_line("foofoofoo"))
+        for key, value in instruction.items():
+            if key in ["identifier"]:
+                continue
+            yield PTCodeLine(context=context, **buildargs).set_line(
+                line=f":{key}={value}"
+            )
+        yield TestLineWithVariable(context=context, **buildargs).set_line("fooo")
 
     def handle_routine_instruction(self, instruction, context, buildargs):
         yield from super().handle_routine_instruction(
@@ -191,23 +225,22 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
 
 
 PlainTextBuilder.set_comment_class(PTCommentLine)
-
+PlainTextBuilder.set_defcon_class(PTDefinitionContainer)
 
 from phoenix.fgen.builder import Context
 import sys
 from phoenix.fgen.instruction import GenericInstruction, InstructionGroup
 
 
-print("START")
 a = PlainTextBuilder()
 
 test = InstructionGroup(
     [
-        GenericInstruction(foo="bar", answer=42.1),
-        GenericInstruction(foo="bar", answer=42.2),
-        GenericInstruction(foo="bar", answer=42.3),
-        GenericInstruction(foo="bar", answer=42.4),
-        GenericInstruction(foo="bar", answer=42.5),
+        GenericInstruction(foo="bar1", answer=42.1),
+        GenericInstruction(foo="bar2", answer=42.2),
+        GenericInstruction(foo="bar3", answer=42.3),
+        GenericInstruction(foo="bar4", answer=42.4),
+        GenericInstruction(foo="bar5", answer=42.5),
     ]
 )
 ctxt = Context()
@@ -216,13 +249,7 @@ largegroup = InstructionGroup([test, test, test])
 
 container_tree = a.generate_container_tree(largegroup)
 
-print(id(container_tree.context.namespace))
-for node in container_tree.content:
-    print(id(node.context.namespace))
-
 for indent, line in container_tree.get_codelines():
     print(indent * "  " + line)
 
-
-print("END")
 sys.exit()

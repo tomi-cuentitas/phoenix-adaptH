@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 25/03/2025, 13:16
-# Version:     0.0.894
+# Last Update: 25/03/2025, 16:12
+# Version:     0.0.895
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -243,6 +243,10 @@ class Logger:
         self._dtout = True
         self._notes = []
         self.set_logfile(filename, path, reset=True)
+
+    def log_to_stdout(self, stdout=True):
+        """enable or disable logging to stdout"""
+        self._stdout = stdout
 
     def add_note(self, note):
         """add a note that is shown in the header of the log file"""

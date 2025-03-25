@@ -1,30 +1,35 @@
-     0: @..oolbox.logger.logger: info: run some tests
-     1: @..oolbox.logger.logger: info: Hello from Builder 'TEST' (v0.0)
-        parameters (1):
-          - foo=bar
-        supported (8):
-          + instruction
-          + instruction.group
-          + instruction.content
-          + instruction.generic
-          + instruction.content.subroutine
-          + instruction.content.map
-          + instruction.content.variation
-          + instruction.content.environment
-        excluded (0):
-     2: @..oolbox.logger.logger: info:   foobar was here
-     3: @..oolbox.logger.logger: info:   foobar was here
-     4: @..oolbox.logger.logger: info:   foobar was here
-     5: @..oolbox.logger.logger: info: now let's do a critical one
-     6: @..oolbox.logger.logger: info:   foobar was here, too
-     7: @..oolbox.logger.logger: WARN:   A controlled exception occured: argument should be an integer
-          called generator test_the_log2
-          args  : (<Builder.TEST>, 'test')
-          kwargs: {}
-     8: @..oolbox.logger.logger: info: This line should be visible
-     9: @..oolbox.logger.logger: WARN: now it's getting serious...
-    10: @..oolbox.logger.logger: info:   foobar was here
-    11: @..oolbox.logger.logger: info: Hello from Optimizer 'TESTAGAIN' (v0.0)
-        parameters (1):
-          - foo=bazzz
-    12: @..oolbox.logger.logger: info: done!
+# +--------------------------------------------------------------------------------------------------------------------+
+# | LOGFILE   : ./testlog.txt                                                                                          |
+# | GENERATED : 2025-03-25 16:28:44                                                                                    |
+# +--------------------------------------------------------------------------------------------------------------------+
+
+162844.221:info @..ger.logger | run some tests
+162844.221:info @..ger.logger | Hello from Builder 'TEST' (v0.0)
+                              | parameters (1):
+                              |   - foo=bar
+                              | supported (8):
+                              |   + instruction
+                              |   + instruction.group
+                              |   + instruction.content
+                              |   + instruction.generic
+                              |   + instruction.content.subroutine
+                              |   + instruction.content.map
+                              |   + instruction.content.variation
+                              |   + instruction.content.environment
+                              | excluded (0):
+162844.222:info @..ger.logger |   foobar was here
+162844.222:info @..ger.logger |   foobar was here
+162844.222:info @..ger.logger |   foobar was here
+162844.222:info @..ger.logger | now let's do a critical one
+162844.222:info @..ger.logger |   foobar was here, too
+162844.222:WARN @..ger.logger |   A controlled exception occured: argument should be an integer
+                              |   called generator test_the_log2
+                              |   args  : (<Builder.TEST>, 'test')
+                              |   kwargs: {}
+162844.222:info @..ger.logger | This line should be visible
+162844.222:WARN @..ger.logger | now it's getting serious...
+162844.222:info @..ger.logger |   foobar was here
+162844.222:info @..ger.logger | Hello from Optimizer 'TESTAGAIN' (v0.0)
+                              | parameters (1):
+                              |   - foo=bazzz
+162844.222:info @..ger.logger | done!

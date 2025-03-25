@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 24/03/2025, 14:46
-# Version:     0.0.442
+# Last Update: 25/03/2025, 16:35
+# Version:     0.0.467
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,6 +18,7 @@ from __future__ import annotations
 import gc
 
 import weakref
+from typing import Dict
 
 
 class Namespace:
@@ -29,7 +30,7 @@ class Namespace:
         # ] = weakref.WeakValueDictionary()
         self._content = {}
         self._parent = parent
-        self._temps = {}
+        self._assigned: Dict[type, type] = {}
 
     def __contains__(self, element: LibRoutineVariable) -> bool:
         if element in self._content:
@@ -37,6 +38,10 @@ class Namespace:
         if self._parent is not None:
             return self._parent.__contains__(element)
         return False
+
+    def assign(self, ivariable_type, lvariable):
+        """assign a libroutine variable to an instruction variable class"""
+        self._assigned[ivariable_type] = lvariable
 
     def add(self, variable: LibRoutineVariable):
         """add a variable to the namespace"""
@@ -79,6 +84,16 @@ class Namespace:
             return self._parent.find(name)
         raise KeyError(f"variable {name} not found")
 
+    def find_assignment(self, ivariable_type):
+        """find a variable in the namespace"""
+        if ivariable_type in self._assigned:
+            return self._assigned[ivariable_type]
+        if self._parent is not None:
+            return self._parent.find_assignment(ivariable_type)
+        raise KeyError(
+            f"instruction variable {ivariable_type} not assigned yet."
+        )
+
     def _get_temp_name(self, name, origin):
         """generate a temporary variable name from a standardized recipe"""
         caps = "".join([c for c in type(origin).__name__ if c.isupper()])
@@ -114,6 +129,11 @@ class LibRoutineVariable:
     _VAR_IDENTIFIER = "GENERIC"
     _CLASS_BASE = "var"
 
+    # some public globals to handle status
+    AS_INPUT = 1
+    AS_OUTPUT = 2
+    AS_INOUT = AS_INPUT | AS_OUTPUT
+
     _class_namespace = Namespace(None)
     # if this ever becomes a dict, it must be weak!
 
@@ -125,6 +145,7 @@ class LibRoutineVariable:
         prefix=None,
         suffix=None,
         dtype="f64",
+        status=0,
     ):
         if namespace is None:
             namespace = type(self)._class_namespace
@@ -141,7 +162,21 @@ class LibRoutineVariable:
         self._name = name
         self._size = size
         self._dtype = dtype
+        self._status = status
         self._namespace.add(self)
+
+    def use_as_input(self):
+        """use the variable as an input"""
+        self._status |= type(self).AS_INPUT  # set the first bit in status
+
+    def use_as_output(self):
+        """use the variable as an output"""
+        self._status |= type(self).AS_OUTPUT  # set the second bit in status
+
+    @property
+    def status(self):
+        """access the status binary set as integer"""
+        return self._status
 
     def __str__(self):
         if self._size is None:
@@ -153,37 +188,16 @@ class LibRoutineVariable:
 
     def get_definition_line(self) -> str:
         """create the line that defines the variable"""
+        status = "??"
+        if self.status & type(self).AS_INPUT:
+            status = "RO"
+        if self.status & type(self).AS_OUTPUT:
+            status = "WO"
+        if self.status & type(self).AS_INOUT:
+            status = "RW"
         if self.size is None:
-            return f"DEFINE {self._dtype} {self._name}"
-        return f"DEFINE {self._dtype} {self._name}[{self.size}]"
-
-    # @classmethod
-    # def autoname(
-    #     cls,
-    #     namespace: Set[LibRoutineVariable] | None,
-    #     base=None,
-    #     prefix=None,
-    #     suffix=None,
-    # ):
-    #     """autogenerate a name"""
-    #     if base is None:
-    #         base = cls._CLASS_BASE
-    #     name = base
-    #     if prefix is not None:
-    #         name = f"{prefix}_{name}"
-    #     if suffix is not None:
-    #         name = f"{name}_{suffix}"
-    #     if namespace is None:
-    #         namespace = cls._class_namespace
-    #     assert namespace is not None
-    #     num = 0
-    #     out = name
-    #     while True:
-    #         if out not in [var.name for var in namespace]:
-    #             break
-    #         num += 1
-    #         out = f"{name}{num}"
-    #     return out
+            return f":DEFINE {status} {self._dtype} {self._name}"
+        return f":DEFINE {status} {self._dtype} {self._name}[{self.size}]"
 
     def free_name(self):
         """discard the name in the namespace"""
@@ -272,6 +286,9 @@ class LibRoutineLocalVariable(LibRoutineVariable):
 
     _VAR_IDENTIFIER = "LOCAL"
     _CLASS_BASE = "loc"
+
+    def __init__(self, *args, status=3, **kwargs):
+        super().__init__(*args, **kwargs, status=3)
 
 
 class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
