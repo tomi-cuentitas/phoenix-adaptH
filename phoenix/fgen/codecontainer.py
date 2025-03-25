@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 24/03/2025, 15:09
-# Version:     0.0.1138
+# Last Update: 25/03/2025, 12:47
+# Version:     0.0.1143
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,6 +20,8 @@ from typing import Generator, Any, Set, Callable, List, Dict, Tuple
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.libroutinevar import LibRoutineVariable, Namespace
+
+from phoenix.aux import multiline_iterable, multiline_text
 
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
@@ -35,7 +37,7 @@ CodeContainer module description
 
 """
 
-
+'''
 def multiline_iterable(
     iterable,
     separator=", ",
@@ -125,35 +127,7 @@ def multiline_iterable(
             yield line + linebreak
             if suffix:
                 yield indent + suffix
-
-
-def multiline_text(
-    large_text,
-    max_line_length=80,
-    indent="",
-    apply_strip=True,
-):
-    """
-    Create multiline text. Special wrapper call for multiline_iterator.
-
-
-    """
-    if apply_strip:
-        large_text = large_text.strip()
-    for section in large_text.split("\n"):
-        if apply_strip:
-            section = section.strip()
-        words = list(section.split(" "))
-        yield from multiline_iterable(
-            words,
-            separator=" ",
-            max_line_length=max_line_length,
-            indent=indent,
-            extra_indent="",
-            prefix="",
-            suffix="",
-            prefix_suffix_lines=False,
-        )
+'''
 
 
 class CodeContainer:

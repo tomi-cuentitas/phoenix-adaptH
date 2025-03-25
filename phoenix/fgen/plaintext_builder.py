@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 24/03/2025, 17:27
-# Version:     0.0.302
+# Last Update: 25/03/2025, 13:19
+# Version:     0.0.315
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,6 +33,17 @@ from phoenix.toolbox.logger import GLOBAL_LOGGER
 
 GLOBAL_LOGGER.set_logfile("plaintextbuilder")
 GLOBAL_LOGGER.set_loglevel("DEBUG")
+GLOBAL_LOGGER.add_note(
+    """
+    This is the plain container build that is supposed to be
+    used for either parsing or debugging.
+    There is no compilation involved.
+    """
+)
+GLOBAL_LOGGER.add_note(
+    "So far I have not implemented a proper library environment either"
+)
+
 
 ###############################################################################
 #
@@ -55,14 +66,15 @@ GLOBAL_LOGGER.set_loglevel("DEBUG")
 
 class TestLineWithVariable(CodeLine):
     def set_line(self, line):
-        temp1 = self.request_temp("test_temporary1", LibRoutineLocalVariable, size=None, dtype="i53")
+        temp1 = self.request_temp(
+            "test_temporary1", LibRoutineLocalVariable, size=None, dtype="i53"
+        )
         # temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
-        super().set_line(
-            f"{line} + {temp1.expr_at_offset(
-                1, 2, 3, 4)} + {temp2.expr_at_offset(
-                1, 2, 3, 4, simplify=False)}")
+        # super().set_line(
+        #     f"{line} + {temp1.expr_at_offset(
+        #         1, 2, 3, 4)} + {temp2.expr_at_offset(
+        #         1, 2, 3, 4, simplify=False)}")
         return self
-
 
 
 class PTCodeLine(CodeLine):

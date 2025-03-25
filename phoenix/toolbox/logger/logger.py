@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 24/03/2025, 17:34
-# Version:     0.0.805
+# Last Update: 25/03/2025, 13:16
+# Version:     0.0.894
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,7 +16,10 @@
 from os.path import join as pathjoin
 import traceback as tb
 
+from datetime import datetime
 from sys import stdout, stderr
+
+from phoenix.aux import multiline_text
 
 # global log levels
 _LOG_LEVELS = {
@@ -237,14 +240,52 @@ class Logger:
         self._indentlevel = 0
         self._loglevel = min(3, max(0, loglevel))
         self._stdout = stdout
-
+        self._dtout = True
+        self._notes = []
         self.set_logfile(filename, path, reset=True)
+
+    def add_note(self, note):
+        """add a note that is shown in the header of the log file"""
+        self._notes.append(note)
+        self.reset()
+
+    def header(self):
+        """generate the lines for the log file header"""
+        tnow = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        file = self._file
+        width = 120
+        width -= 18
+        if len(file) > width:
+            file = f"..{file[:width-2]}"
+        yield f"# +-------------{'-' * width}-+"
+        yield f"# | LOGFILE   : {file: <{width}} |"
+        yield f"# | GENERATED : {tnow: <{width}} |"
+        for num, comment in enumerate(self._notes):
+            words = []
+            for section in comment.strip().split("\n"):
+                words += section.strip().split(" ")
+            combined_section = " ".join(words)
+            if len(self._notes) > 1:
+                prefixline = f"# | > NOTE {num + 1: <2d} : "
+            else:
+                prefixline = "# | NOTE      : "
+            for line in multiline_text(
+                combined_section.strip(),
+                max_line_length=width + 15,
+                prefix=prefixline,
+                extra_indent="# |             ",
+            ):
+                yield f"{line: <{width + 16}} |"
+
+        yield f"# +-------------{'-' * width}-+"
+        yield ""
 
     def reset(self):
         """reset the file"""
         if self._file:
             with open(self._file, "w") as file:
-                file.write("")
+                for line in self.header():
+                    file.write(line + "\n")
 
     def set_loglevel(self, loglevel):
         """
@@ -278,23 +319,25 @@ class Logger:
             if reset:
                 self.reset()
 
-    def _write_to_stdout(self, acstr, typestr, mline, msgtype, level, srcstr):
+    def _write_to_stdout(
+        self, enumstr, typestr, mline, msgtype, level, srcstr
+    ):
         indent = level * "  "
         colors_in, colors_out = Logger._LOG_COLORS[msgtype], _COLOR_RESET
         color_in = "".join((_COLORS[col] for col in colors_in))
         color_out = "".join((_COLORS[col] for col in colors_out))
         line = color_in + f"{indent}{mline}" + color_out
         # line = color_in + f"{srcstr}{indent}{mline}" + color_out
-        # line = color_in + f"{acstr}{srcstr}{typestr}{indent}{mline}" + color_out
+        # line = color_in + f"{enumstr}{srcstr}{typestr}{indent}{mline}" + color_out
         if msgtype == "ERROR":
             stderr.write(line + "\n")
         else:
             if self._stdout:
                 stdout.write(line + "\n")
 
-    def _write_to_file(self, acstr, typestr, mline, msgtype, level, srcstr):
+    def _write_to_file(self, enumstr, typestr, mline, msgtype, level, srcstr):
         indent = level * "  "
-        line = f"{acstr}{srcstr}{typestr}| {indent}{mline}"
+        line = f"{enumstr}{typestr} {srcstr} | {indent}{mline}"
         if self._file:
             with open(self._file, "a") as file:
                 file.write(line + "\n")
@@ -311,31 +354,35 @@ class Logger:
         lsource = source.strip()
         if len(ssource) > 12:
             ssource = ".." + ssource[-10:]
-        if len(lsource) > 22:
-            lsource = ".." + lsource[-20:]
+        if len(lsource) > 12:
+            lsource = ".." + lsource[-10:]
 
         if "".join(message_lines).replace("\n", "").strip():
             acount = Logger._actioncount
+            date_time = datetime.now().strftime("%H%M%S.%f")
             Logger._actioncount += 1
 
             first = True
             for mline in message_lines:
-                acstr = f"{acount:>6}" + ": "
-                typestr = f"{type(self)._LOG_REPR[msgtype.upper()]: <4}" + " "
-                lsrcstr = f"@{lsource:<22}: "
-                ssrcstr = f"@{ssource:<12}: "
+                if self._dtout:
+                    enumstr = f"{date_time[:-3]}:"
+                else:
+                    enumstr = f"{acount:>6}:"
+                typestr = f"{type(self)._LOG_REPR[msgtype.upper()]: <4}"
+                lsrcstr = f"@{lsource:<12}"
+                ssrcstr = f"@{ssource:<12}"
                 if not first:
-                    acstr = " " * len(acstr)
+                    enumstr = " " * len(enumstr)
                     typestr = " " * len(typestr)
                     lsrcstr = " " * len(lsrcstr)
                     ssrcstr = " " * len(ssrcstr)
                 first = False
                 self._write_to_stdout(
-                    acstr, typestr, mline, msgtype, level, ssrcstr
+                    enumstr, typestr, mline, msgtype, level, ssrcstr
                 )
                 if mline.strip():
                     self._write_to_file(
-                        acstr, typestr, mline, msgtype, level, lsrcstr
+                        enumstr, typestr, mline, msgtype, level, lsrcstr
                     )
         else:
             self._write_to_stdout("", "", "", msgtype, level, "")
