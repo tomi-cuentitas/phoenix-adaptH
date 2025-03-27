@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 25/03/2025, 16:14
-# Version:     0.0.1144
+# Last Update: 27/03/2025, 11:07
+# Version:     0.0.1148
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -566,6 +566,13 @@ class CaptureContainer(CodeContainer):
         else:
             super().requires(variable)
 
+    def build(self):
+        """
+        builds the capture container, which requires that up to that point
+        all potential variables have been captured.
+        """
+        return self
+
 
 class DefinitionContainer(CaptureContainer):
     """
@@ -605,7 +612,8 @@ class RoutineContainer(EnclosingContainer):
 #     might map to parametrized auxilliary functions or actual kernels on GPUs.
 
 #     An instruction block from a map instruction is preferably rendered into a
-#     kernel. Kernels are treated as subtypes of functions
+#     kernel. Kernels are treated as subtypes of functions. They provide frame selectors
+#     and map them to external parallel ressources.
 #     """
 
 

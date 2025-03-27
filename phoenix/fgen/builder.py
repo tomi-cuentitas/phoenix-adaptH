@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 25/03/2025, 16:28
-# Version:     0.0.851
+# Last Update: 27/03/2025, 11:57
+# Version:     0.0.870
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -237,8 +237,7 @@ class Builder(Optimizer, identifier="GENERIC"):
     _supp_instr_handler: Dict[type, Generator] = {}
     _excl_instr_classes: Set[type] = set()
 
-    _comment_class = None
-    _defcon_class = DefinitionContainer
+    _default_containers: Dict[str, type] = {}
 
     _class_optimizers: List[Optimizer] = []
     _class_validators: List[Validator] = []
@@ -414,7 +413,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             namespace=Namespace(),
         )
 
-        definition_section = type(self)._defcon_class(context=context)
+        definition_section = self.default_container("DEFCONT")(context=context)
         definition_section.add_capture(lambda x: True)
         for container in self.containers_from_instruction(
             optimized_tree,
@@ -426,22 +425,32 @@ class Builder(Optimizer, identifier="GENERIC"):
         info("reached end of instruction build")
         return definition_section.build()
 
-    @classmethod
-    @log.wrap_call
-    def set_comment_class(cls, comment_class):
-        """set the comment class for the builder"""
-        cls._comment_class = comment_class
+    def default_container(self, *args):
+        """get the intended container class for the key. Optional default argument."""
+        match args:
+            case (key, default):
+                if (upperkey := key.upper()) in type(self)._default_containers:
+                    return type(self)._default_containers[upperkey]
+                return default
+            case (key,):
+                if (upperkey := key.upper()) in type(self)._default_containers:
+                    return type(self)._default_containers[upperkey]
+                raise KeyError(f"No container class for key {key}")
+            case _:
+                raise ValueError(
+                    "container class can have at most two input arguments"
+                )
 
     @classmethod
     @log.wrap_call
-    def set_defcon_class(cls, defcon_class):
-        """set the comment class for the builder"""
-        cls._defcon_class = defcon_class
+    def set_default_container(cls, key, target):
+        """set the container to be used for a certain operation"""
+        cls._default_containers[key.upper()] = target
 
     @log.wrap_call
     def comment(self, *lines, context: Context, buildargs):
         """generate one or multiple comment lines"""
-        comment_class: type(CommentLine) | None = type(self)._comment_class
+        comment_class = self.default_container("COMMENT", None)
         if comment_class is not None:
             assert issubclass(comment_class, CommentLine)
             for line in lines:

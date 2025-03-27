@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 24/03/2025, 12:01
-# Version:     0.0.2921
+# Last Update: 27/03/2025, 11:15
+# Version:     0.0.2932
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -359,33 +359,35 @@ class Instruction:
         return self.__deepcopy__(memo=memo)
         # pylint: enable=unnecessary-dunder-call
 
-    def _apply_environment(
+    def apply_environment(
         self,
         environment: InstructionEnvironment,
-        memo: dict,
+        memo: dict | None = None,
     ) -> Instruction:
         """actually apply the environment"""
         raise NotImplementedError("Must be implemented in subclass")
 
-    def apply_environment(
-        self,
-        environment: InstructionEnvironment | None = None,
-        *,
-        memo=None,
-    ) -> Instruction:
-        """
-        Apply an environment to the instruction. User call, handles memo and environment initialization.
-        """
-        if environment is None:
-            environment = InstructionEnvironment()
-        if memo is None:
-            memo = {}
-        if (id(environment), id(self)) in memo:
-            if (memorized := memo[(id(environment), id(self))]()) is not None:
-                return memorized
-        env_applied = self._apply_environment(environment, memo=memo)
-        memo[(id(environment), id(self))] = weakref.ref(env_applied)
-        return env_applied
+    # def apply_environment(
+    #     self,
+    #     environment: InstructionEnvironment | None = None,
+    #     **kwargs,
+    # ) -> Instruction:
+    #     """
+    #     Apply an environment to the instruction. User call, handles memo and environment initialization.
+    #     """
+    #     if environment is None:
+    #         environment = InstructionEnvironment()
+    #     if memo is not None:
+    #         if (id(environment), id(self)) in memo:
+    #             if (
+    #                 memorized := memo[(id(environment), id(self))]()
+    #             ) is not None:
+    #                 return memorized
+
+    #     env_applied = self.apply_environment(environment, memo=memo)
+    #     if memo is not None:
+    #         memo[(id(environment), id(self))] = weakref.ref(env_applied)
+    #     return env_applied
 
     def get_instruction_variables(self):
         """get the instruction variables that are included in the instruction"""
@@ -570,10 +572,9 @@ class GenericInstruction(Instruction, ftype="generic"):
 class KeyMapInstruction(GenericInstruction, ftype="kmap"):
     """Represents an Expression"""
 
-    def _apply_environment(
+    def apply_environment(
         self,
         environment: InstructionEnvironment,
-        memo: dict,
     ) -> Instruction:
         """actually apply the environment"""
         modified_params = {}
@@ -801,12 +802,12 @@ class InstructionGroup(Instruction, ftype="group"):
             collect.append(subgroup_type(group, itype=self._itype))
         return group_type(collect, itype=self._itype)
 
-    def _apply_environment(
-        self, environment: InstructionEnvironment, memo: dict
+    def apply_environment(
+        self, environment: InstructionEnvironment
     ) -> Instruction:
         return type(self)(
             [
-                instr.apply_environment(environment, memo=memo)
+                instr.apply_environment(environment)
                 for instr in self.instructions
             ],
             itype=self.itype,
@@ -908,12 +909,12 @@ class ContentInstruction(Instruction, ftype="content"):
                     level=level,
                 )
 
-    def _apply_environment(
-        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    def apply_environment(
+        self, environment: InstructionEnvironment, **kwargs
     ) -> Instruction:
         # environments are replaced by their transformed content
         return type(self)(
-            self.content.apply_environment(environment, memo=memo),
+            self.content.apply_environment(environment),
             **kwargs,
         )
 
@@ -970,14 +971,12 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
             **kwargs,
         )
 
-    def _apply_environment(
-        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    def apply_environment(
+        self, environment: InstructionEnvironment, **kwargs
     ) -> Instruction:
         combined_environment = environment.merge(self.environment)
         # environments are replaced by their transformed content
-        return self.content.apply_environment(
-            combined_environment, memo=memo, **kwargs
-        )
+        return self.content.apply_environment(combined_environment, **kwargs)
 
     def walk(
         self,
@@ -1185,14 +1184,16 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
                         level=level,
                     )
 
-    def _apply_environment(
-        self, environment: InstructionEnvironment, memo: dict, **kwargs
+    def apply_environment(
+        self,
+        environment: InstructionEnvironment,
+        **kwargs,
     ) -> Instruction:
         # environments are replaced by their transformed content
         return InstructionGroup(
             [
-                self.content._apply_environment(
-                    environment.merge(env), memo=memo, **kwargs
+                self.content.apply_environment(
+                    environment.merge(env), **kwargs
                 )
                 for env in self.environments
             ]

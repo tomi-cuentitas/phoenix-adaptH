@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 25/03/2025, 16:35
-# Version:     0.0.467
+# Last Update: 27/03/2025, 11:59
+# Version:     0.0.468
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -40,7 +40,7 @@ class Namespace:
         return False
 
     def assign(self, ivariable_type, lvariable):
-        """assign a libroutine variable to an instruction variable class"""
+        """assign an instruction variable class to a libroutine variable"""
         self._assigned[ivariable_type] = lvariable
 
     def add(self, variable: LibRoutineVariable):

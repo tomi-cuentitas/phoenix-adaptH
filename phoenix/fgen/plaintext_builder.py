@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 25/03/2025, 18:21
-# Version:     0.0.359
+# Last Update: 27/03/2025, 10:59
+# Version:     0.0.363
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -126,6 +126,9 @@ class PTRoutineDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
 
+class PTLibraryDefinition(RoutineContainer):
+    """Plain Text version of a RoutineDefinition"""
+
 class PTConditionalContainer(ConditionalContainer):
     """Plain Text version of a RoutineDefinition"""
 
@@ -173,8 +176,8 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         outer = PTBracketContainer(
             context=context, **buildargs
         ).fill_enclosings(
-            open_string=f"BEGIN Group {instruction.identifier} {{ ",
-            close_string=f"END Group {instruction.identifier} }} ",
+            open_string=f"BEGIN Content Group {instruction.identifier} {{ ",
+            close_string=f"END Content Group {instruction.identifier} }} ",
         )
         for key, value in instruction.items():
             if key in ["identifier", "content"]:
@@ -227,8 +230,11 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         )
 
 
-PlainTextBuilder.set_comment_class(PTCommentLine)
-PlainTextBuilder.set_defcon_class(PTDefinitionContainer)
+PlainTextBuilder.set_default_container("COMMENT", PTCommentLine)
+PlainTextBuilder.set_default_container("DEFCONT", PTDefinitionContainer)
+PlainTextBuilder.set_default_container("ROUTINE", PTRoutineDefinition)
+PlainTextBuilder.set_default_container("LIBRARY", PTLibraryDefinition)
+
 
 from phoenix.fgen.builder import Context
 import sys
