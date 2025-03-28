@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 27/03/2025, 11:59
-# Version:     0.0.468
+# Last Update: 28/03/2025, 20:11
+# Version:     0.0.469
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -308,6 +308,12 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
         if origin is None:
             raise ValueError("FrameSelector requires origin.")
         self._origin = origin
+
+    """-> Optionally, use a symbolic instruction variable in symbolic environment in map instruction.
+                   the symbolic instruction variables are attached to the map instruction and have a frame
+                   selector attached. Within the not unrolled map, the frame selector replaces the i in a loop
+                   and the offset value of the environment is looked up from an external constant array at
+                   index i"""
 
 
 class LibRoutineInputVariable(LibRoutineVariable):
