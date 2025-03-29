@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 29/03/2025, 14:39
-# Version:     0.0.2982
+# Last Update: 29/03/2025, 14:48
+# Version:     0.0.2989
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -614,7 +614,12 @@ class LeafInstruction(GenericInstruction, ftype="leaf"):
         generate a new class instance from a dictionary.
         Consider renaming here
         """
-        return cls(**{key: params[key] for key in cls._DEFINING_KEYS})
+        return cls(**{key: params[key] for key in cls.get_generating_keys()})
+
+    @classmethod
+    def get_generating_keys(cls):
+        """access the generating keys"""
+        yield from cls._DEFINING_KEYS
 
 
 ###############################################################################
@@ -844,23 +849,25 @@ class InstructionGroup(Instruction, ftype="group"):
 class ParametricGroup(InstructionGroup, ftype="pgroup"):
     """"""
 
-    # # TODO!
-    # def __init__(self, instructions, generating_instruction_class):
-    #     super().__init__()
+    def __init__(self, instructions, generating_instruction_class):
+        if not issubclass(generating_instruction_class, LeafInstruction):
+            raise TypeError(
+                "generating instruction class must be a leaf class"
+            )
+        super().__init__(
+            [
+                instruction.as_type(generating_instruction_class)
+                for instruction in instructions
+            ],
+            itype=generating_instruction_class.itype,
+        )
+        self._gen_instr_class = generating_instruction_class
 
-    # def append_from_parameters(self, **params):
-    # append parameters instead of instruction
-
-    def append(self, instruction):
-        """"""
-        # also define that for super, consider instruction length and itype check
-        # append instruction converted to generating instruction class via as_class
-
-    # def unpack
-    # for ...
-    #     yield self._generating_instruction(**params))
-
-    # def from_group(self, group)
+    def iterate_parameters(self):
+        for instruction in self.instructions:
+            yield instruction.to_dict(
+                *self._gen_instr_class.get_generating_keys()
+            )
 
 
 ######################################################################################
