@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 29/03/2025, 13:09
-# Version:     0.0.2946
+# Last Update: 29/03/2025, 14:39
+# Version:     0.0.2982
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -176,8 +176,8 @@ class Instruction:
         data_dict = {}  # _PartialFormatDict
         provided = {}
         for cls in reversed(self.__class__.__mro__):
-            if hasattr(cls, "_export_dict"):
-                provided.update(cls._export_dict(self))
+            if hasattr(cls, "contribute_to_dict"):
+                provided.update(cls.contribute_to_dict(self))
         if keys:
             data_dict.update(
                 {
@@ -285,8 +285,8 @@ class Instruction:
 
     # pylint: enable=unused-argument
 
-    def _export_dict(self) -> Dict[str, Any]:
-        """get a dictionary from self"""
+    def contribute_to_dict(self) -> Dict[str, Any]:
+        """get a dictionary from self. Only include what this level adds to super class"""
         return {
             "identifier": self.identifier,
             "ftype": self.ftype,
@@ -405,7 +405,7 @@ class Instruction:
             raise TypeError(
                 f"Cannot convert {self.__class__.__name__} to {other_class.__name__}"
             )
-        return other_class.from_dict(self._export_dict())
+        return other_class.from_dict(self.to_dict())
 
 
 ###############################################################################
@@ -429,7 +429,7 @@ class GenericInstruction(Instruction, ftype="generic"):
     supported for flexible entry access without creating duplicates.
     """
 
-    _alias: dict[str, str] = {}
+    # _alias: dict[str, str] = {}
 
     def __init__(self, itype=None, **params):
         if itype is None:
@@ -462,16 +462,16 @@ class GenericInstruction(Instruction, ftype="generic"):
     def __getitem__(self, key):
         if key in self._params:
             return self._params[key]
-        # raise KeyError(f"Key '{key}' not found in instruction parameters")
-        return self._from_alias(key)
+        raise KeyError(f"Key '{key}' not found in instruction parameters")
+        # return self._from_alias(key)
 
     def __setitem__(self, key, value):
         self.set(key, value)
 
-    @classmethod
-    def set_alias(cls, alias, reference):
-        """add an alias to the class"""
-        cls._alias[alias] = reference
+    # @classmethod
+    # def set_alias(cls, alias, reference):
+    #     """add an alias to the class"""
+    #     cls._alias[alias] = reference
 
     def checksum(self):
         test_tuple = (
@@ -488,8 +488,8 @@ class GenericInstruction(Instruction, ftype="generic"):
     def get(self, *in_args):
         """mimic the get behaviour of dicts, but consider set alias"""
         key, *default = in_args
-        if key in type(self)._alias:
-            return self._from_alias(key)
+        # if key in type(self)._alias:
+        #     return self._from_alias(key)
         if key in self._params:
             return self._params[key]
         if len(default) == 0:
@@ -508,13 +508,13 @@ class GenericInstruction(Instruction, ftype="generic"):
             )
         self._params[key] = value
 
-    def _export_dict(self):
+    def contribute_to_dict(self):
         """access the full dict representation, which is params for any generic instruction"""
-        mapped_alias = {
-            alias: self._params[target]
-            for alias, target in type(self)._alias.items()
-        }
-        return {**self._params, **mapped_alias}
+        # mapped_alias = {
+        #     alias: self._params[target]
+        #     for alias, target in type(self)._alias.items()
+        # }
+        return {**self._params}  # , **mapped_alias}
 
     def to_tuple(self, *keys, defaults: dict | None = None):
         """get a data tuple from keys in the order the keys are requested"""
@@ -529,12 +529,12 @@ class GenericInstruction(Instruction, ftype="generic"):
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
 
-    def _from_alias(self, key):
-        #     print(f"look up potential alias {key} in {type(self).__name__}")
-        if key in type(self)._alias:
-            # don't call self._params here, so alias can chain
-            return self._params[type(self)._alias[key]]
-        raise KeyError(f"Key '{key}' not found in dict nor alias map")
+    # def _from_alias(self, key):
+    #     #     print(f"look up potential alias {key} in {type(self).__name__}")
+    #     if key in type(self)._alias:
+    #         # don't call self._params here, so alias can chain
+    #         return self._params[type(self)._alias[key]]
+    #     raise KeyError(f"Key '{key}' not found in dict nor alias map")
 
     def __deepcopy__(self, memo=None):
         if memo is None:
@@ -570,16 +570,6 @@ class GenericInstruction(Instruction, ftype="generic"):
             environment = InstructionEnvironment()
         yield level, True, self, environment
 
-
-###############################################################################
-#
-# KEYMAP INSTRUCTION
-# ==================
-
-
-class KeyMapInstruction(GenericInstruction, ftype="kmap"):
-    """Represents an Expression"""
-
     def apply_environment(
         self,
         environment: InstructionEnvironment,
@@ -599,6 +589,32 @@ class KeyMapInstruction(GenericInstruction, ftype="kmap"):
             else:
                 modified_params[key] = val
         return type(self).from_dict(modified_params)
+
+
+###############################################################################
+#
+# LEAF INSTRUCTION
+# ================
+
+
+class LeafInstruction(GenericInstruction, ftype="leaf"):
+    """Represents an Expression"""
+
+    _DEFINING_KEYS = []
+
+    def __init_subclass__(cls, ftype: str, defining_keys=None):
+        if defining_keys is None:
+            defining_keys = cls._DEFINING_KEYS
+        super().__init_subclass__(ftype=ftype)
+        cls._DEFINING_KEYS = list(defining_keys)
+
+    @classmethod
+    def from_dict(cls, params):
+        """
+        generate a new class instance from a dictionary.
+        Consider renaming here
+        """
+        return cls(**{key: params[key] for key in cls._DEFINING_KEYS})
 
 
 ###############################################################################
@@ -645,13 +661,17 @@ class InstructionGroup(Instruction, ftype="group"):
 
     def __init__(self, instructions, itype=None):
         self._instructions = list(instructions)
-        self._len = len(self._instructions)
         if itype is None:
             itype = InstructionGroup._get_itype_common_root(self._instructions)
         super().__init__(itype=itype)
 
     def __len__(self):
         return sum(len(instr) for instr in self.instructions)
+
+    def append(self, instruction):
+        """append an instruction"""
+        # must match itype!!!
+        # TODO
 
     def __deepcopy__(self, memo=None):
         if memo is None:
@@ -669,8 +689,7 @@ class InstructionGroup(Instruction, ftype="group"):
         memo[id(self)] = weakref.ref(copied_group)
         return copied_group
 
-    def _export_dict(self):
-        """get a full dict-like object"""
+    def contribute_to_dict(self):
         return {"instructions": self._instructions}
 
     @property
@@ -701,7 +720,7 @@ class InstructionGroup(Instruction, ftype="group"):
         if include_control:
             yield level, False, self, environment
             for instr in self.instructions:
-                # iterate level and recursion parameter, as control structure itself has been yielded
+                # iterate level and recursion parameter as control structure itself has been yielded
                 yield from instr.walk(
                     environment=environment,
                     recursive=_next_recursive(recursions),
@@ -821,28 +840,27 @@ class InstructionGroup(Instruction, ftype="group"):
             itype=self.itype,
         )
 
-    def ParametricGroup(InstructionGroup, ftype="pgroup"):
+
+class ParametricGroup(InstructionGroup, ftype="pgroup"):
+    """"""
+
+    # # TODO!
+    # def __init__(self, instructions, generating_instruction_class):
+    #     super().__init__()
+
+    # def append_from_parameters(self, **params):
+    # append parameters instead of instruction
+
+    def append(self, instruction):
         """"""
+        # also define that for super, consider instruction length and itype check
+        # append instruction converted to generating instruction class via as_class
 
-        # # TODO!
-        # def __init__(self, instructions, generating_instruction=None):
-        #     super().__init__()
-        #     if generating_instruction is None:
-        # get gen instr from content
-        #     self._generating_instruction = generating_instruction
+    # def unpack
+    # for ...
+    #     yield self._generating_instruction(**params))
 
-        # def append_from_parameters(self, **params):
-        # append parameters instead of instruction
-
-        def append(self, instruction):
-            """"""
-            # also define that for super, consider instruction length and itype check
-
-        # def unpack
-        # for ...
-        #     yield self._generating_instruction(**params))
-
-        # def from_group(self, group)
+    # def from_group(self, group)
 
 
 ######################################################################################
@@ -877,8 +895,7 @@ class ContentInstruction(Instruction, ftype="content"):
             )
         self._content = content
 
-    def _export_dict(self):
-        """get a full dict-like object"""
+    def contribute_to_dict(self):
         return {"content": self._content}
 
     def __len__(self):
@@ -982,8 +999,7 @@ class EnvironmentInstruction(ContentInstruction, ftype="environment"):
         """access read-only attribute environment"""
         return self._environment
 
-    def _export_dict(self):
-        """get a full dict-like object"""
+    def contribute_to_dict(self):
         return {"environment": self.environment}
 
     def __deepcopy__(self, memo=None, **kwargs):
@@ -1154,8 +1170,7 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         """access read-only environments"""
         yield from self._environments
 
-    def _export_dict(self):
-        """get a full dict-like object"""
+    def contribute_to_dict(self):
         return {"environments": self._environments}
 
     def __len__(self):
@@ -1292,8 +1307,7 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
             buildargs = {}
         self._buildargs = buildargs
 
-    def _export_dict(self):
-        """get a full dict-like object"""
+    def contribute_to_dict(self):
         return {"content": self._content, "buildargs": self._buildargs}
 
     def __deepcopy__(self, memo=None, **kwargs):
@@ -1330,8 +1344,7 @@ class RoutineInstruction(ContentInstruction, ftype="subroutine"):
         self._inp_variables = inp_variables  # TODO: not sure yet.
         self._out_variables = out_variables  # Might come out naturally.
 
-    def _export_dict(self):
-        """get a full dict-like object"""
+    def contribute_to_dict(self):
         return {
             "inp_vars": self._inp_variables,
             "out_vars": self._out_variables,
@@ -1373,7 +1386,11 @@ class RoutineInstruction(ContentInstruction, ftype="subroutine"):
 # ======================
 
 
-class PolynomialInstruction(KeyMapInstruction, ftype="polynomial"):
+class PolynomialInstruction(
+    LeafInstruction,
+    ftype="polynomial",
+    defining_keys=["tgt0", "src0", "coeffs"],
+):
     """
     Base class for polynomial instructions
     y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
@@ -1383,20 +1400,14 @@ class PolynomialInstruction(KeyMapInstruction, ftype="polynomial"):
         self,
         tgt0: InstructionVariable,
         src0: InstructionVariable,
-        *coeffs,
-        **other,
+        coeffs,
     ):
-        degree = len(coeffs) - 1
         assert isinstance(tgt0, InstructionVariable)
         assert isinstance(src0, InstructionVariable)
-        dcoeffs: dict[str, Any] = {}
-        for exp, coeff in enumerate(coeffs):
-            dcoeffs[f"coeff_x{exp}"] = coeff
         super().__init__(
             tgt0=tgt0,
             src0=src0,
-            degree=degree,
-            **dcoeffs,
+            coeffs=coeffs,
             itype=self.ftype,
         )
 
@@ -1407,26 +1418,21 @@ class PolynomialInstruction(KeyMapInstruction, ftype="polynomial"):
 # ==================
 
 
-class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
+class AffineOperationInstruction(
+    LeafInstruction,
+    ftype="affine",
+    defining_keys=["tgt0", "src0", "alpha", "beta"],
+):
     """y[key_tgt0] = a * x[key_src] + b type instruction"""
 
     def __init__(self, tgt0, src0, alpha, beta):
         assert isinstance(tgt0, InstructionVariable)
         assert isinstance(src0, InstructionVariable)
-        super().__init__(tgt0, src0, beta, alpha)
-        # TODO: introduce alias alpha, beta
-
-    @classmethod
-    def from_dict(cls, params):
-        """
-        generate a new class instance from a dictionary.
-        Consider renaming here
-        """
-        return cls(
-            params["tgt0"],
-            params["src0"],
-            params["coeff_x1"],
-            params["coeff_x0"],
+        super().__init__(
+            tgt0=tgt0,
+            src0=src0,
+            alpha=alpha,
+            beta=beta,
         )
 
 
@@ -1436,24 +1442,42 @@ class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
 # ==================
 
 
-class LinearOperationInstruction(AffineOperationInstruction, ftype="linear"):
+class LinearOperationInstruction(
+    AffineOperationInstruction,
+    ftype="linear",
+    defining_keys=["tgt0", "src0", "alpha"],
+):
     """y[key_tgt0] = a * x[key_src] type instruction"""
 
     def __init__(self, tgt0, src0, alpha):
         assert isinstance(tgt0, InstructionVariable)
         assert isinstance(src0, InstructionVariable)
-        super().__init__(tgt0, src0, alpha, 0.0)
+        super().__init__(tgt0=tgt0, src0=src0, alpha=alpha, beta=0.0)
 
-    @classmethod
-    def from_dict(cls, params):
-        """
-        generate a new class instance from a dictionary.
-        Consider renaming here
-        """
-        return cls(
-            params["tgt0"],
-            params["src0"],
-            params["coeff_x1"],
+
+###############################################################################
+#
+# BILINEAR INSTRUCTION
+# ====================
+
+
+class BiLinearOperationInstruction(
+    LeafInstruction,
+    ftype="bilinear",
+    defining_keys=["tgt0", "src0", "src1", "alpha"],
+):
+    """y[key_tgt0] = a * x[key_src] type instruction"""
+
+    def __init__(self, tgt0, src0, src1, alpha):
+        assert isinstance(tgt0, InstructionVariable)
+        assert isinstance(src0, InstructionVariable)
+        assert isinstance(src1, InstructionVariable)
+        super().__init__(
+            tgt0=tgt0,
+            src0=src0,
+            src1=src1,
+            alpha=alpha,
+            itype=self.ftype,
         )
 
 
@@ -1578,7 +1602,7 @@ if __name__ == "__main__":
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
-                env_el["coeff_x1"],
+                env_el["alpha"],
             )
         else:
             print("\t", level, el, env)
@@ -1593,7 +1617,7 @@ if __name__ == "__main__":
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
-                env_el["coeff_x1"],
+                env_el["alpha"],
             )
         else:
             print("\t", level, el, env)
@@ -1608,7 +1632,7 @@ if __name__ == "__main__":
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
-                env_el["coeff_x1"],
+                env_el["alpha"],
             )
         else:
             print("\t", level, el, env)
@@ -1623,7 +1647,7 @@ if __name__ == "__main__":
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
-                env_el["coeff_x1"],
+                env_el["alpha"],
             )
         else:
             print("\t", level, el, env)
@@ -1638,7 +1662,7 @@ if __name__ == "__main__":
                 env_el.identifier,
                 env_el["tgt0"].offsets,
                 env_el["src0"].offsets,
-                env_el["coeff_x1"],
+                env_el["alpha"],
             )
         else:
             print("\t", level, el, env)
@@ -1655,13 +1679,13 @@ if __name__ == "__main__":
                 env_el["src0"].offsets,
                 env_el["tgt0"].name,
                 env_el["src0"].name,
-                env_el["coeff_x1"],
+                env_el["alpha"],
             )
         else:
             print("\t", level, el, env)
 
-    some_value_x = SymbolicOffset("some_offset")
-    some_value_x.associate_variable("x")
+    some_value_x = SymbolicOffset()
+    some_value_x.put_expression("x")
 
     print("unpack, True recursive, extra tests on variable variables")
     for el in printed_instructions.unpack():
@@ -1674,6 +1698,12 @@ if __name__ == "__main__":
     print(len(printed_instructions))
 
     print(next(printed_instructions.instructions).to_dict())
+
+    test_op = LinearOperationInstruction(
+        VarOutInner("key3"), VarInpInner("key1"), 1.0
+    )
+    print()
+    print(test_op.to_dict())
 
     sys.exit(0)
 

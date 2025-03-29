@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 29/03/2025, 12:16
-# Version:     0.0.1123
+# Last Update: 29/03/2025, 14:37
+# Version:     0.0.1125
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -375,7 +375,7 @@ class SymbolicOffset(InstructionVariableOffset):
             variable, input_config=input_config, output_config=output_config
         )
 
-    def associate_variable(self, variable):
+    def put_expression(self, variable):
         """associate a new value"""
         self._value = variable
 
