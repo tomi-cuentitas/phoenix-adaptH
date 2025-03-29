@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 20/03/2025, 11:51
-# Version:     0.0.1120
+# Last Update: 29/03/2025, 12:16
+# Version:     0.0.1123
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -229,7 +229,7 @@ class InstructionVariable(_Chainable):
         )
 
     def progressed(self, *offsets):
-        """append an new instance with an extra offset"""
+        """get a new instance with extra offsets"""
         return type(self)(
             *self.plain_offsets,
             input_config=self.input_config,

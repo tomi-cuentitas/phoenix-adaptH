@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 28/03/2025, 10:40
-# Version:     0.0.2933
+# Last Update: 29/03/2025, 13:09
+# Version:     0.0.2946
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -398,6 +398,14 @@ class Instruction:
     def class_identifier(cls):
         """access the class identifier"""
         return cls._ftype
+
+    def as_type(self, other_class):
+        """get a version of self as an instance of other_class"""
+        if not isinstance(self, other_class):
+            raise TypeError(
+                f"Cannot convert {self.__class__.__name__} to {other_class.__name__}"
+            )
+        return other_class.from_dict(self._export_dict())
 
 
 ###############################################################################
@@ -812,6 +820,29 @@ class InstructionGroup(Instruction, ftype="group"):
             ],
             itype=self.itype,
         )
+
+    def ParametricGroup(InstructionGroup, ftype="pgroup"):
+        """"""
+
+        # # TODO!
+        # def __init__(self, instructions, generating_instruction=None):
+        #     super().__init__()
+        #     if generating_instruction is None:
+        # get gen instr from content
+        #     self._generating_instruction = generating_instruction
+
+        # def append_from_parameters(self, **params):
+        # append parameters instead of instruction
+
+        def append(self, instruction):
+            """"""
+            # also define that for super, consider instruction length and itype check
+
+        # def unpack
+        # for ...
+        #     yield self._generating_instruction(**params))
+
+        # def from_group(self, group)
 
 
 ######################################################################################
@@ -1294,10 +1325,10 @@ class RoutineInstruction(ContentInstruction, ftype="subroutine"):
     subroutine
     """
 
-    def __init__(self, operations, inp_variables, out_variables, itype=None):
+    def __init__(self, inp_variables, out_variables, operations, itype=None):
         super().__init__(operations, itype=itype)
-        self._inp_variables = inp_variables
-        self._out_variables = out_variables
+        self._inp_variables = inp_variables  # TODO: not sure yet.
+        self._out_variables = out_variables  # Might come out naturally.
 
     def _export_dict(self):
         """get a full dict-like object"""
@@ -1308,10 +1339,12 @@ class RoutineInstruction(ContentInstruction, ftype="subroutine"):
 
     @property
     def inp_variables(self):
+        """access read only attribute inp_variables"""
         return tuple(self._inp_variables)
 
     @property
     def out_variables(self):
+        """access read only attribute out_variables"""
         return tuple(self._out_variables)
 
     def __deepcopy__(self, memo=None):
@@ -1381,6 +1414,7 @@ class AffineOperationInstruction(PolynomialInstruction, ftype="affine"):
         assert isinstance(tgt0, InstructionVariable)
         assert isinstance(src0, InstructionVariable)
         super().__init__(tgt0, src0, beta, alpha)
+        # TODO: introduce alias alpha, beta
 
     @classmethod
     def from_dict(cls, params):
