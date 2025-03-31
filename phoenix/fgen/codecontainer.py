@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 27/03/2025, 11:07
-# Version:     0.0.1148
+# Last Update: 31/03/2025, 17:56
+# Version:     0.0.1166
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -162,14 +162,15 @@ class CodeContainer:
         #     context.parent
         # )  # manage parent reference, might be weak
 
+    @Namespace.wrap_name_combine
     def request_temp(self, name, generating, autorequire=True, **genargs):
         """
-        Request a local variable from a namespace
+        Request a temporary variable from a namespace
         """
         # if variable is known to namespace already, get a new one.
         # the counter of local variables of the proper type tells
         # if a new variable has to be made.
-        temp = self.namespace.get_temp(
+        temp = self.namespace.request_temp(
             generating,
             name=name,
             origin=self,
@@ -178,6 +179,50 @@ class CodeContainer:
         if autorequire:
             self.requires(temp)
         return temp
+
+    @Namespace.wrap_name_combine
+    def request_unique(self, name, generating, autorequire=True, **genargs):
+        """
+        Request a unique variable from a namespace
+        """
+        # if variable is known to namespace already, get a new one.
+        # the counter of local variables of the proper type tells
+        # if a new variable has to be made.
+        temp = self.namespace.request_unique(
+            generating,
+            name=name,
+            origin=self,
+            **genargs,
+        )
+        if autorequire:
+            self.requires(temp)
+        return temp
+
+    @Namespace.wrap_name_combine
+    def request_new(
+        self,
+        name,
+        generating,
+        size=None,
+        dtype="f64",
+        autorequire=True,
+        **genargs,
+    ):
+        """
+        Request any new variable type from a namespace. Use autoname if necessary.
+        """
+        # TODO
+        variable = self.namespace.request_variable(
+            generating,
+            name=name,
+            size=size,
+            enum_first=True,
+            dtype=dtype,
+            **genargs,
+        )
+        if autorequire:
+            self.requires(variable)
+        return variable
 
     def requires(self, variable: LibRoutineVariable) -> None:
         """request to use a variable"""
@@ -554,7 +599,7 @@ class CaptureContainer(CodeContainer):
     def provides(self, variable):
         """
         This CaptureContainer provides a variable.
-        It is also added to the namespace
+        It is also added to the namespace and can be seen from all derived namespaces.
         """
         self._captured.add(variable)
         self.namespace.add(variable)

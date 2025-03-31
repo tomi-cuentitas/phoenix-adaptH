@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 28/03/2025, 20:12
-# Version:     0.0.873
+# Last Update: 31/03/2025, 14:44
+# Version:     0.0.874
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,7 +28,7 @@ from phoenix.fgen.instruction import (
     RoutineInstruction,
     ContentInstruction,
     VariationInstruction,
-    KeyMapInstruction,
+    LeafInstruction,
     LinkVariableEnvironmentInstruction,
     OffsetEnvironmentInstruction,
 )

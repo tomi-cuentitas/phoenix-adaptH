@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 28/03/2025, 20:11
-# Version:     0.0.469
+# Last Update: 31/03/2025, 17:56
+# Version:     0.0.531
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,6 +28,8 @@ class Namespace:
         # self._content: weakref.WeakValueDictionary[
         #     str, LibRoutineVariable
         # ] = weakref.WeakValueDictionary()
+        # if this is weak, the namespace probably cannot remember temp variables that
+        # have been set in another branch
         self._content = {}
         self._parent = parent
         self._assigned: Dict[type, type] = {}
@@ -47,33 +49,50 @@ class Namespace:
         """add a variable to the namespace"""
         self._content[variable.name] = variable
 
+    def add_new(self, variable: LibRoutineVariable):
+        """add a variable to the namespace. Make sure it is not yet defined"""
+        if variable.name in self:
+            raise ValueError(f"Variable '{variable.name}' already exists")
+        self._content[variable.name] = variable
+
     def remove(self, variable: LibRoutineVariable):
         """add a variable to the namespace"""
         del self._content[variable.name]
 
-    def get_all(self):
+    def get_all_content(self):
         """get all content from self and parents"""
         yield from self._content.values()
         if self._parent is not None:
-            yield from self._parent.get_all()
+            yield from self._parent.get_all_content()
 
-    def combine_name(self, base, prefix=None, suffix=None):
+    @staticmethod
+    def combine_name(name, prefix=None, suffix=None):
         """combine a name from prefix, base and suffix"""
-        name = base
         if prefix is not None:
             name = f"{prefix}_{name}"
         if suffix is not None:
             name = f"{name}_{suffix}"
         return name
 
-    def autoname(self, name, prefix=None, suffix=None):
+    @staticmethod
+    def wrap_name_combine(func):
+        def wrapper(self, name, *args, prefix=None, suffix=None, **kwargs):
+            name = Namespace.combine_name(name, prefix=prefix, suffix=suffix)
+            return func(self, name, *args, **kwargs)
+
+        return wrapper
+
+    def autoname(self, name, prefix=None, suffix=None, enum_first=False):
         """automatically generate a name from base, prefix and suffix"""
-        name = self.combine_name(name, prefix=prefix, suffix=suffix)
+        cname = self.combine_name(name, prefix=prefix, suffix=suffix)
         num = 0
-        out = name
+        if enum_first:
+            out = f"{cname}{num}"
+        else:
+            out = cname
         while out in self._content:
             num += 1
-            out = f"{name}{num}"
+            out = f"{cname}{num}"
         return out
 
     def find(self, name):
@@ -94,19 +113,51 @@ class Namespace:
             f"instruction variable {ivariable_type} not assigned yet."
         )
 
+    def _get_unique_name(self, name, origin):
+        """generate a unique variable name from a standardized recipe"""
+        caps = "".join([c for c in type(origin).__name__ if c.isupper()])
+        myhash = f"{caps.lower()}"
+        return f"{name}_{myhash}"
+
     def _get_temp_name(self, name, origin):
-        """generate a temporary variable name from a standardized recipe"""
+        """generate a reusable variable name from a standardized recipe"""
         caps = "".join([c for c in type(origin).__name__ if c.isupper()])
         myhash = f"{caps.lower()}"
         return f"{name}_{myhash}L{origin.level}"
 
-    def get_temp(self, generating, name, origin, **genargs):
+    def request_unique(self, generating, name, origin, **genargs):
+        """get a unique variable. Look it up or generate."""
+        name = self._get_unique_name(name, origin)
+        if name in self:
+            return self.find(name)
+        temp = generating(name=name, namespace=self, **genargs)
+        return temp
+
+    def request_temp(self, generating, name, origin, **genargs):
         """get a temporary variable. Look it up or generate."""
         name = self._get_temp_name(name, origin)
         if name in self:
             return self.find(name)
-        temp = generating(name=name, **genargs)
+        temp = generating(name=name, namespace=self, **genargs)
         return temp
+
+    def request_variable(
+        self,
+        generating,
+        name,
+        size,
+        dtype="f64",
+        enum_first=False,
+        **genargs,
+    ):
+        variable = generating(
+            name,
+            namespace=self,
+            size=size,
+            dtype=dtype,
+            enum_first=enum_first,
+        )
+        return variable
 
     def __len__(self) -> int:
         return len(self._content)
@@ -147,23 +198,26 @@ class LibRoutineVariable:
         dtype="f64",
         status=0,
     ):
-        if namespace is None:
-            namespace = type(self)._class_namespace
-        self._namespace = namespace
         if name is None:
             name = type(self)._CLASS_BASE
-        name = self._namespace.autoname(
+        if namespace is None:
+            self._namespace = type(self)._class_namespace
+        else:
+            self._namespace = namespace
+        aname = self._namespace.autoname(
             name,
             prefix=prefix,
             suffix=suffix,
         )
-        assert name is not None
-        assert name not in self._namespace
-        self._name = name
+        assert aname not in self._namespace
+        assert aname is not None
+        self._name = aname
         self._size = size
         self._dtype = dtype
         self._status = status
-        self._namespace.add(self)
+        # do not automatically add if explicit namespace is given!
+        if namespace is None:
+            self._namespace.add(self)
 
     def use_as_input(self):
         """use the variable as an input"""
@@ -229,6 +283,7 @@ class LibRoutineVariable:
         return self._VAR_IDENTIFIER
 
     def __del__(self):
+        print("gc called")
         self.free_name()
 
     def __init_subclass__(cls, prefix=None):
@@ -307,7 +362,9 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
         super().__init__(size=size, namespace=namespace, prefix=prefix)
         if origin is None:
             raise ValueError("FrameSelector requires origin.")
-        self._origin = origin
+        self._origin = (
+            origin  # the container that the frame selector is attached to
+        )
 
     """-> Optionally, use a symbolic instruction variable in symbolic environment in map instruction.
                    the symbolic instruction variables are attached to the map instruction and have a frame
@@ -402,6 +459,7 @@ class LibRoutineConstant(LibRoutineVariable):
 
 
 if __name__ == "__main__":
+    thisnamespace = Namespace(None)
     othernamespace = Namespace(None)
     a = None
     b = None
@@ -431,8 +489,9 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    a = None
     gc.collect()
+    a.free_name()
+    a = None
     print("resetted a")
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
@@ -441,7 +500,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    a = LibRoutineLocalVariable(size=1)
+    a = LibRoutineLocalVariable(size=4)
     gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),

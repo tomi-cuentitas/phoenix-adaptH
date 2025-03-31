@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 29/03/2025, 14:48
-# Version:     0.0.2989
+# Last Update: 31/03/2025, 14:43
+# Version:     0.0.2996
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -598,9 +598,20 @@ class GenericInstruction(Instruction, ftype="generic"):
 
 
 class LeafInstruction(GenericInstruction, ftype="leaf"):
-    """Represents an Expression"""
+    """
+    Represents an Expression.
+    Leaf Instructions are exclusively defined via the keyword arguments
+    listed in _DEFINING_KEYS. Positional args are not allowed.
+    """
 
     _DEFINING_KEYS = []
+
+    def __init__(self, *args, **kwargs):
+        if args:
+            raise ValueError(
+                "Positional arguments are not allowed in LeafInstruction"
+            )
+        super().__init__(**kwargs)
 
     def __init_subclass__(cls, ftype: str, defining_keys=None):
         if defining_keys is None:
@@ -847,7 +858,10 @@ class InstructionGroup(Instruction, ftype="group"):
 
 
 class ParametricGroup(InstructionGroup, ftype="pgroup"):
-    """"""
+    """
+    Within this group, all instructions must be of the same type.
+    So far I will not allow any groups, only leaf instructions.
+    """
 
     def __init__(self, instructions, generating_instruction_class):
         if not issubclass(generating_instruction_class, LeafInstruction):
@@ -863,11 +877,30 @@ class ParametricGroup(InstructionGroup, ftype="pgroup"):
         )
         self._gen_instr_class = generating_instruction_class
 
+    def generate_instruction(self, *args, **kwargs):
+        """generate an instruction using the generating instruction class"""
+        return self._gen_instr_class(*args, **kwargs)
+
     def iterate_parameters(self):
         for instruction in self.instructions:
             yield instruction.to_dict(
                 *self._gen_instr_class.get_generating_keys()
             )
+
+    def grouped_by_key(self, function, subgroup_type=None):
+        return super().grouped_by_key(
+            function, group_type=InstructionGroup, subgroup_type=subgroup_type
+        )
+
+    def grouped_to_batches(self, batches, subgroup_type=None):
+        return super().grouped_to_batches(
+            batches, group_type=InstructionGroup, subgroup_type=subgroup_type
+        )
+
+    def grouped_to_size(self, max_size, subgroup_type=None):
+        return super().grouped_to_size(
+            max_size, group_type=InstructionGroup, subgroup_type=subgroup_type
+        )
 
 
 ######################################################################################

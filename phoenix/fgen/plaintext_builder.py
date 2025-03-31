@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 27/03/2025, 10:59
-# Version:     0.0.363
+# Last Update: 31/03/2025, 17:45
+# Version:     0.0.368
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -125,12 +125,14 @@ class PTDefinitionContainer(DefinitionContainer):
 class PTRoutineDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
+    # routine definition
+    # variable initialization
+    # body
 
 class PTLibraryDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
-class PTConditionalContainer(ConditionalContainer):
-    """Plain Text version of a RoutineDefinition"""
+    # collect all library routines
 
 
 ###############################################################################
