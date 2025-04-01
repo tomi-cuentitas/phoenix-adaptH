@@ -1,10 +1,10 @@
 # +--------------------------------------------------------------------------------------------------------------------+
 # | LOGFILE   : ./testlog.txt                                                                                          |
-# | GENERATED : 2025-03-31 14:45:08                                                                                    |
+# | GENERATED : 2025-04-01 20:26:34                                                                                    |
 # +--------------------------------------------------------------------------------------------------------------------+
 
-144508.097:info @..ger.logger | run some tests
-144508.097:info @..ger.logger | Hello from Builder 'TEST' (v0.0)
+202634.321:info @..ger.logger | run some tests
+202634.322:info @..ger.logger | Hello from Builder 'TEST' (v0.0)
                               | parameters (1):
                               |   - foo=bar
                               | supported (8):
@@ -17,19 +17,19 @@
                               |   + instruction.content.variation
                               |   + instruction.content.environment
                               | excluded (0):
-144508.097:info @..ger.logger |   foobar was here
-144508.097:info @..ger.logger |   foobar was here
-144508.097:info @..ger.logger |   foobar was here
-144508.097:info @..ger.logger | now let's do a critical one
-144508.097:info @..ger.logger |   foobar was here, too
-144508.097:WARN @..ger.logger |   A controlled exception occured: argument should be an integer
+202634.322:info @..ger.logger |   foobar was here
+202634.322:info @..ger.logger |   foobar was here
+202634.322:info @..ger.logger |   foobar was here
+202634.322:info @..ger.logger | now let's do a critical one
+202634.322:info @..ger.logger |   foobar was here, too
+202634.322:WARN @..ger.logger |   A controlled exception occured: argument should be an integer
                               |   called generator test_the_log2
                               |   args  : (<Builder.TEST>, 'test')
                               |   kwargs: {}
-144508.098:info @..ger.logger | This line should be visible
-144508.098:WARN @..ger.logger | now it's getting serious...
-144508.098:info @..ger.logger |   foobar was here
-144508.098:info @..ger.logger | Hello from Optimizer 'TESTAGAIN' (v0.0)
+202634.322:info @..ger.logger | This line should be visible
+202634.322:WARN @..ger.logger | now it's getting serious...
+202634.322:info @..ger.logger |   foobar was here
+202634.322:info @..ger.logger | Hello from Optimizer 'TESTAGAIN' (v0.0)
                               | parameters (1):
                               |   - foo=bazzz
-144508.098:info @..ger.logger | done!
+202634.322:info @..ger.logger | done!

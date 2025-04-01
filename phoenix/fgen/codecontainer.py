@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 31/03/2025, 17:56
-# Version:     0.0.1166
+# Last Update: 01/04/2025, 20:38
+# Version:     0.0.1171
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -395,7 +395,7 @@ class CodeContainer:
         for container in containers:
             self._container_foot.append(container)
 
-    # def add_capture(self, capture: str | Callable) -> None:
+    # def add_capture_trigger(self, capture: str | Callable) -> None:
     #     """add a type of requirement to capture"""
     #     raise TypeError(f"Cannot have caputure in class {type(self)}.")
 
@@ -548,10 +548,10 @@ class EnclosingContainer(GroupContainer):
     def __init__(self, context, **buildargs) -> None:
         super().__init__(context, **buildargs)
 
-    def fill_enclosings(self, **buildargs):
+    def fill_enclosings(self, open_string="(", close_string=")", **buildargs):
         """this method defines the enclosing characters."""
-        self.append_head(self.from_text("(", **buildargs))
-        self.append_foot(self.from_text(")", **buildargs))
+        self.append_head(self.from_text(open_string, **buildargs))
+        self.append_foot(self.from_text(close_string, **buildargs))
         return self
 
 
@@ -574,9 +574,9 @@ class CaptureContainer(CodeContainer):
         self._context.new_namespace_node()
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
-        self._captured: Set[LibRoutineVariable] = set()
+        self._provided: Set[LibRoutineVariable] = set()
 
-    def add_capture(self, capture: str | Callable) -> None:
+    def add_capture_trigger(self, capture: str | Callable) -> None:
         """add a type of requirement to capture"""
         if isinstance(capture, str):
             self._filter_func_captures.add(capture)
@@ -586,6 +586,11 @@ class CaptureContainer(CodeContainer):
             raise ValueError(
                 f"Invalid filter arg {capture}. Must be str|callable."
             )
+
+    @property
+    def captured(self):
+        """get the captured libvariables"""
+        yield from self._provided
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
@@ -601,7 +606,7 @@ class CaptureContainer(CodeContainer):
         This CaptureContainer provides a variable.
         It is also added to the namespace and can be seen from all derived namespaces.
         """
-        self._captured.add(variable)
+        self._provided.add(variable)
         self.namespace.add(variable)
 
     def requires(self, variable):
@@ -631,7 +636,7 @@ class DefinitionContainer(CaptureContainer):
     def build(self):
         """build head and tail section of the definition container"""
         # append all definition lines in head
-        for variable in self._captured:
+        for variable in self.captured:
             defline = (
                 type(self)
                 .DEFCLASS(context=self.inherit_context())
@@ -648,6 +653,11 @@ class RoutineContainer(EnclosingContainer):
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
     """
+
+    # should provide a string how the routine is called
+    # should provide a general signature database for imports
+    # libraries can provide that and when a library is imported, the
+    # signatures are provided
 
 
 # class KernelContainer(RoutineContainer):
@@ -739,7 +749,7 @@ if __name__ == "__main__":
     print(foo.capture_check(LibRoutineConstant(name="foo", value=1337)))
     # False
 
-    foo.add_capture("CONSTANT")
+    foo.add_capture_trigger("CONSTANT")
     print(foo.capture_check(LibRoutineConstant(name="foo", value=[1337])))
     # True
 
@@ -747,7 +757,7 @@ if __name__ == "__main__":
     print(foo.capture_check(LibRoutineLocalVariable(name="foo")))
     # False
 
-    foo.add_capture("LOCAL")
+    foo.add_capture_trigger("LOCAL")
     print(foo.capture_check(LibRoutineLocalVariable(name="foo")))
     # True
 
@@ -755,7 +765,7 @@ if __name__ == "__main__":
     print(foo.capture_check(LibRoutineVariable(name="foo", size=42)))
     # False
 
-    foo.add_capture(lambda x: x.size > 12)
+    foo.add_capture_trigger(lambda x: x.size > 12)
     print(foo.capture_check(LibRoutineVariable(name="foo", size=42)))
     # True
 
@@ -763,7 +773,7 @@ if __name__ == "__main__":
     print(foo.capture_check(LibRoutineVariable(name="foo", size=2)))
     # False
 
-    foo.add_capture(lambda x: "f" in x.name)
+    foo.add_capture_trigger(lambda x: "f" in x.name)
     print(foo.capture_check(LibRoutineVariable(name="foo", size=2)))
     # True
 

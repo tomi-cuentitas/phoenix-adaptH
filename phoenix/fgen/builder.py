@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 31/03/2025, 14:44
-# Version:     0.0.874
+# Last Update: 01/04/2025, 20:40
+# Version:     0.0.876
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -414,7 +414,7 @@ class Builder(Optimizer, identifier="GENERIC"):
         )
 
         definition_section = self.default_container("DEFCONT")(context=context)
-        definition_section.add_capture(lambda x: True)
+        definition_section.add_capture_trigger(lambda x: True)
         for container in self.containers_from_instruction(
             optimized_tree,
             context=definition_section.inherit_context(),
