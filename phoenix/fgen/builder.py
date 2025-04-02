@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 02/04/2025, 19:38
-# Version:     0.0.906
+# Last Update: 02/04/2025, 20:14
+# Version:     0.0.910
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -332,11 +332,16 @@ class Builder(Optimizer, identifier="GENERIC"):
         return None
 
     @log.wrap_call
-    def request_temp(self, name, generating, container, **genargs):
+    def request_temp(
+        self, container, name, generating, autorequire=True, **genargs
+    ):
         """request a temporary variable"""
-        return container.context.namespace.request_temp(
+        variable = container.context.namespace.request_temp(
             generating, name, origin=container, **genargs
         )
+        if autorequire:
+            container.requires(variable)
+        return variable
 
     @log.wrap_call_gen
     def containers_from_instruction(

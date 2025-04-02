@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 02/04/2025, 19:55
-# Version:     0.0.60
+# Last Update: 02/04/2025, 20:15
+# Version:     0.0.64
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -238,22 +238,23 @@ class Fortran90Builder(Builder, identifier="PLAINTEXT"):
             instruction, context, buildargs
         )
 
-    def handle_linear_instruction(self, instruction, context, buildargs):
-        """"""
+    # def handle_linear_instruction(self, instruction, context, buildargs):
+    #     """"""
 
     def handle_generic_instruction(self, instruction, context, buildargs):
         yield from super().handle_generic_instruction(
             instruction, context, buildargs
         )
-        foo = CodeLine("test expression {foo}", context=context.inherit())
+        foo = CodeLine(
+            "! this is a test expression {foo}", context=context.inherit()
+        )
         temp1 = self.request_temp(
+            foo,
             "test_temporary1",
             F90LibRoutineVariable,
             size=None,
             dtype="i64",
-            container=foo,
         )
-        foo.requires(temp1)
         foo.format(foo=f"{temp1.expr_at(5)} + 2")
         yield foo
 
