@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 01/04/2025, 20:40
-# Version:     0.0.876
+# Last Update: 02/04/2025, 19:38
+# Version:     0.0.906
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -331,6 +331,13 @@ class Builder(Optimizer, identifier="GENERIC"):
                 return type(self)._supp_instr_handler[elder]
         return None
 
+    @log.wrap_call
+    def request_temp(self, name, generating, container, **genargs):
+        """request a temporary variable"""
+        return container.context.namespace.request_temp(
+            generating, name, origin=container, **genargs
+        )
+
     @log.wrap_call_gen
     def containers_from_instruction(
         self,
@@ -455,9 +462,10 @@ class Builder(Optimizer, identifier="GENERIC"):
             assert issubclass(comment_class, CommentLine)
             for line in lines:
                 yield comment_class(
+                    line,
                     context=context,
                     **buildargs,
-                ).set_comment(line)
+                )
 
     @log.wrap_call_gen
     def handle_basic_instruction(self, instruction, context, buildargs):
@@ -493,6 +501,13 @@ class Builder(Optimizer, identifier="GENERIC"):
         """default handler for generic instruction"""
         yield from self.comment(
             str(instruction.to_dict()), context=context, buildargs=buildargs
+        )
+
+    @log.wrap_call_gen
+    def handle_leaf_instruction(self, instruction, context, buildargs):
+        """default handler for leaf instruction, mapping back to generic"""
+        yield from self.handle_generic_instruction(
+            instruction, context=context, buildargs=buildargs
         )
 
     @log.wrap_call_gen
@@ -536,27 +551,29 @@ class Builder(Optimizer, identifier="GENERIC"):
         if instruction_class in cls._supp_instr_handler:
             del cls._supp_instr_handler[instruction_class]
 
-    @log.wrap_call
     @classmethod
-    def include_instruction_class(cls, instruction_class):
+    @log.wrap_call
+    def set_instruction_class_handler(cls, instruction_class, handler):
         """remove a handler"""
         if instruction_class in cls._excl_instr_classes:
             cls._excl_instr_classes.remove(instruction_class)
+        cls._supp_instr_handler[instruction_class] = handler
 
     @classmethod
     @log.wrap_call
     def set_default_handlers(cls):
         """set the instruction handlers to a default"""
-        handler_mappings = [
+        default_handler_mappings = [
             # base instruction
             (Instruction, cls.handle_basic_instruction),
             #
             # first order subclasses
             (InstructionGroup, cls.handle_group_instruction),
             (ContentInstruction, cls.handle_content_instruction),
+            (GenericInstruction, cls.handle_generic_instruction),
             #
             # leaf instruction
-            (GenericInstruction, cls.handle_generic_instruction),
+            (LeafInstruction, cls.handle_leaf_instruction),
             #
             # content based
             (RoutineInstruction, cls.handle_routine_instruction),
@@ -566,14 +583,8 @@ class Builder(Optimizer, identifier="GENERIC"):
             # environments
             (EnvironmentInstruction, cls.handle_environment_instruction),
         ]
-        cls.set_handlers(handler_mappings)
-
-    @classmethod
-    @log.wrap_call
-    def set_handlers(cls, handler_mappings):
-        """set the mappings of instruction classes to handlers"""
-        for instruction_class, class_handler in handler_mappings:
-            cls.set_default_handler(instruction_class, class_handler)
+        for instruction_class, handler in default_handler_mappings:
+            cls.set_instruction_class_handler(instruction_class, handler)
 
 
 Builder.set_default_handlers()

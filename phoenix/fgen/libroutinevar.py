@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 31/03/2025, 17:56
-# Version:     0.0.531
+# Last Update: 02/04/2025, 19:56
+# Version:     0.0.551
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -233,14 +233,14 @@ class LibRoutineVariable:
         return self._status
 
     def __str__(self):
-        if self._size is None:
+        if self.is_scalar:
             return f"{self._name}"
         return f"{self._name}[{self._size}]"
 
     def __repr__(self):
         return str(self)
 
-    def get_definition_line(self) -> str:
+    def get_definition_lines(self) -> str:
         """create the line that defines the variable"""
         status = "??"
         if self.status & type(self).AS_INPUT:
@@ -250,8 +250,9 @@ class LibRoutineVariable:
         if self.status & type(self).AS_INOUT:
             status = "RW"
         if self.size is None:
-            return f":DEFINE {status} {self._dtype} {self._name}"
-        return f":DEFINE {status} {self._dtype} {self._name}[{self.size}]"
+            yield f":DEFINE {status} {self.datatype} {self.name}"
+        else:
+            yield f":DEFINE {status} {self.datatype} {self.name}[{self.size}]"
 
     def free_name(self):
         """discard the name in the namespace"""
@@ -262,10 +263,19 @@ class LibRoutineVariable:
         except AttributeError:
             print("this should not have happened.")
 
+    def lookup_dtype(self, dtype):
+        """lookup the dtype specifier"""
+        return dtype
+
     @property
     def name(self):
         """access name attribute"""
         return self._name
+
+    @property
+    def is_scalar(self):
+        """return boolean deciding whether the variable is a scalar"""
+        return self._size is None
 
     @property
     def size(self):
@@ -276,6 +286,11 @@ class LibRoutineVariable:
     def dtype(self):
         """access datatype attribute"""
         return self._dtype
+
+    @property
+    def datatype(self):
+        """access datatype attribute"""
+        return self.lookup_dtype(self._dtype)
 
     @property
     def vtype(self):
@@ -290,10 +305,13 @@ class LibRoutineVariable:
         if prefix is not None:
             cls._CLASS_BASE = prefix
 
-    def expr_at_offset(
-        self, *offsets, callback=None, simplify=True, allow_strings=False
+    def process_offsets(
+        self,
+        *offsets,
+        # callback=None,
+        simplify=True,
+        allow_strings=False,
     ):
-        """expression at offset"""
         offset_str_list = []
         offset_int = 0
         for offset in offsets:
@@ -307,9 +325,8 @@ class LibRoutineVariable:
                     raise ValueError(
                         "only scalar offsets are allowed in this context"
                     )
-                if callback is not None:
-                    callback(self)
-                    callback(offset)
+                # if callback is not None:
+                #     callback(offset)
                 offset_str_list.append(str(offset))
             else:
                 if allow_strings:
@@ -323,6 +340,24 @@ class LibRoutineVariable:
                 offset_str_list.append(str(offset_int))
         if not offset_str_list:
             offset_str_list = ["0"]
+        return offset_str_list
+
+    def expr_at(
+        self,
+        *offsets,
+        # callback=None,
+        simplify=True,
+        allow_strings=False,
+    ):
+        """expression at offset"""
+
+        offset_str_list = self.process_offsets(
+            *offsets,
+            # callback=callback,
+            simplify=simplify,
+            allow_strings=allow_strings,
+        )
+
         offset_str = " + ".join(offset_str_list)
         return f"{self._name}[{offset_str}]"
 
@@ -336,6 +371,20 @@ class LibRoutineVariable:
     #     return str(self)
 
 
+class ImportVariable(LibRoutineVariable):
+    """
+    An import. Maybe part of the variable concept in a broader sense.
+    When a routine, variable or macro is used that has to be imported,
+    it can be provided like that and ultimately requested
+    """
+
+    _VAR_IDENTIFIER = "IMPORT"
+    _CLASS_BASE = "imp"
+
+    def __init__(self, *args, status=1, **kwargs):
+        super().__init__(*args, **kwargs, status=status)
+
+
 class LibRoutineLocalVariable(LibRoutineVariable):
     """Any kind of variable used in the library"""
 
@@ -343,14 +392,14 @@ class LibRoutineLocalVariable(LibRoutineVariable):
     _CLASS_BASE = "loc"
 
     def __init__(self, *args, status=3, **kwargs):
-        super().__init__(*args, **kwargs, status=3)
+        super().__init__(*args, **kwargs, status=status)
 
 
 class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
     """An integer type variable made for iterating through an array"""
 
     _VAR_IDENTIFIER = "FRAMESELECT"
-    _CLASS_BASE = "frm"
+    _CLASS_BASE = "sel"
 
     # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
     # maybe let it rise like other variables and introduce a "handled" flag that is true once the
@@ -359,7 +408,9 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
     # exactly one of these.
 
     def __init__(self, origin=None, size=None, namespace=None, prefix=None):
-        super().__init__(size=size, namespace=namespace, prefix=prefix)
+        super().__init__(
+            size=size, namespace=namespace, prefix=prefix, status=2
+        )
         if origin is None:
             raise ValueError("FrameSelector requires origin.")
         self._origin = (
@@ -382,6 +433,9 @@ class LibRoutineInputVariable(LibRoutineVariable):
     # in some languages, input variables are treated differently than output.
     # inputs are assumed constant
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, status=1)
+
 
 class LibRoutineOutputVariable(LibRoutineVariable):
     """Output Variable. Potentially includes Auto Initialization"""
@@ -392,8 +446,11 @@ class LibRoutineOutputVariable(LibRoutineVariable):
     # in some languages, output variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
 
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, status=2)
 
-class LibRoutineInpOutVariable(LibRoutineVariable):
+
+class LibRoutineInOutVariable(LibRoutineVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "INPOUT"
@@ -401,6 +458,9 @@ class LibRoutineInpOutVariable(LibRoutineVariable):
 
     # in some languages, output variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs, status=3)
 
 
 class LibRoutineConstant(LibRoutineVariable):
@@ -423,7 +483,7 @@ class LibRoutineConstant(LibRoutineVariable):
                 self._value = value
                 size = len(value)
             else:
-                self._value = [value]
+                self._value = value
         else:
             if not hasattr(value, "__iter__"):
                 raise ValueError("value must be iterable.")
@@ -437,17 +497,29 @@ class LibRoutineConstant(LibRoutineVariable):
             namespace=None,
             prefix=None,
             suffix=None,
+            status=2,
         )
 
     @property
     def value(self):
         """access value"""
-        if self._size is None:
-            return self._value[0]
+        if self.is_scalar:
+            return self._value
         return list(self._value)
+
+    @property
+    def values(self):
+        """access value"""
+        if self.is_scalar:
+            raise ValueError(
+                "Cannot access multiple values of a scalar variable."
+            )
+        yield from self._value
 
     def append(self, value):
         """append a value"""
+        if self.is_scalar:
+            raise ValueError("Cannot append to a scalar variable.")
         self._value.append(value)
         self._size = len(self._value)
 

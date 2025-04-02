@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 01/04/2025, 20:40
-# Version:     0.0.6
+# Last Update: 02/04/2025, 19:55
+# Version:     0.0.60
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -27,9 +27,18 @@ from phoenix.fgen.codecontainer import (
     RoutineContainer,
     ConditionalContainer,
 )
-from phoenix.fgen.libroutinevar import LibRoutineLocalVariable
+from phoenix.fgen.libroutinevar import (
+    LibRoutineVariable,
+    LibRoutineInputVariable,
+    LibRoutineOutputVariable,
+    LibRoutineInOutVariable,
+    LibRoutineLocalVariable,
+    LibRoutineConstant,
+)
 
 from phoenix.toolbox.logger import GLOBAL_LOGGER
+
+from phoenix.aux import multiline_iterable
 
 GLOBAL_LOGGER.set_logfile("fortranbuilder")
 GLOBAL_LOGGER.set_loglevel("INFO")
@@ -73,14 +82,16 @@ class F90CommentLine(CommentLine):
     # some_aux_variable = LibRoutineLocalVariable("testvar")
 
 
-class F90BracketContainer(EnclosingContainer):
+class F90SectionContainer(EnclosingContainer):
     """Plain Text version of a EnvironmentContainer"""
 
     INDENT_BODY = True
 
-    def fill_enclosings(self, open_string, close_string, **buildargs):
+    def set_enclosings(self, section, name, **buildargs):
         """this method defines the enclosing characters."""
-        return super().fill_enclosings(open_string, close_string, **buildargs)
+        open_string = f"{section.upper()} {name}"
+        close_string = f"END {section.upper()} {name}"
+        return super().set_enclosings(open_string, close_string, **buildargs)
 
 
 class F90LoopContainer(LoopContainer):
@@ -93,23 +104,6 @@ class F90DefinitionContainer(DefinitionContainer):
     """Plain Text version of a DefinitionContainer"""
 
     INDENT_BODY = True
-
-    def build(self):
-        self.append_head(
-            F90CodeLine(context=self.context).set_line(
-                "BEGIN DEFINITION CONTAINER"
-            )
-        )
-        if list(self.captured):
-            self.append_head(
-                F90CodeLine(context=self.context).set_line("defines:")
-            )
-        self.append_foot(
-            F90CodeLine(context=self.context).set_line(
-                "END OF DEFINITION CONTAINER"
-            )
-        )
-        return super().build()
 
 
 class F90RoutineDefinition(RoutineContainer):
@@ -124,6 +118,87 @@ class F90LibraryDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
     # collect all library routines
+
+
+class F90LibRoutineVariable(LibRoutineVariable):
+    """LibRoutineVariable F90 Base class"""
+
+    _intent = None
+
+    def lookup_intent(self, intent):
+        if intent is None:
+            return None
+        if intent == "RO":
+            return "IN"
+        if intent == "WO":
+            return "OUT"
+        if intent == "RW":
+            return "INOUT"
+        raise ValueError(f"Unknown intent: {intent}")
+
+    def get_definition_lines(self) -> str:
+        """create the line that defines the variable"""
+        intent_str = ""
+        dimension_str = ""
+        intent = self.lookup_intent(type(self)._intent)
+        if intent:
+            intent_str = f", intent({intent})"
+        if not self.is_scalar:
+            dimension_str = f", dimension({self._dimension})"
+        yield f"{self.lookup_dtype(self._dtype)}{intent_str}{dimension_str} :: {self._name}"
+
+    def lookup_dtype(self, dtype):
+        match dtype:
+            case "f64":
+                return "double precision"
+            case "f32":
+                return "real"
+            case "i64":
+                return "integer(8)"
+            case "i32":
+                return "integer"
+        raise ValueError(f"Unknown dtype: {dtype}")
+
+
+class F90InputVariable(F90LibRoutineVariable, LibRoutineInputVariable):
+    _intent = "RO"
+
+
+class F90InputVariable(F90LibRoutineVariable, LibRoutineOutputVariable):
+    _intent = "WO"
+
+
+class F90InputVariable(F90LibRoutineVariable, LibRoutineInOutVariable):
+    _intent = "RW"
+
+
+class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
+    def get_definition_lines(self) -> str:
+        """create the line that defines the variable"""
+        dimension_str = ""
+        if not self.is_scalar:
+            dimension_str = f", dimension({self._dimension})"
+        if self.is_scalar:
+            yield f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name} = {self.value}"
+            return
+        line = f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name}({self.size}) = "
+        prefix = "(/"
+        suffix = "/)"
+        conv = float
+        if self.dtype[0] == "i":
+            conv = int
+        for line in multiline_iterable(
+            [conv(value) for value in self.values],
+            separator=", ",
+            max_line_length=100,
+            indent="",
+            extra_indent="  ",
+            linebreak=" &",
+            prefix=line + prefix,
+            suffix=suffix,
+            prefix_suffix_lines=True,
+        ):
+            yield line
 
 
 ###############################################################################
@@ -143,63 +218,15 @@ class F90LibraryDefinition(RoutineContainer):
 class Fortran90Builder(Builder, identifier="PLAINTEXT"):
     """PlainTextBuilder"""
 
-    def handle_basic_instruction(self, instruction, context, buildargs):
-        yield F90CodeLine(context, **buildargs).set_line(
-            f"Unknown instruction {instruction}",
-        )
-
     def handle_group_instruction(self, instruction, context, buildargs):
-        outer = F90BracketContainer(
-            context=context, **buildargs
-        ).fill_enclosings(
-            open_string=f"BEGIN Group {instruction.identifier} {{ ",
-            close_string=f"END Group {instruction.identifier} }} ",
+        yield from super().handle_group_instruction(
+            instruction, context, buildargs
         )
-        inside_context = context.inherit(parent=outer)
-        for inner_instruction in instruction.instructions:
-            for inner_container in self.containers_from_instruction(
-                inner_instruction,
-                inside_context,
-                **buildargs,
-            ):
-                outer.append(inner_container)
-        yield outer
 
     def handle_content_instruction(self, instruction, context, buildargs):
-        outer = F90BracketContainer(
-            context=context, **buildargs
-        ).fill_enclosings(
-            open_string=f"BEGIN Content Group {instruction.identifier} {{ ",
-            close_string=f"END Content Group {instruction.identifier} }} ",
+        yield from super().handle_content_instruction(
+            instruction, context, buildargs
         )
-        for key, value in instruction.items():
-            if key in ["identifier", "content"]:
-                continue
-            outer.append(
-                F90CodeLine(context=context, **buildargs).set_line(
-                    line=f":{key}={value}"
-                )
-            )
-        inside_context = context.inherit(parent=outer)
-        for inner_instruction in instruction.content:
-            for inner_container in self.containers_from_instruction(
-                inner_instruction,
-                inside_context,
-                **buildargs,
-            ):
-                outer.append(inner_container)
-        yield outer
-
-    def handle_generic_instruction(self, instruction, context, buildargs):
-        yield F90CodeLine(context=context, **buildargs).set_line(
-            line=f"generic instruction: {instruction.identifier}"
-        )
-        for key, value in instruction.items():
-            if key in ["identifier"]:
-                continue
-            yield F90CodeLine(context=context, **buildargs).set_line(
-                line=f":{key}={value}"
-            )
 
     def handle_routine_instruction(self, instruction, context, buildargs):
         yield from super().handle_routine_instruction(
@@ -211,15 +238,24 @@ class Fortran90Builder(Builder, identifier="PLAINTEXT"):
             instruction, context, buildargs
         )
 
-    def handle_variation_instruction(self, instruction, context, buildargs):
-        yield from super().handle_variation_instruction(
-            instruction, context, buildargs
-        )
+    def handle_linear_instruction(self, instruction, context, buildargs):
+        """"""
 
-    def handle_environment_instruction(self, instruction, context, buildargs):
-        yield from super().handle_environment_instruction(
+    def handle_generic_instruction(self, instruction, context, buildargs):
+        yield from super().handle_generic_instruction(
             instruction, context, buildargs
         )
+        foo = CodeLine("test expression {foo}", context=context.inherit())
+        temp1 = self.request_temp(
+            "test_temporary1",
+            F90LibRoutineVariable,
+            size=None,
+            dtype="i64",
+            container=foo,
+        )
+        foo.requires(temp1)
+        foo.format(foo=f"{temp1.expr_at(5)} + 2")
+        yield foo
 
 
 Fortran90Builder.set_default_container("COMMENT", F90CommentLine)

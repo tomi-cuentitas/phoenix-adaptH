@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 01/04/2025, 20:38
-# Version:     0.0.1171
+# Last Update: 02/04/2025, 19:54
+# Version:     0.0.1196
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -241,8 +241,9 @@ class CodeContainer:
     def from_text(self, text: str) -> CodeContainer:
         """generate a plain codeline from text"""
         return CodeLine(
+            line=text,
             context=self.inherit_context(),
-        ).set_line(text)
+        )
 
     def get_codelines_head(
         self, indent: int, **kwargs: Any
@@ -438,9 +439,9 @@ class CodeBlock(GroupContainer):
 class CodeLine(CodeContainer):
     """Recursion-Breaking. Literally a single line."""
 
-    def __init__(self, *, context, **params):
+    def __init__(self, line, context, **params):
         super().__init__(context=context, **params)
-        self._line = None
+        self._line = line
 
     def get_codelines_body(self, indent, **kwargs):
         for line in self.construct_code_lines(**kwargs):
@@ -454,11 +455,6 @@ class CodeLine(CodeContainer):
         return
         yield
 
-    def construct_code_lines(self, **_):
-        """construct the code line"""
-        # this is a generator to include line breaks if necessary
-        yield self.line
-
     @property
     def line(self):
         """access hidden attribute line"""
@@ -466,13 +462,10 @@ class CodeLine(CodeContainer):
             raise ValueError("CodeLine not set!")
         return self._line
 
-    @line.setter
-    def line(self, line):
-        if not isinstance(line, str):
-            raise TypeError("Line must be a string")
-        if "\n" in line:
-            raise ValueError("Line cannot contain newline")
-        self._line = line
+    # @line.setter
+    # def line(self, line):
+    #     """write-access. Maybe disallow in the future."""
+    #     self.set_line(line)
 
     def append_head(self, *_):
         raise ValueError("Cannot append to head in StatementLine")
@@ -485,8 +478,22 @@ class CodeLine(CodeContainer):
 
     def set_line(self, line):
         """set the line"""
-        self.line = line
+        if not isinstance(line, str):
+            raise TypeError("Line must be a string")
+        if "\n" in line:
+            raise ValueError("Line cannot contain newline")
+        self._line = line
         return self
+
+    def format(self, **replacements):
+        """format the line using replacements"""
+        self._line = self._line.format(**replacements)
+
+    def construct_code_lines(self, **_):
+        """construct the code line"""
+        # this is a generator to include line breaks if necessary
+        if self._line is not None:
+            yield self.line
 
 
 class StatementLine(CodeLine):
@@ -503,10 +510,12 @@ class StatementLine(CodeLine):
 
     _BLUEPRINT = ""
 
-    def finalize(self, **value_dict):
-        """construct the content from a value dictionary"""
-        self.line = type(self)._BLUEPRINT.format(**value_dict)
-        return self
+    def __init__(self, parameters, context, **params):
+        super().__init__(
+            type(self)._BLUEPRINT.format(**value_dict),
+            context=context,
+            **params,
+        )
 
 
 class CommentLine(CodeLine):
@@ -519,20 +528,27 @@ class CommentLine(CodeLine):
     def construct_code_lines(self, **_):
         yield type(self).COMMENT_PREFIX + self.line
 
-    def set_comment(self, text):
-        """set the comment text"""
-        self.line = text
-        return self
 
-
-class DefinitionLine(CodeLine):
+class DefinitionLines(CodeLine):
     """
     This line represents a comment
     """
 
+    def __init__(self, variable, context, **params):
+        super().__init__(line=None, context=context, **params)
+        self.set_variable(variable)
+
+    @property
+    def variable(self):
+        """acccess variable"""
+        return self._variable
+
+    def construct_code_lines(self, **_):
+        yield from self._variable.get_definition_lines()
+
     def set_variable(self, variable):
-        """set the comment text"""
-        self.line = variable.get_definition_line()
+        """set the variable. Maybe disallow that later."""
+        self._variable = variable
         return self
 
 
@@ -548,10 +564,8 @@ class EnclosingContainer(GroupContainer):
     def __init__(self, context, **buildargs) -> None:
         super().__init__(context, **buildargs)
 
-    def fill_enclosings(self, open_string="(", close_string=")", **buildargs):
-        """this method defines the enclosing characters."""
-        self.append_head(self.from_text(open_string, **buildargs))
-        self.append_foot(self.from_text(close_string, **buildargs))
+    def set_enclosings(self, **buildargs):
+        """this method later defines the enclosing characters."""
         return self
 
 
@@ -631,18 +645,13 @@ class DefinitionContainer(CaptureContainer):
     on which type of requirements are implemented here or passed on.
     """
 
-    DEFCLASS = DefinitionLine
-
     def build(self):
         """build head and tail section of the definition container"""
         # append all definition lines in head
         for variable in self.captured:
-            defline = (
-                type(self)
-                .DEFCLASS(context=self.inherit_context())
-                .set_variable(variable)
+            self.append_head(
+                DefinitionLines(variable, context=self.context.inherit())
             )
-            self.append_head(defline)
         # perform potential allocations in head
         # perform potential deallocations in tail
         return self

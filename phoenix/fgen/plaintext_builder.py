@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 31/03/2025, 17:45
-# Version:     0.0.368
+# Last Update: 02/04/2025, 19:29
+# Version:     0.0.381
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -72,7 +72,7 @@ class TestLineWithVariable(CodeLine):
         )
         temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
         super().set_line(
-            f"{line} yadayada 42 + {temp2.expr_at_offset(
+            f"{line} yadayada 42 + {temp2.expr_at(
                 1, temp1, 3, 4, simplify=True)}")
         return self
 
@@ -94,7 +94,7 @@ class PTBracketContainer(EnclosingContainer):
 
     INDENT_BODY = True
 
-    def fill_enclosings(self, open_string, close_string, **buildargs):
+    def set_enclosings(self, open_string, close_string, **buildargs):
         """this method defines the enclosing characters."""
         self.append_head(self.from_text(open_string, **buildargs))
         self.append_foot(self.from_text(close_string, **buildargs))
@@ -113,13 +113,10 @@ class PTDefinitionContainer(DefinitionContainer):
     INDENT_BODY = True
 
     def build(self):
-        self.append_head(PTCodeLine(context=self.context).set_line(
-            "BEGIN DEFINITION CONTAINER"))
-        if self._captured:
-            self.append_head(PTCodeLine(context=self.context).set_line(
-                "defines:"))
-        self.append_foot(PTCodeLine(context=self.context).set_line(
-            "END OF DEFINITION CONTAINER"))
+        self.append_head(PTCodeLine("BEGIN DEFINITION CONTAINER", context=self.context))
+        if list(self.captured):
+            self.append_head(PTCodeLine("defines:", context=self.context))
+        self.append_foot(PTCodeLine("END OF DEFINITION CONTAINER", context=self.context))
         return super().build()
 
 class PTRoutineDefinition(RoutineContainer):
@@ -153,14 +150,12 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
     """PlainTextBuilder"""
 
     def handle_basic_instruction(self, instruction, context, buildargs):
-        yield PTCodeLine(context, **buildargs).set_line(
-            f"Unknown instruction {instruction}",
-        )
+        yield PTCodeLine(f"Unknown instruction {instruction}", context, **buildargs)
 
     def handle_group_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
             context=context, **buildargs
-        ).fill_enclosings(
+        ).set_enclosings(
             open_string=f"BEGIN Group {instruction.identifier} {{ ",
             close_string=f"END Group {instruction.identifier} }} ",
         )
@@ -177,7 +172,7 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
     def handle_content_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
             context=context, **buildargs
-        ).fill_enclosings(
+        ).set_enclosings(
             open_string=f"BEGIN Content Group {instruction.identifier} {{ ",
             close_string=f"END Content Group {instruction.identifier} }} ",
         )
@@ -185,9 +180,7 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
             if key in ["identifier", "content"]:
                 continue
             outer.append(
-                PTCodeLine(context=context, **buildargs).set_line(
-                    line=f":{key}={value}"
-                )
+                PTCodeLine(f":{key}={value}", context=context, **buildargs)
             )
         inside_context = context.inherit(parent=outer)
         for inner_instruction in instruction.content:
@@ -200,16 +193,12 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         yield outer
 
     def handle_generic_instruction(self, instruction, context, buildargs):
-        yield PTCodeLine(context=context, **buildargs).set_line(
-            line=f"generic instruction: {instruction.identifier}"
-        )
+        yield PTCodeLine(f"generic instruction: {instruction.identifier}", context=context, **buildargs)
         for key, value in instruction.items():
             if key in ["identifier"]:
                 continue
-            yield PTCodeLine(context=context, **buildargs).set_line(
-                line=f":{key}={value}"
-            )
-        yield TestLineWithVariable(context=context, **buildargs).set_line("fooo")
+            yield PTCodeLine(f":{key}={value}", context=context, **buildargs)
+        yield TestLineWithVariable("fooo", context=context, **buildargs)
 
     def handle_routine_instruction(self, instruction, context, buildargs):
         yield from super().handle_routine_instruction(
