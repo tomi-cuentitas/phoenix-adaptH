@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 29/03/2025, 14:37
-# Version:     0.0.1125
+# Last Update: 03/04/2025, 16:18
+# Version:     0.0.1146
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -121,9 +121,7 @@ class InstructionVariable(_Chainable):
         if input_config is None:
             input_config = type(self)._default_config
         output_config = input_config
-        super().__init__(
-            input_config=input_config, output_config=output_config
-        )
+        super().__init__(input_config=input_config, output_config=output_config)
         self._offsets = []
         if _pure_copy:
             self._offsets = list(offsets)
@@ -269,9 +267,7 @@ class InstructionVariableOffset(_Chainable):
     """
 
     def __init__(self, value, input_config=None, output_config=None):
-        super().__init__(
-            input_config=input_config, output_config=output_config
-        )
+        super().__init__(input_config=input_config, output_config=output_config)
         self._value = value
         self._fixed_value = None
 
@@ -391,7 +387,7 @@ class InstructionEnvironment:
     """Defines an instruction environment where all known variables can be stored"""
 
     def __init__(self, **variables):
-        self._variables: Dict[str, InstructionVariable] = variables
+        self._variables: Dict[type, InstructionVariable] = variables
 
     def items(self):
         """iterate through dict-like items"""
@@ -430,46 +426,46 @@ class InstructionEnvironment:
         return f"<Env{content_as_string}>"
 
     def merge(
-        self, other_environment: InstructionEnvironment
+        self, inner_environment: InstructionEnvironment
     ) -> InstructionEnvironment:
         """merge an environment with another. Creates a new object."""
         new_environment = self.copy()
-        new_environment.include(other_environment)
+        new_environment.include(inner_environment)
         return new_environment
 
-    def include(self, other_environment: InstructionEnvironment):
+    def include(self, inner_environment: InstructionEnvironment):
         """include an environment"""
-        # print("include new environment:")
-        # print("  outer:", self)
-        # print("  inner:", other_environment)
-        for inner_key, inner_variable in other_environment.items():
-            if (outer_key := inner_variable.__class__) in self:
-                self._variables[inner_key] = self._variables[outer_key].merge(
-                    inner_variable
-                )
-            else:
-                self._variables[inner_key] = inner_variable
+        for inner_key, inner_variable in inner_environment.items():
+            self.update(inner_key, inner_variable)
         return self
 
     def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
         return self.merge(other)
 
-    def update(self, key, variable, overwrite=False):
+    def delete(self, target_class):
+        """delete the target class from the list of known variables"""
+        if target_class in self:
+            del self._variables[target_class]
+
+    def update(self, inner_target_class, inner_variable):
         """
         update the internal dictionary. Extend if possible.
         set variable to None to delete from environment
         """
-        if not issubclass(key, InstructionVariable):
-            raise TypeError(f"Key must be an InstructionVariable: {key}")
-        if key in self._variables:
-            if variable is None:
-                del self._variables[key]
-            if overwrite:
-                self._variables[key] = variable
-            else:
-                self._variables[key] = self._variables[key].merge(variable)
-        else:
-            self._variables[key] = variable
+        if not issubclass(inner_target_class, InstructionVariable):
+            raise TypeError(
+                f"Key must be an InstructionVariable subclass: {inner_target_class}"
+            )
+        # the added variable could be subject to an already registered offset.
+        # in this case, extend this offset and update the target class.
+        if (existing_target_class := type(inner_variable)) in self:
+            self._variables[inner_target_class] = self._variables[
+                existing_target_class
+            ].merge(inner_variable)
+            # for now, remove the old offset.
+            self.delete(existing_target_class)
+            return self
+        self._variables[inner_target_class] = inner_variable
         return self
 
     def keys(self):

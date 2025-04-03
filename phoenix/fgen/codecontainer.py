@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 02/04/2025, 19:54
-# Version:     0.0.1196
+# Last Update: 03/04/2025, 14:25
+# Version:     0.0.1205
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -510,7 +510,7 @@ class StatementLine(CodeLine):
 
     _BLUEPRINT = ""
 
-    def __init__(self, parameters, context, **params):
+    def __init__(self, value_dict, context, **params):
         super().__init__(
             type(self)._BLUEPRINT.format(**value_dict),
             context=context,
@@ -564,8 +564,10 @@ class EnclosingContainer(GroupContainer):
     def __init__(self, context, **buildargs) -> None:
         super().__init__(context, **buildargs)
 
-    def set_enclosings(self, **buildargs):
+    def set_enclosings(self, head_string, foot_string, **buildargs):
         """this method later defines the enclosing characters."""
+        self.append_head(self.from_text(head_string, **buildargs))
+        self.append_foot(self.from_text(foot_string, **buildargs))
         return self
 
 
@@ -669,16 +671,18 @@ class RoutineContainer(EnclosingContainer):
     # signatures are provided
 
 
-# class KernelContainer(RoutineContainer):
-#     """
-#     A KernelContainer represents a piece of code that is supposed to be called
-#     in various memory locations, potentially simultaneously. KernelContainers
-#     might map to parametrized auxilliary functions or actual kernels on GPUs.
+class KernelContainer(RoutineContainer):
+    """
+    A KernelContainer represents a piece of code that is supposed to be called
+    in various memory locations, potentially simultaneously. KernelContainers
+    might map to parametrized auxilliary functions or actual kernels on GPUs.
 
-#     An instruction block from a map instruction is preferably rendered into a
-#     kernel. Kernels are treated as subtypes of functions. They provide frame selectors
-#     and map them to external parallel ressources.
-#     """
+    An instruction block from a map instruction is preferably rendered into a
+    kernel. Kernels are treated as subtypes of functions. They provide frame selectors
+    and map them to external parallel ressources.
+
+    Kernel Containers provide some management for frame selectors
+    """
 
 
 class LibraryContainer(EnclosingContainer):
@@ -689,7 +693,7 @@ class LibraryContainer(EnclosingContainer):
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
         # library level must capture all required variables!
-        if not requirement.vtype == "CONSTANT":
+        if requirement.vtype not in ["IMPORT", "CONSTANT"]:
             raise ValueError(
                 "only constants are allowed to traverse to library definition level"
             )
@@ -706,7 +710,7 @@ class ConditionalContainer(CodeContainer):
     def add_case(self, condition, content):
         """add a case to the conditional"""
         self._cases[condition] = content
-        # maybe sth like (libroutinevar, operator, libroutinevar)?
+        # maybe sth like (libroutinevar, operator, libroutinevar/value)?
         # (would require a constant lrv)
 
 

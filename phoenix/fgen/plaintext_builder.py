@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 02/04/2025, 19:29
-# Version:     0.0.381
+# Last Update: 03/04/2025, 14:25
+# Version:     0.0.382
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -93,12 +93,6 @@ class PTBracketContainer(EnclosingContainer):
     """Plain Text version of a EnvironmentContainer"""
 
     INDENT_BODY = True
-
-    def set_enclosings(self, open_string, close_string, **buildargs):
-        """this method defines the enclosing characters."""
-        self.append_head(self.from_text(open_string, **buildargs))
-        self.append_foot(self.from_text(close_string, **buildargs))
-        return self
 
 
 class PTLoopContainer(LoopContainer):

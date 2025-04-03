@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 31/03/2025, 14:43
-# Version:     0.0.2996
+# Last Update: 03/04/2025, 16:20
+# Version:     0.0.2998
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -522,9 +522,7 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(
-                self.get(key, defaults.get(key, None)) for key in keys
-            )
+            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -581,9 +579,7 @@ class GenericInstruction(Instruction, ftype="generic"):
         for key, val in self._params.items():
             if isinstance(val, InstructionVariable):
                 if val.__class__ in environment:
-                    modified_params[key] = environment[val.__class__].merge(
-                        val
-                    )
+                    modified_params[key] = environment[val.__class__].merge(val)
                 else:
                     modified_params[key] = val
             else:
@@ -865,9 +861,7 @@ class ParametricGroup(InstructionGroup, ftype="pgroup"):
 
     def __init__(self, instructions, generating_instruction_class):
         if not issubclass(generating_instruction_class, LeafInstruction):
-            raise TypeError(
-                "generating instruction class must be a leaf class"
-            )
+            raise TypeError("generating instruction class must be a leaf class")
         super().__init__(
             [
                 instruction.as_type(generating_instruction_class)
@@ -1278,9 +1272,7 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         # environments are replaced by their transformed content
         return InstructionGroup(
             [
-                self.content.apply_environment(
-                    environment.merge(env), **kwargs
-                )
+                self.content.apply_environment(environment.merge(env), **kwargs)
                 for env in self.environments
             ]
         )
