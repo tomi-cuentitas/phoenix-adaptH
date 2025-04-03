@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 03/04/2025, 16:31
-# Version:     0.0.71
+# Last Update: 03/04/2025, 18:26
+# Version:     0.0.72
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -291,3 +291,18 @@ for indent, line in container_tree.get_codelines():
     print(indent * "  " + line)
 
 sys.exit()
+
+
+"""
+class Library:
+
+    library container class
+    [(builder, routine), ...]
+
+    create_container_tree():
+        create library container
+        capture container
+        include routines
+        build captures
+
+"""

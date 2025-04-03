@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 03/04/2025, 16:27
-# Version:     0.0.552
+# Last Update: 03/04/2025, 18:21
+# Version:     0.0.559
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -113,7 +113,7 @@ class Namespace:
             f"instruction variable {ivariable_type} not assigned yet."
         )
 
-    def _get_unique_name(self, name, origin):
+    def _get_fixed_name(self, name, origin):
         """generate a unique variable name from a standardized recipe"""
         caps = "".join([c for c in type(origin).__name__ if c.isupper()])
         myhash = f"{caps.lower()}"
@@ -125,16 +125,21 @@ class Namespace:
         myhash = f"{caps.lower()}"
         return f"{name}_{myhash}L{origin.level}"
 
-    def request_unique(self, generating, name, origin, **genargs):
-        """get a unique variable. Look it up or generate."""
-        name = self._get_unique_name(name, origin)
+    def request_fixed(self, generating, name, origin, **genargs):
+        """
+        Get a fixed name variable. Look it up or generate.
+        """
+        name = self._get_fixed_name(name, origin)
         if name in self:
             return self.find(name)
         temp = generating(name=name, namespace=self, **genargs)
         return temp
 
     def request_temp(self, generating, name, origin, **genargs):
-        """get a temporary variable. Look it up or generate."""
+        """
+        Get a temporary variable. Look it up or generate.
+        Has a fixed name with an additional level specifier.
+        """
         name = self._get_temp_name(name, origin)
         if name in self:
             return self.find(name)
@@ -181,9 +186,9 @@ class LibRoutineVariable:
     _CLASS_BASE = "var"
 
     # some public globals to handle status
-    AS_INPUT = 1
-    AS_OUTPUT = 2
-    AS_INOUT = AS_INPUT | AS_OUTPUT
+    STATUS_INPUT = 1
+    STATUS_OUTPUT = 2
+    STATUS_INOUT = STATUS_INPUT | STATUS_OUTPUT
 
     _class_namespace = Namespace(None)
     # if this ever becomes a dict, it must be weak!
@@ -221,11 +226,13 @@ class LibRoutineVariable:
 
     def use_as_input(self):
         """use the variable as an input"""
-        self._status |= type(self).AS_INPUT  # set the first bit in status
+        self._status |= type(self).STATUS_INPUT  # set the first bit in status
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).AS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     @property
     def status(self):
@@ -243,11 +250,11 @@ class LibRoutineVariable:
     def get_definition_lines(self) -> str:
         """create the line that defines the variable"""
         status = "??"
-        if self.status & type(self).AS_INPUT:
+        if self.status & type(self).STATUS_INPUT:
             status = "RO"
-        if self.status & type(self).AS_OUTPUT:
+        if self.status & type(self).STATUS_OUTPUT:
             status = "WO"
-        if self.status & type(self).AS_INOUT:
+        if self.status & type(self).STATUS_INOUT:
             status = "RW"
         if self.size is None:
             yield f":DEFINE {status} {self.datatype} {self.name}"
@@ -380,8 +387,10 @@ class ImportVariable(LibRoutineVariable):
     _VAR_IDENTIFIER = "IMPORT"
     _CLASS_BASE = "imp"
 
-    def __init__(self, *args, status=1, **kwargs):
-        super().__init__(*args, **kwargs, status=status)
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, **kwargs, status=LibRoutineVariable.STATUS_INPUT
+        )
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):
@@ -390,8 +399,10 @@ class LibRoutineLocalVariable(LibRoutineVariable):
     _VAR_IDENTIFIER = "LOCAL"
     _CLASS_BASE = "loc"
 
-    def __init__(self, *args, status=3, **kwargs):
-        super().__init__(*args, **kwargs, status=status)
+    def __init__(self, *args, **kwargs):
+        super().__init__(
+            *args, **kwargs, status=LibRoutineVariable.STATUS_INOUT
+        )
 
 
 class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
@@ -433,7 +444,9 @@ class LibRoutineInputVariable(LibRoutineVariable):
     # inputs are assumed constant
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, status=1)
+        super().__init__(
+            *args, **kwargs, status=LibRoutineVariable.STATUS_INPUT
+        )
 
 
 class LibRoutineOutputVariable(LibRoutineVariable):
@@ -446,20 +459,24 @@ class LibRoutineOutputVariable(LibRoutineVariable):
     # outputs are assumed read-write, or inout and not constant
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, status=2)
+        super().__init__(
+            *args, **kwargs, status=LibRoutineVariable.STATUS_OUTPUT
+        )
 
 
 class LibRoutineInOutVariable(LibRoutineVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
-    _VAR_IDENTIFIER = "INPOUT"
+    _VAR_IDENTIFIER = "INOUT"
     _CLASS_BASE = "ref"
 
     # in some languages, output variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
 
     def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs, status=3)
+        super().__init__(
+            *args, **kwargs, status=LibRoutineVariable.STATUS_INOUT
+        )
 
 
 class LibRoutineConstant(LibRoutineVariable):
@@ -496,7 +513,7 @@ class LibRoutineConstant(LibRoutineVariable):
             namespace=None,
             prefix=None,
             suffix=None,
-            status=2,
+            status=1,
         )
 
     @property

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 03/04/2025, 17:17
-# Version:     0.0.922
+# Last Update: 03/04/2025, 18:24
+# Version:     0.0.924
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -144,7 +144,9 @@ class Context:
             if self.namespace is None:
                 namespace = Namespace()
             else:
-                namespace = self.namespace  # .inherit()  use new_namespace_node
+                namespace = (
+                    self.namespace
+                )  # .inherit()  use new_namespace_node
 
         return Context(
             parent=parent,
