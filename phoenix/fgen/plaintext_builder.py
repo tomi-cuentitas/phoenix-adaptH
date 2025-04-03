@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 03/04/2025, 14:25
-# Version:     0.0.382
+# Last Update: 03/04/2025, 16:26
+# Version:     0.0.385
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -86,8 +86,6 @@ class PTCommentLine(CommentLine):
 
     COMMENT_PREFIX = "#> "
 
-    # some_aux_variable = LibRoutineLocalVariable("testvar")
-
 
 class PTBracketContainer(EnclosingContainer):
     """Plain Text version of a EnvironmentContainer"""
@@ -150,8 +148,8 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         outer = PTBracketContainer(
             context=context, **buildargs
         ).set_enclosings(
-            open_string=f"BEGIN Group {instruction.identifier} {{ ",
-            close_string=f"END Group {instruction.identifier} }} ",
+            head_string=f"BEGIN Group {instruction.identifier} {{ ",
+            foot_string=f"END Group {instruction.identifier} }} ",
         )
         inside_context = context.inherit(parent=outer)
         for inner_instruction in instruction.instructions:
@@ -167,8 +165,8 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         outer = PTBracketContainer(
             context=context, **buildargs
         ).set_enclosings(
-            open_string=f"BEGIN Content Group {instruction.identifier} {{ ",
-            close_string=f"END Content Group {instruction.identifier} }} ",
+            head_string=f"BEGIN Content Group {instruction.identifier} {{ ",
+            foot_string=f"END Content Group {instruction.identifier} }} ",
         )
         for key, value in instruction.items():
             if key in ["identifier", "content"]:

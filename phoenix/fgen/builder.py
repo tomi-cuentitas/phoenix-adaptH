@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 02/04/2025, 20:14
-# Version:     0.0.910
+# Last Update: 03/04/2025, 17:17
+# Version:     0.0.922
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -60,17 +60,28 @@ class Context:
         level=0,
         environment: InstructionEnvironment | None = None,
         namespace: Namespace | None = None,
+        assignments: dict | None = None,
     ):
         if environment is None:
             environment = InstructionEnvironment()
+
+        if namespace is None:
+            namespace = Namespace()
+
+        if assignments is None:
+            assignments = {}
 
         if parent is None:
             self._parent = None
         else:
             self._parent = ref(parent)
+
         self._level = level
         self._namespace = namespace
         self._environment = environment
+        self._assignments = assignments
+
+    # there is only one assignments instance being passed down a routine.
 
     @property
     def parent(self):
@@ -95,12 +106,21 @@ class Context:
         """access read-only attribute namespace"""
         return self._namespace
 
+    @property
+    def assignments(self):
+        """access assignments"""
+        return self._assignments
+
     def new_namespace_node(self):
         """provide a new namespace node"""
         if self._namespace is None:
             self._namespace = Namespace()
         else:
             self._namespace = self._namespace.inherit()
+
+    def set_assignment(self, instruction_variable_class, assignment):
+        """set the assignment for an instruction variable class"""
+        self._assignments[instruction_variable_class] = assignment
 
     def inherit(
         self,
@@ -124,13 +144,14 @@ class Context:
             if self.namespace is None:
                 namespace = Namespace()
             else:
-                namespace = self.namespace  # .inherit()
+                namespace = self.namespace  # .inherit()  use new_namespace_node
 
         return Context(
             parent=parent,
             level=self.level + 1,
             namespace=namespace,
             environment=environment,
+            assignments=self.assignments,
         )
 
 
@@ -229,7 +250,22 @@ class Validator:
 
 class Builder(Optimizer, identifier="GENERIC"):
     """
-    Make codecontainer from instruction tree
+    Make codecontainer from instruction tree.
+
+    Builders primarily build routines, but they can also combine them to libraries.
+
+    As another builder might be used for various routines that end up in the same
+    library, it might be cool to build routines in a capture container and rerise the
+    captured variables once the routine has been included in a library. Has the
+    theoretical possiblity to screw up the levels, but that's gonna be ok.
+
+    To circumvent that, I will for now require, that built routines are in libraries
+    already. A Library-Container will have routines that can be called by any builder
+    to attach more routines to it, therefore breaking out of the familiar builder
+    structure.
+
+    The Library class will manage that from there on and provide library objects
+    providing routines, that in turn can be imported if the signatures match.
     """
 
     _CLSNAME_PREFIX = "Builder"

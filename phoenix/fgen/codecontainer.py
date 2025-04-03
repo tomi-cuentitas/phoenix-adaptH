@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 03/04/2025, 14:25
-# Version:     0.0.1205
+# Last Update: 03/04/2025, 17:18
+# Version:     0.0.1206
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -646,6 +646,10 @@ class DefinitionContainer(CaptureContainer):
     on during requirement iterator. Supports a filtering function that decides
     on which type of requirements are implemented here or passed on.
     """
+
+    def __init__(self, context, **buildargs):
+        super().__init__(context, **buildargs)
+        self.context.new_namespace_node()
 
     def build(self):
         """build head and tail section of the definition container"""

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 02/04/2025, 20:15
-# Version:     0.0.64
+# Last Update: 03/04/2025, 16:31
+# Version:     0.0.71
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -87,8 +87,8 @@ class F90SectionContainer(EnclosingContainer):
 
     INDENT_BODY = True
 
-    def set_enclosings(self, section, name, **buildargs):
-        """this method defines the enclosing characters."""
+    def make_enclosings(self, section, name, **buildargs):
+        """this method defines the enclosing characters for this special case."""
         open_string = f"{section.upper()} {name}"
         close_string = f"END {section.upper()} {name}"
         return super().set_enclosings(open_string, close_string, **buildargs)
@@ -144,7 +144,7 @@ class F90LibRoutineVariable(LibRoutineVariable):
         if intent:
             intent_str = f", intent({intent})"
         if not self.is_scalar:
-            dimension_str = f", dimension({self._dimension})"
+            dimension_str = f", dimension({self._size})"
         yield f"{self.lookup_dtype(self._dtype)}{intent_str}{dimension_str} :: {self._name}"
 
     def lookup_dtype(self, dtype):
@@ -164,11 +164,11 @@ class F90InputVariable(F90LibRoutineVariable, LibRoutineInputVariable):
     _intent = "RO"
 
 
-class F90InputVariable(F90LibRoutineVariable, LibRoutineOutputVariable):
+class F90OutputVariable(F90LibRoutineVariable, LibRoutineOutputVariable):
     _intent = "WO"
 
 
-class F90InputVariable(F90LibRoutineVariable, LibRoutineInOutVariable):
+class F90InOutVariable(F90LibRoutineVariable, LibRoutineInOutVariable):
     _intent = "RW"
 
 
@@ -177,7 +177,7 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
         """create the line that defines the variable"""
         dimension_str = ""
         if not self.is_scalar:
-            dimension_str = f", dimension({self._dimension})"
+            dimension_str = f", dimension({self._size})"
         if self.is_scalar:
             yield f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name} = {self.value}"
             return
@@ -252,7 +252,7 @@ class Fortran90Builder(Builder, identifier="PLAINTEXT"):
             foo,
             "test_temporary1",
             F90LibRoutineVariable,
-            size=None,
+            size=42,
             dtype="i64",
         )
         foo.format(foo=f"{temp1.expr_at(5)} + 2")

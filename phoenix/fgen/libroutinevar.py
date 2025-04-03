@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 02/04/2025, 19:56
-# Version:     0.0.551
+# Last Update: 03/04/2025, 16:27
+# Version:     0.0.552
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -298,7 +298,6 @@ class LibRoutineVariable:
         return self._VAR_IDENTIFIER
 
     def __del__(self):
-        print("gc called")
         self.free_name()
 
     def __init_subclass__(cls, prefix=None):
