@@ -5,13 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 03/04/2025, 18:24
-# Version:     0.0.924
+# Last Update: 04/04/2025, 13:22
+# Version:     0.0.1078
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
+
+from hashlib import sha256
 
 from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
@@ -61,6 +63,8 @@ class Context:
         environment: InstructionEnvironment | None = None,
         namespace: Namespace | None = None,
         assignments: dict | None = None,
+        name: str | None = None,
+        _names: List[str] | None = None,
     ):
         if environment is None:
             environment = InstructionEnvironment()
@@ -76,12 +80,29 @@ class Context:
         else:
             self._parent = ref(parent)
 
+        self._container = None
         self._level = level
         self._namespace = namespace
         self._environment = environment
         self._assignments = assignments
+        self._names = []
+
+        if name is not None:
+            self._names.append(name)
 
     # there is only one assignments instance being passed down a routine.
+
+    @property
+    def name(self):
+        """return a readable name from name combinations"""
+        if self._names:
+            return "_".join(self._names)
+        else:
+            return "_"
+
+    def hashed_name(self, num_symbols=8):
+        """return a shortened hashed name"""
+        return sha256(self.name).hexdigest()[:num_symbols]
 
     @property
     def parent(self):
@@ -111,6 +132,18 @@ class Context:
         """access assignments"""
         return self._assignments
 
+    @property
+    def container(self):
+        """access container"""
+        return self._container
+
+    def set_container(self, container):
+        """set container"""
+        if self._container is not None:
+            raise ValueError("Cannot change container once set")
+        self._container = container
+        return self
+
     def new_namespace_node(self):
         """provide a new namespace node"""
         if self._namespace is None:
@@ -124,6 +157,7 @@ class Context:
 
     def inherit(
         self,
+        name=None,
         parent=None,
         environment=None,
         namespace=None,
@@ -134,8 +168,14 @@ class Context:
         Default behaviour for previous namespace and environment
         """
 
+        if name is not None:
+            self._names.append(name)
+
         if parent is None:
-            parent = self.parent
+            if self.container is None:
+                parent = self.parent
+            else:
+                parent = self.container
 
         if environment is None:
             environment = self.environment
@@ -154,25 +194,17 @@ class Context:
             namespace=namespace,
             environment=environment,
             assignments=self.assignments,
+            _names=self._names,
         )
 
 
-class Optimizer:
-    """Optimize the instruction tree w.r.t. certain aspects"""
+class BuilderSegment:
+    """Anything that handles instructions in the context of the build process"""
 
-    _CLSNAME_PREFIX = "Optimizer"
-    _IDENTIFIER = "GENERIC"
+    _CLSNAME_PREFIX = "_SEGMENT_"
+    _IDENTIFIER = "_GENERIC_"
     _VERSN = 0
     _BUILD = 0
-    _BCKND = "GENERIC"
-
-    def __init__(self, _internal=None, **params):
-        self._params: Dict[str, Any] = params
-        if _internal is None:
-            _internal = {}
-        _log_welcome = _internal.get("_log_welcome", True)
-        if _log_welcome:
-            self._welcome_log()
 
     def _welcome_log(self):
         info(*self._welcome_log_lines())
@@ -200,17 +232,28 @@ class Optimizer:
     def __init_subclass__(
         cls,
         identifier=None,
-        # _major=False,
+        version=None,
+        build=None,
     ):
         if identifier is None:
             identifier = cls.__name__.upper()
         cls._IDENTIFIER = identifier
-        # handle versioning when a new builder is implemented.
-        # if _major:
-        #     cls._VERSN += 1
-        #     cls._BUILD = 0
-        # else:
-        #     cls._BUILD += 1
+        if version is not None:
+            cls._VERSN = version
+        if build is not None:
+            cls._BUILD = build
+
+
+class Optimizer(BuilderSegment):
+    """Optimize the instruction tree w.r.t. certain aspects"""
+
+    def __init__(self, _internal=None, **params):
+        self._params: Dict[str, Any] = params
+        if _internal is None:
+            _internal = {}
+        _log_welcome = _internal.get("_log_welcome", True)
+        if _log_welcome:
+            self._welcome_log()
 
     def __str__(self):
         param_string = "|".join(
@@ -227,20 +270,24 @@ class Optimizer:
     @log.wrap_call
     def apply(self, instruction_tree):
         """apply the optimizer"""
-        return instruction_tree.deepcopy()
+        raise NotImplementedError(
+            "apply method must be implemented in subclass"
+        )
 
 
 class ValidationError(Exception):
     """An Error exception class thrown from validator"""
 
 
-class Validator:
+class Validator(BuilderSegment):
     """Validators check whether an instruction tree matches all requirements"""
+
+    _CLSNAME_PREFIX = "VALIDATOR"
 
     def __init__(self, **parameters):
         self._params = parameters
 
-    def apply(self, instruction_tree):
+    def validate(self, instruction_tree):
         """apply the validator to an instruction tree"""
         # check if all requirements are fulfilled
         return True
@@ -250,7 +297,7 @@ class Validator:
         return ValidationError(message)
 
 
-class Builder(Optimizer, identifier="GENERIC"):
+class Builder(BuilderSegment, identifier="GENERIC"):
     """
     Make codecontainer from instruction tree.
 
@@ -271,37 +318,27 @@ class Builder(Optimizer, identifier="GENERIC"):
     """
 
     _CLSNAME_PREFIX = "Builder"
+    _IDENTIFIER = "DEFAULT"
+    _BCKND = "GENERIC"
 
     _supp_instr_handler: Dict[type, Generator] = {}
     _excl_instr_classes: Set[type] = set()
 
     _default_containers: Dict[str, type] = {}
 
-    _class_optimizers: List[Optimizer] = []
-    _class_validators: List[Validator] = []
-
-    _VERSN = 0
-    _BUILD = 0
-
     def __init_subclass__(cls, identifier=None):
         super().__init_subclass__(identifier=identifier)
         cls.set_default_handlers()
 
-    def __init__(self, _internal=None, **params):
-        super().__init__(**params, _internal={"_log_welcome": False})
-        if _internal is None:
-            _internal = {}
-        _log_welcome = _internal.get("_log_welcome", True)
-        if _log_welcome:
-            self._welcome_log()
-        self._optimizers = []
-        self._validators = []
+    def __init__(self, **params):
+        self._params = params
+        self._welcome_log()
 
         self._extra_instr_handler: Dict[type, Generator] = {}
         self._avoid_instr_classes: Set[type] = set()
 
     def _detail_log_lines(self):
-        yield from Optimizer._detail_log_lines(self)
+        yield from BuilderSegment._detail_log_lines(self)
         supported = list(type(self)._supp_instr_handler.keys())
         yield f"supported ({len(supported)}):"
         for instruction_type in supported:
@@ -335,20 +372,6 @@ class Builder(Optimizer, identifier="GENERIC"):
         cls._excl_instr_classes.add(instruction_class)
         if instruction_class in cls._supp_instr_handler:
             del cls._supp_instr_handler[instruction_class]
-
-    @log.wrap_call
-    def include_optimizer(self, optimizer):
-        """append an optimizer to the list"""
-        if not isinstance(optimizer, Optimizer):
-            raise TypeError("Optimizer must be an instance of Optimizer")
-        self._optimizers.append(optimizer)
-
-    @log.wrap_call
-    def include_validator(self, validator):
-        """append an validator to the list"""
-        if not isinstance(validator, Validator):
-            raise TypeError("validator must be an instance of Validator")
-        self._validators.append(validator)
 
     @log.wrap_call
     def match_instruction(self, instruction):
@@ -425,55 +448,27 @@ class Builder(Optimizer, identifier="GENERIC"):
         # to implement that lazy as well.
 
     @log.wrap_call
-    def generate_container_tree(self, instruction, **buildargs):
-        """
-        Build the code from the instruction tree. This is meant to be called
-        from the trees root.
-        This is a generator!
-        """
-        info("build code from instruction tree")
-        optimized_tree = self.apply(instruction)  # this is a deepcopy call
-
-        for num, optimizer in enumerate(self._optimizers):
-            info(f"apply optimizer #{num + 1}")
-            optimized_tree = optimizer.apply(optimized_tree)
-
-        for num, optimizer in enumerate(type(self)._class_optimizers):
-            info(f"apply class optimizer #{num + 1}")
-            optimized_tree = optimizer.apply(optimized_tree)
-
-        for num, validator in enumerate(self._validators):
-            info(f"apply validator #{num + 1}")
-            if not validator.apply(optimized_tree):
-                raise validator.raise_exception(optimized_tree)
-
-        for num, validator in enumerate(type(self)._class_validators):
-            info(f"apply class validator #{num + 1}")
-            if not validator.apply(optimized_tree):
-                raise validator.raise_exception(optimized_tree)
-
-        info("start with root instruction node")
-
-        # context = (level, environment, parent, namespace)
-
-        context = Context(
-            level=0,
-            environment=InstructionEnvironment(),
-            parent=None,
-            namespace=Namespace(),
-        )
-
-        definition_section = self.default_container("DEFCONT")(context=context)
-        definition_section.add_capture_trigger(lambda x: True)
+    def generate_container_tree(
+        self, instruction, host_container=None, **buildargs
+    ):
+        """generate the container tree from instruction"""
+        if host_container is None:
+            context = Context(
+                level=0,
+                environment=InstructionEnvironment(),
+                parent=None,
+                namespace=Namespace(),
+            )
+            host_container = self.default_container("DEFCONT")(context=context)
+            host_container.add_capture_trigger(lambda x: True)
         for container in self.containers_from_instruction(
-            optimized_tree,
-            context=definition_section.inherit_context(),
-            **{**self._params, **buildargs},
+            instruction,
+            context=host_container.context.inherit(),
+            **buildargs,
         ):
-            definition_section.append(container)
-
+            host_container.append(container)
         info("reached end of instruction build")
-        return definition_section.build()
+        return host_container.build()
 
     def default_container(self, *args):
         """get the intended container class for the key. Optional default argument."""
@@ -506,7 +501,7 @@ class Builder(Optimizer, identifier="GENERIC"):
             for line in lines:
                 yield comment_class(
                     line,
-                    context=context,
+                    context=context.inherit(),
                     **buildargs,
                 )
 
@@ -628,6 +623,101 @@ class Builder(Optimizer, identifier="GENERIC"):
         ]
         for instruction_class, handler in default_handler_mappings:
             cls.set_instruction_class_handler(instruction_class, handler)
+
+
+class BuildChain:
+    """
+    The build chain.
+    This design allows to add more components and keeps validator, optimizer and
+    builder at the same hierarchy level"""
+
+    _class_optimizers: List[Optimizer] = []
+    _class_validators: List[Validator] = []
+
+    def __init__(self, builder, optimizers=None, validators=None):
+        self._optimizers = []
+        self._validators = []
+        self._builder = builder
+
+    @log.wrap_call
+    def include_optimizer(self, optimizer):
+        """append an optimizer to the list"""
+        if not isinstance(optimizer, Optimizer):
+            raise TypeError("Optimizer must be an instance of Optimizer")
+        self._optimizers.append(optimizer)
+
+    @log.wrap_call
+    def include_validator(self, validator):
+        """append an validator to the list"""
+        if not isinstance(validator, Validator):
+            raise TypeError("validator must be an instance of Validator")
+        self._validators.append(validator)
+
+    @log.wrap_call
+    def perform_optimization(self, instruction):
+        """perform the optimization steps"""
+
+        for num, optimizer in enumerate(self._optimizers):
+            info(f"apply optimizer #{num + 1}")
+            instruction = optimizer.apply(instruction)
+
+        for num, optimizer in enumerate(type(self)._class_optimizers):
+            info(f"apply class optimizer #{num + 1}")
+            instruction = optimizer.apply(instruction)
+
+        return instruction
+
+    @log.wrap_call
+    def perform_validation(self, instruction):
+        """perform the validation steps"""
+
+        report = {}
+
+        for num, validator in enumerate(self._validators):
+            info(f"apply validator #{num + 1}")
+            passed, details = validator.validate(instruction, report)
+            if not passed:
+                validator.handle_fail(details)
+                return False, report
+
+        for num, validator in enumerate(type(self)._class_validators):
+            info(f"apply class validator #{num + 1}")
+            passed, details = validator.validate(instruction, report)
+            if not passed:
+                validator.handle_fail(details)
+                return False, report
+
+        return True, report
+
+    @log.wrap_call
+    def perform_build(self, instruction, host_container=None):
+        """perform the build step"""
+        return self._builder.generate_container_tree(
+            instruction, host_container=host_container
+        )
+
+    @log.wrap_call
+    def build(self, instruction, host_container=None):
+        optimized_tree = self.perform_optimization(instruction)
+        passed, report = self.perform_validation(optimized_tree)
+        if not passed:
+            print(report)
+            raise ValueError("Validation failed")
+        return self.perform_build(
+            optimized_tree, host_container=host_container
+        )
+
+    @log.wrap_call
+    def prepare_instructions(self, instructions, **buildargs):
+        """
+        run instructions through the preparation steps of the builder.
+        """
+        info("build code from instruction tree")
+        optimized_tree = instructions.deepcopy()
+
+        info("start with root instruction node")
+
+        return optimized_tree
 
 
 Builder.set_default_handlers()

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 03/04/2025, 17:18
-# Version:     0.0.1206
+# Last Update: 04/04/2025, 12:28
+# Version:     0.0.1213
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -154,7 +154,8 @@ class CodeContainer:
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
 
-        self._context = context
+        self._context = context.set_container(self)
+        # context.set_container(self)
 
         # # parent link
         # self._wr_parent: wrReferenceType[CodeContainer] | None = None
@@ -692,16 +693,18 @@ class KernelContainer(RoutineContainer):
 class LibraryContainer(EnclosingContainer):
     """
     A Library contains routines, constants and more.
+    The Library Container provides generalized routines to add
+    libroutines, imports, constants, ... that can be called
     """
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
         # library level must capture all required variables!
-        if requirement.vtype not in ["IMPORT", "CONSTANT"]:
-            raise ValueError(
-                "only constants are allowed to traverse to library definition level"
-            )
-        return True
+        if requirement.vtype in ["IMPORT", "CONSTANT"]:
+            return True
+        raise ValueError(
+            "only constants are allowed to traverse up to library definition level"
+        )
 
 
 class ConditionalContainer(CodeContainer):

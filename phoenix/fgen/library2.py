@@ -5,15 +5,14 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/04/2025, 11:39
-# Version:     0.0.474
+# Last Update: 04/04/2025, 11:51
+# Version:     0.0.480
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-import warnings
 
 __doc__ = """
 Library module description
@@ -49,7 +48,9 @@ class LibraryManager:
             "compiled": False,
         }
         self._dependencies = {}
+        self._routines = {}
         self._libroutines = {}
+        self._library_container = None
 
     @property
     def fileending(self):
@@ -66,9 +67,7 @@ class LibraryManager:
         """generator-access to libroutines"""
         yield from self._libroutines.items()
 
-    def append(
-        self, routine, implementation="default", exception_existing=False
-    ):
+    def append(self, routine, builder="default", exception_existing=False):
         """append a routine to the library"""
         libroutine = self.from_routine(routine, implementation=implementation)
         ident_impl = (libroutine.identifier, libroutine.implementation)
@@ -77,10 +76,6 @@ class LibraryManager:
                 raise KeyError(
                     f"Routine '{libroutine.name}' already exists in library"
                 )
-
-            warnings.warn(
-                f"Routine '{libroutine.name}' already exists in library"
-            )
             return
         self._libroutines[ident_impl] = libroutine
 

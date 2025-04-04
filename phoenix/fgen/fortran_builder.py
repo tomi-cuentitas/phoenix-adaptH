@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 03/04/2025, 18:26
-# Version:     0.0.72
+# Last Update: 04/04/2025, 13:21
+# Version:     0.0.78
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,7 +17,7 @@ from __future__ import annotations
 
 from typing import Any, Dict
 
-from phoenix.fgen.builder import Builder
+from phoenix.fgen.builder import Builder, BuildChain
 from phoenix.fgen.codecontainer import (
     CodeLine,
     CommentLine,
@@ -215,8 +215,8 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
 ###############################################################################
 
 
-class Fortran90Builder(Builder, identifier="PLAINTEXT"):
-    """PlainTextBuilder"""
+class Fortran90Builder(Builder, identifier="FORTRAN90"):
+    """F90 Builder"""
 
     def handle_group_instruction(self, instruction, context, buildargs):
         yield from super().handle_group_instruction(
@@ -270,7 +270,9 @@ import sys
 from phoenix.fgen.instruction import GenericInstruction, InstructionGroup
 
 
-a = Fortran90Builder()
+my_builder = Fortran90Builder()
+
+test_chain = BuildChain(my_builder)
 
 test = InstructionGroup(
     [
@@ -281,11 +283,10 @@ test = InstructionGroup(
         GenericInstruction(foo="bar5", answer=42.5),
     ]
 )
-ctxt = Context()
 
 largegroup = InstructionGroup([test, test, test])
 
-container_tree = a.generate_container_tree(largegroup)
+container_tree = test_chain.build(largegroup)
 
 for indent, line in container_tree.get_codelines():
     print(indent * "  " + line)
