@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 04/04/2025, 13:21
-# Version:     0.0.78
+# Last Update: 04/04/2025, 13:47
+# Version:     0.0.79
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -307,3 +307,25 @@ class Library:
         build captures
 
 """
+
+
+# inside library (autocreate library if none given)
+# Builder/BuildChain places CodeContainer from Instruction(s) in
+# LibraryContainer, managed by Library via standardized routines
+
+# Routine has instruction inside and information on InstructionVariables
+# It is completely abstract and is based on instruction related objects.
+
+# A Builder/Buildchain is loaded from a default file. Or created.
+
+# It will either create code in an existing library and refer to that or
+# create its own library (and refer to that) based on the routines name,
+# instructions, properties (e.g. no_imag), ...
+
+# the result is a LibRoutine object for every routine in a library, storing
+# name and signature of the implemented piece of code. The library object is
+# aware of the libroutine object and its dependencies to be able to generate
+# a proper make file
+
+# The libroutine object can be called in python, too, as it now is specific
+# to a backend.
