@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 04/04/2025, 12:28
-# Version:     0.0.1213
+# Last Update: 07/04/2025, 18:16
+# Version:     0.0.1260
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -154,8 +154,7 @@ class CodeContainer:
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
 
-        self._context = context.set_container(self)
-        # context.set_container(self)
+        self._context = context.inherit().set_container(self)
 
         # # parent link
         # self._wr_parent: wrReferenceType[CodeContainer] | None = None
@@ -235,15 +234,11 @@ class CodeContainer:
             raise ValueError("variable request got lost!")
         self.parent.requires(variable)
 
-    def inherit_context(self, **kwargs):
-        """inherit the context"""
-        return self.context.inherit(parent=self, **kwargs)
-
-    def from_text(self, text: str) -> CodeContainer:
+    def line_from_text(self, text: str) -> CodeContainer:
         """generate a plain codeline from text"""
         return CodeLine(
             line=text,
-            context=self.inherit_context(),
+            context=self.context,
         )
 
     def get_codelines_head(
@@ -440,7 +435,7 @@ class CodeBlock(GroupContainer):
 class CodeLine(CodeContainer):
     """Recursion-Breaking. Literally a single line."""
 
-    def __init__(self, line, context, **params):
+    def __init__(self, line=None, *, context, **params):
         super().__init__(context=context, **params)
         self._line = line
 
@@ -460,13 +455,13 @@ class CodeLine(CodeContainer):
     def line(self):
         """access hidden attribute line"""
         if self._line is None:
-            raise ValueError("CodeLine not set!")
+            return ""
         return self._line
 
-    # @line.setter
-    # def line(self, line):
-    #     """write-access. Maybe disallow in the future."""
-    #     self.set_line(line)
+    @line.setter
+    def line(self, line):
+        """write-access. Maybe disallow in the future."""
+        self.set_line(line)
 
     def append_head(self, *_):
         raise ValueError("Cannot append to head in StatementLine")
@@ -493,8 +488,7 @@ class CodeLine(CodeContainer):
     def construct_code_lines(self, **_):
         """construct the code line"""
         # this is a generator to include line breaks if necessary
-        if self._line is not None:
-            yield self.line
+        yield self.line
 
 
 class StatementLine(CodeLine):
@@ -511,12 +505,15 @@ class StatementLine(CodeLine):
 
     _BLUEPRINT = ""
 
-    def __init__(self, value_dict, context, **params):
+    def __init__(self, value_dict, *, context, **params):
         super().__init__(
-            type(self)._BLUEPRINT.format(**value_dict),
             context=context,
             **params,
         )
+        self._value_dict = value_dict
+
+        def construct_code_lines(self):
+            yield type(self)._BLUEPRINT.format(**self._value_dict)
 
 
 class CommentLine(CodeLine):
@@ -535,7 +532,7 @@ class DefinitionLines(CodeLine):
     This line represents a comment
     """
 
-    def __init__(self, variable, context, **params):
+    def __init__(self, variable, *, context, **params):
         super().__init__(line=None, context=context, **params)
         self.set_variable(variable)
 
@@ -562,13 +559,13 @@ class EnclosingContainer(GroupContainer):
     class and are not occupied by other content.
     """
 
-    def __init__(self, context, **buildargs) -> None:
+    def __init__(self, *, context, **buildargs) -> None:
         super().__init__(context, **buildargs)
 
     def set_enclosings(self, head_string, foot_string, **buildargs):
         """this method later defines the enclosing characters."""
-        self.append_head(self.from_text(head_string, **buildargs))
-        self.append_foot(self.from_text(foot_string, **buildargs))
+        self.append_head(self.line_from_text(head_string, **buildargs))
+        self.append_foot(self.line_from_text(foot_string, **buildargs))
         return self
 
 
@@ -585,13 +582,18 @@ class CaptureContainer(CodeContainer):
     hierarchy.
     """
 
-    def __init__(self, context, **buildargs) -> None:
+    def __init__(self, *, context, **buildargs) -> None:
         super().__init__(context=context, **buildargs)
         # new namespace node in capture container
         self._context.new_namespace_node()
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
         self._provided: Set[LibRoutineVariable] = set()
+        self._callbacks: List[Callable] = []
+
+    def add_callback(self, callback: Callable) -> None:
+        """add a callback that is executed once a libroutinevariable is provided"""
+        self._callbacks.append(callback)
 
     def add_capture_trigger(self, capture: str | Callable) -> None:
         """add a type of requirement to capture"""
@@ -625,6 +627,8 @@ class CaptureContainer(CodeContainer):
         """
         self._provided.add(variable)
         self.namespace.add(variable)
+        for callback in self._callbacks:
+            callback(variable)
 
     def requires(self, variable):
         """send the required variables up the tree"""
@@ -632,6 +636,11 @@ class CaptureContainer(CodeContainer):
             self.provides(variable)
         else:
             super().requires(variable)
+
+    @property
+    def provided(self):
+        """access provided LibRoutineVariables"""
+        yield from self._provided
 
     def build(self):
         """
@@ -648,23 +657,21 @@ class DefinitionContainer(CaptureContainer):
     on which type of requirements are implemented here or passed on.
     """
 
-    def __init__(self, context, **buildargs):
-        super().__init__(context, **buildargs)
+    def __init__(self, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
         self.context.new_namespace_node()
 
     def build(self):
         """build head and tail section of the definition container"""
         # append all definition lines in head
         for variable in self.captured:
-            self.append_head(
-                DefinitionLines(variable, context=self.context.inherit())
-            )
+            self.append_head(DefinitionLines(variable, context=self.context))
         # perform potential allocations in head
         # perform potential deallocations in tail
         return self
 
 
-class RoutineContainer(EnclosingContainer):
+class RoutineContainer(CaptureContainer):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
@@ -674,6 +681,17 @@ class RoutineContainer(EnclosingContainer):
     # should provide a general signature database for imports
     # libraries can provide that and when a library is imported, the
     # signatures are provided
+
+    def build(self):
+        """handle the I/O variable captures"""
+
+    def get_signature(self):
+        """get the call signature of the routine"""
+
+    def get_call(self, **substitutions):
+        """
+        Get the string of how to call it. Plug the proper substitutions into
+        the argument line"""
 
 
 class KernelContainer(RoutineContainer):
@@ -690,7 +708,7 @@ class KernelContainer(RoutineContainer):
     """
 
 
-class LibraryContainer(EnclosingContainer):
+class LibraryContainer(CaptureContainer):
     """
     A Library contains routines, constants and more.
     The Library Container provides generalized routines to add
@@ -720,41 +738,6 @@ class ConditionalContainer(CodeContainer):
         # maybe sth like (libroutinevar, operator, libroutinevar/value)?
         # (would require a constant lrv)
 
-
-# class VirtualContainer(CodeContainer):
-#     """The part of a CodeContainer that adds the virtual stuff"""
-
-#     def __init__(self, parent, level, **kwargs):
-#         super().__init__(parent, level, **kwargs)
-#         self._representatives = []
-
-#     def get_representatives(self):
-#         yield from self._representatives
-
-#     @log.wrap_call
-#     def build_all(self, data, builder, context, buildargs, **_):
-#         raise TypeError("VirtualContainer does not support build")
-
-#     @log.wrap_call
-#     def build_self(self, data, builder, context, buildargs, **_):
-#         raise TypeError("VirtualContainer does not support build")
-
-#     @log.wrap_call
-#     def build_children(self, data, builder, context, buildargs, **_):
-#         raise TypeError("VirtualContainer does not support build")
-
-
-"""
-Important Containers:
-
-StatementLine(s): All required leaf instructions need one
-CommentLine: for structure. At least define comment symbol
-GroupContainer: grouping of lines.
-EnclosingContainer
-DefinitionContainer
-LoopContainer
-RoutineContainer
-"""
 
 if __name__ == "__main__":
     from phoenix.fgen.libroutinevar import (

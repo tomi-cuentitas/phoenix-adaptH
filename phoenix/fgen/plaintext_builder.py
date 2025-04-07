@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 03/04/2025, 16:26
-# Version:     0.0.385
+# Last Update: 07/04/2025, 16:35
+# Version:     0.0.421
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -66,15 +66,17 @@ GLOBAL_LOGGER.log_to_stdout(False)
 
 
 class TestLineWithVariable(CodeLine):
-    def set_line(self, line):
+    def __init__(self, line, *args, **kwargs):
+        super().__init__(*args, **kwargs)
         temp1 = self.request_temp(
-            "test_temporary1", LibRoutineLocalVariable, size=None, dtype="i53"
+            "test_temporary1", LibRoutineLocalVariable, size=None, dtype="i64"
         )
-        temp2 = self.request_temp("test_temporary2", LibRoutineLocalVariable, size=12, dtype="i53")
-        super().set_line(
-            f"{line} yadayada 42 + {temp2.expr_at(
-                1, temp1, 3, 4, simplify=True)}")
-        return self
+        temp2 = self.request_temp(
+            "test_temporary2", LibRoutineLocalVariable, size=12, dtype="i64"
+        )
+        var = temp2.expr_at(1, temp1, 3, 4, simplify=False)
+        longline = f"{line} yadayada 42 + {var}"
+        self.set_line(longline)
 
 
 class PTCodeLine(CodeLine):
@@ -104,12 +106,15 @@ class PTDefinitionContainer(DefinitionContainer):
 
     INDENT_BODY = True
 
-    def build(self):
-        self.append_head(PTCodeLine("BEGIN DEFINITION CONTAINER", context=self.context))
-        if list(self.captured):
-            self.append_head(PTCodeLine("defines:", context=self.context))
-        self.append_foot(PTCodeLine("END OF DEFINITION CONTAINER", context=self.context))
-        return super().build()
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.append_head(
+            PTCodeLine("BEGIN DEFINITION CONTAINER", context=self.context)
+        )
+        self.append_foot(
+            PTCodeLine("END OF DEFINITION CONTAINER", context=self.context)
+        )
+
 
 class PTRoutineDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
@@ -117,6 +122,7 @@ class PTRoutineDefinition(RoutineContainer):
     # routine definition
     # variable initialization
     # body
+
 
 class PTLibraryDefinition(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
@@ -142,7 +148,9 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
     """PlainTextBuilder"""
 
     def handle_basic_instruction(self, instruction, context, buildargs):
-        yield PTCodeLine(f"Unknown instruction {instruction}", context, **buildargs)
+        yield PTCodeLine(
+            f"Unknown instruction {instruction}", context, **buildargs
+        )
 
     def handle_group_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
@@ -151,11 +159,10 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
             head_string=f"BEGIN Group {instruction.identifier} {{ ",
             foot_string=f"END Group {instruction.identifier} }} ",
         )
-        inside_context = context.inherit(parent=outer)
         for inner_instruction in instruction.instructions:
             for inner_container in self.containers_from_instruction(
                 inner_instruction,
-                inside_context,
+                context=context,
                 **buildargs,
             ):
                 outer.append(inner_container)
@@ -174,18 +181,21 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
             outer.append(
                 PTCodeLine(f":{key}={value}", context=context, **buildargs)
             )
-        inside_context = context.inherit(parent=outer)
         for inner_instruction in instruction.content:
             for inner_container in self.containers_from_instruction(
                 inner_instruction,
-                inside_context,
+                context=context,
                 **buildargs,
             ):
                 outer.append(inner_container)
         yield outer
 
     def handle_generic_instruction(self, instruction, context, buildargs):
-        yield PTCodeLine(f"generic instruction: {instruction.identifier}", context=context, **buildargs)
+        yield PTCodeLine(
+            f"generic instruction: {instruction.identifier}",
+            context=context,
+            **buildargs,
+        )
         for key, value in instruction.items():
             if key in ["identifier"]:
                 continue
@@ -213,10 +223,7 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         )
 
 
-PlainTextBuilder.set_default_container("COMMENT", PTCommentLine)
-PlainTextBuilder.set_default_container("DEFCONT", PTDefinitionContainer)
-PlainTextBuilder.set_default_container("ROUTINE", PTRoutineDefinition)
-PlainTextBuilder.set_default_container("LIBRARY", PTLibraryDefinition)
+PlainTextBuilder.set_comment_generator(PTCommentLine)
 
 
 from phoenix.fgen.builder import Context

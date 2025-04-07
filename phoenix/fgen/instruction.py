@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 03/04/2025, 16:20
-# Version:     0.0.2998
+# Last Update: 07/04/2025, 17:03
+# Version:     0.0.3003
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -522,7 +522,9 @@ class GenericInstruction(Instruction, ftype="generic"):
             defaults = {}
         # check params first, then check defaults, return None for miss
         if keys:
-            return tuple(self.get(key, defaults.get(key, None)) for key in keys)
+            return tuple(
+                self.get(key, defaults.get(key, None)) for key in keys
+            )
         return tuple(
             self.get(key, defaults.get(key, None)) for key in self.keys()
         )
@@ -579,7 +581,9 @@ class GenericInstruction(Instruction, ftype="generic"):
         for key, val in self._params.items():
             if isinstance(val, InstructionVariable):
                 if val.__class__ in environment:
-                    modified_params[key] = environment[val.__class__].merge(val)
+                    modified_params[key] = environment[val.__class__].merge(
+                        val
+                    )
                 else:
                     modified_params[key] = val
             else:
@@ -861,7 +865,9 @@ class ParametricGroup(InstructionGroup, ftype="pgroup"):
 
     def __init__(self, instructions, generating_instruction_class):
         if not issubclass(generating_instruction_class, LeafInstruction):
-            raise TypeError("generating instruction class must be a leaf class")
+            raise TypeError(
+                "generating instruction class must be a leaf class"
+            )
         super().__init__(
             [
                 instruction.as_type(generating_instruction_class)
@@ -1272,7 +1278,9 @@ class MapApplyInstruction(ContentInstruction, ftype="map"):
         # environments are replaced by their transformed content
         return InstructionGroup(
             [
-                self.content.apply_environment(environment.merge(env), **kwargs)
+                self.content.apply_environment(
+                    environment.merge(env), **kwargs
+                )
                 for env in self.environments
             ]
         )
@@ -1356,7 +1364,6 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
         )
 '''
 
-
 ###############################################################################
 #
 # SUBROUTINE ENVIRONMENT
@@ -1367,20 +1374,27 @@ class RoutineInstruction(ContentInstruction, ftype="subroutine"):
     """
     SubroutineGroup
 
-    suggests that upon implementation these instructions are grouped in a
+    suggests (!) that upon implementation these instructions are grouped in a
     subroutine
     """
 
-    def __init__(self, inp_variables, out_variables, operations, itype=None):
+    def __init__(
+        self,
+        # inp_variables,
+        # out_variables,
+        operations,
+        itype=None,
+    ):
         super().__init__(operations, itype=itype)
-        self._inp_variables = inp_variables  # TODO: not sure yet.
-        self._out_variables = out_variables  # Might come out naturally.
+        # self._inp_variables = inp_variables  # TODO: not sure yet.
+        # self._out_variables = out_variables  # Might come out naturally.
+        # name might be more relevant...
 
-    def contribute_to_dict(self):
-        return {
-            "inp_vars": self._inp_variables,
-            "out_vars": self._out_variables,
-        }
+    # def contribute_to_dict(self):
+    #     return {
+    #         "inp_vars": self._inp_variables,
+    #         "out_vars": self._out_variables,
+    #     }
 
     @property
     def inp_variables(self):

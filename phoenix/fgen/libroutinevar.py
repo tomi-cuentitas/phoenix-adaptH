@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 03/04/2025, 18:21
-# Version:     0.0.559
+# Last Update: 07/04/2025, 17:43
+# Version:     0.0.563
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -41,9 +41,9 @@ class Namespace:
             return self._parent.__contains__(element)
         return False
 
-    def assign(self, ivariable_type, lvariable):
+    def assign(self, ivariable_type, key, lvariable):
         """assign an instruction variable class to a libroutine variable"""
-        self._assigned[ivariable_type] = lvariable
+        self._assigned[(ivariable_type, key)] = lvariable
 
     def add(self, variable: LibRoutineVariable):
         """add a variable to the namespace"""
@@ -103,14 +103,14 @@ class Namespace:
             return self._parent.find(name)
         raise KeyError(f"variable {name} not found")
 
-    def find_assignment(self, ivariable_type):
+    def find_assignment(self, ivariable_type, key):
         """find a variable in the namespace"""
         if ivariable_type in self._assigned:
-            return self._assigned[ivariable_type]
+            return self._assigned[(ivariable_type, key)]
         if self._parent is not None:
-            return self._parent.find_assignment(ivariable_type)
+            return self._parent.find_assignment(ivariable_type, key)
         raise KeyError(
-            f"instruction variable {ivariable_type} not assigned yet."
+            f"instruction variable {ivariable_type}:{key} not assigned."
         )
 
     def _get_fixed_name(self, name, origin):
@@ -387,10 +387,11 @@ class ImportVariable(LibRoutineVariable):
     _VAR_IDENTIFIER = "IMPORT"
     _CLASS_BASE = "imp"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, libroutine, *args, **kwargs):
         super().__init__(
             *args, **kwargs, status=LibRoutineVariable.STATUS_INPUT
         )
+        self._libroutine = libroutine
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):

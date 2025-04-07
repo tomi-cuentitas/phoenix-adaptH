@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 04/04/2025, 13:47
-# Version:     0.0.79
+# Last Update: 07/04/2025, 16:35
+# Version:     0.0.86
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -245,9 +245,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         yield from super().handle_generic_instruction(
             instruction, context, buildargs
         )
-        foo = CodeLine(
-            "! this is a test expression {foo}", context=context.inherit()
-        )
+        foo = CodeLine("! this is a test expression {foo}", context=context)
         temp1 = self.request_temp(
             foo,
             "test_temporary1",
@@ -259,10 +257,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         yield foo
 
 
-Fortran90Builder.set_default_container("COMMENT", F90CommentLine)
-Fortran90Builder.set_default_container("DEFCONT", F90DefinitionContainer)
-Fortran90Builder.set_default_container("ROUTINE", F90RoutineDefinition)
-Fortran90Builder.set_default_container("LIBRARY", F90LibraryDefinition)
+Fortran90Builder.set_comment_generator(F90CommentLine)
 
 
 from phoenix.fgen.builder import Context

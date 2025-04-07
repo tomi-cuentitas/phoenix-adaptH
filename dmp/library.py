@@ -5,41 +5,35 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 07/04/2025, 18:11
-# Version:     0.0.546
+# Last Update: 07/04/2025, 14:23
+# Version:     0.0.475
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
+import warnings
 
 __doc__ = """
 Library module description
 
+I thought about library objects but now I prefer the idea of LibraryManagers.
+Python Libraries can have their own library manager but the actual libraries
+(the imported stuff) are not represented by it, that's why 'Library' would be 
+misleading.
 """
 
-from phoenix.fgen.codecontainer import (
-    LibraryContainer,
-    DefinitionContainer,
-    GroupContainer,
-    RoutineContainer,
-)
-from phoenix.fgen.context import Context
 
-
-class Library:
+class LibraryManager:
     """
-    Library class description.
+    Library manager class description.
 
     Used to create, manage, adapt and compile libraries.
     """
 
     FILEENDING = "txt"
     INDENTSTR = "  "
-
-    LIBRARY_CONTAINER = LibraryContainer
-    ROUTINE_CONTAINER = RoutineContainer
 
     def __init__(self, libname):
         self._libname = libname
@@ -54,78 +48,8 @@ class Library:
             "created": False,
             "compiled": False,
         }
-        self._dependencies = set()
+        self._dependencies = {}
         self._libroutines = {}
-
-        self._library_container = None
-        self._routines_container = None
-
-        self._content_context = None
-        self.initialize_library_containers()
-
-    def initialize_library_containers(self):
-        """initialize the library container"""
-        context = Context(name=self.name)
-
-        self._library_container = type(self).LIBRARY_CONTAINER(context=context)
-        self._routines_container = GroupContainer(
-            context=self._library_container.context
-        )
-        self._library_container.append(self._routines_container)
-
-    @property
-    def container(self):
-        """access the container where to put new stuff"""
-        return self._routines_container
-
-    @property
-    def context(self):
-        """access the context where to put new stuff"""
-        return self._routines_container.context
-
-    def append_from_instructions(
-        self,
-        name,
-        instruction_tree,
-        builder,
-        assignments,
-    ):
-        """append a routine from an instruction_tree"""
-        # consider to hash the environment and the builder settings to include
-        # that in the libroutine hash.
-        # assume that any environment is already mapped onto the instruction vars
-        # assignments from signature, where signature is the instr_var to adaa mapping
-        # and assignments map to libroutinevars directly
-
-        # create an empty routine container based on context
-        routine_container = type(self)._ROUTINE_CONTAINER(
-            name=name, context=self.context
-        )
-
-        # transfer the assigned variables
-        for (instr_var_class, key), libroutinevar in assignments.items():
-            routine_container.context.namespace.assign(
-                instr_var_class, key, libroutinevar
-            )
-
-        # generate the tree inside the routine host container
-        builder.generate_container_tree(
-            instruction_tree,
-            host_container=routine_container,
-        )
-
-        # generate a libroutine from that
-        libroutine = LibRoutine(
-            name=routine_container.display_name,
-            container=routine_container,
-            library=self,
-        )
-        self.register_libroutine(libroutine)
-        return libroutine
-
-    def register_libroutine(self, libroutine):
-        """add the libroutine to the known libroutines"""
-        self._libroutines[libroutine.name] = libroutine
 
     @property
     def fileending(self):
@@ -142,18 +66,33 @@ class Library:
         """generator-access to libroutines"""
         yield from self._libroutines.items()
 
-    def append(self, libroutine, exception_existing=False):
+    def append(
+        self, routine, implementation="default", exception_existing=False
+    ):
         """append a routine to the library"""
-        if libroutine.key in self._libroutines:
+        libroutine = self.from_routine(routine, implementation=implementation)
+        ident_impl = (libroutine.identifier, libroutine.implementation)
+        if ident_impl in self._libroutines:
             if exception_existing:
                 raise KeyError(
                     f"Routine '{libroutine.name}' already exists in library"
                 )
+
+            warnings.warn(
+                f"Routine '{libroutine.name}' already exists in library"
+            )
             return
-        self._libroutines[libroutine.key] = libroutine
+        self._libroutines[ident_impl] = libroutine
 
     def __getitem__(self, key):
-        return self._libroutines.get(key)
+        identififer, implementation = key
+        return self._libroutines.get((identififer, implementation))
+
+    def from_routine(self, routine, implementation=None):
+        """create a libroutine from the routine"""
+        raise NotImplementedError(
+            "'to_libroutine' must be implemented by subclasses"
+        )
 
     def compile(self):
         """compile the library"""
@@ -170,13 +109,41 @@ class Library:
         # finally:
         self._status["created"] = True
 
+    def _get_library_head_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_deps_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_const_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_routine_lines(self, **_kwargs):
+        return
+        yield
+
+    def _get_library_foot_lines(self, **_kwargs):
+        return
+        yield
+
+    def create_source_lines(self, **kwargs):
+        """create the source code lines"""
+        yield from self._get_library_head_lines(**kwargs)
+        yield from self._get_library_deps_lines(**kwargs)
+        yield from self._get_library_const_lines(**kwargs)
+        yield from self._get_library_routine_lines(**kwargs)
+        yield from self._get_library_foot_lines(**kwargs)
+
     def get_meta(self, key=None):
         """return meta information on the library"""
         if key is None:
             return dict(self._meta)
         return self._meta.get(key)
 
-    def _get_dependencies(self):
+    def _collect_dependencies(self):
         dependencies = {}
         for _, libroutine in self._libroutines.items():
             for _, dep in libroutine.dependencies:
@@ -270,6 +237,3 @@ y_j <- x_i with extras
 
 # print(backend_f90_base.foo())
 # print(backend_f90_base.xxx)
-
-
-a = Library("test")

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 04/04/2025, 13:22
-# Version:     0.0.1078
+# Last Update: 07/04/2025, 18:00
+# Version:     0.0.1121
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,6 +17,10 @@ from hashlib import sha256
 
 from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
+
+from phoenix.fgen.library import Library
+
+from phoenix.fgen.context import Context
 
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import LibRoutineVariable, Namespace
@@ -35,7 +39,7 @@ from phoenix.fgen.instruction import (
     OffsetEnvironmentInstruction,
 )
 
-from weakref import ref
+
 from phoenix.fgen.codecontainer import CommentLine, DefinitionContainer
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
@@ -45,157 +49,6 @@ success = log.success
 debug = log.debug
 warn = log.warn
 error = log.error
-
-
-class Context:
-    """
-    A context indicating the intermediate state of a builder when going down
-    the instruction tree. Keep track of indentation level, local variables,
-    and variable environments. And maybe more (hence the class)
-    """
-
-    def __init__(
-        self,
-        /,
-        *,
-        parent: Instruction | None = None,
-        level=0,
-        environment: InstructionEnvironment | None = None,
-        namespace: Namespace | None = None,
-        assignments: dict | None = None,
-        name: str | None = None,
-        _names: List[str] | None = None,
-    ):
-        if environment is None:
-            environment = InstructionEnvironment()
-
-        if namespace is None:
-            namespace = Namespace()
-
-        if assignments is None:
-            assignments = {}
-
-        if parent is None:
-            self._parent = None
-        else:
-            self._parent = ref(parent)
-
-        self._container = None
-        self._level = level
-        self._namespace = namespace
-        self._environment = environment
-        self._assignments = assignments
-        self._names = []
-
-        if name is not None:
-            self._names.append(name)
-
-    # there is only one assignments instance being passed down a routine.
-
-    @property
-    def name(self):
-        """return a readable name from name combinations"""
-        if self._names:
-            return "_".join(self._names)
-        else:
-            return "_"
-
-    def hashed_name(self, num_symbols=8):
-        """return a shortened hashed name"""
-        return sha256(self.name).hexdigest()[:num_symbols]
-
-    @property
-    def parent(self):
-        """access read-only attribute parent"""
-        if self._parent is None:
-            return None
-        # weakref
-        return self._parent()
-
-    @property
-    def level(self):
-        """access read-only attribute level"""
-        return self._level
-
-    @property
-    def environment(self):
-        """access read-only attribute environment"""
-        return self._environment
-
-    @property
-    def namespace(self):
-        """access read-only attribute namespace"""
-        return self._namespace
-
-    @property
-    def assignments(self):
-        """access assignments"""
-        return self._assignments
-
-    @property
-    def container(self):
-        """access container"""
-        return self._container
-
-    def set_container(self, container):
-        """set container"""
-        if self._container is not None:
-            raise ValueError("Cannot change container once set")
-        self._container = container
-        return self
-
-    def new_namespace_node(self):
-        """provide a new namespace node"""
-        if self._namespace is None:
-            self._namespace = Namespace()
-        else:
-            self._namespace = self._namespace.inherit()
-
-    def set_assignment(self, instruction_variable_class, assignment):
-        """set the assignment for an instruction variable class"""
-        self._assignments[instruction_variable_class] = assignment
-
-    def inherit(
-        self,
-        name=None,
-        parent=None,
-        environment=None,
-        namespace=None,
-    ):
-        """
-        Inherit to a new context object.
-        Increment the level, optionally extend the namespace.
-        Default behaviour for previous namespace and environment
-        """
-
-        if name is not None:
-            self._names.append(name)
-
-        if parent is None:
-            if self.container is None:
-                parent = self.parent
-            else:
-                parent = self.container
-
-        if environment is None:
-            environment = self.environment
-
-        if namespace is None:
-            if self.namespace is None:
-                namespace = Namespace()
-            else:
-                namespace = (
-                    self.namespace
-                )  # .inherit()  use new_namespace_node
-
-        return Context(
-            parent=parent,
-            level=self.level + 1,
-            namespace=namespace,
-            environment=environment,
-            assignments=self.assignments,
-            _names=self._names,
-        )
 
 
 class BuilderSegment:
@@ -324,7 +177,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _supp_instr_handler: Dict[type, Generator] = {}
     _excl_instr_classes: Set[type] = set()
 
-    _default_containers: Dict[str, type] = {}
+    _comment = None
 
     def __init_subclass__(cls, identifier=None):
         super().__init_subclass__(identifier=identifier)
@@ -404,6 +257,15 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             container.requires(variable)
         return variable
 
+    @log.wrap_call
+    def as_external(
+        self, instruction_tree, name, context, library=None, **genargs
+    ):
+        """treat the instruction tree as an external auxilliary routine"""
+        # generate a new libroutine object in library
+        libroutine = None
+        return libroutine
+
     @log.wrap_call_gen
     def containers_from_instruction(
         self,
@@ -459,49 +321,33 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 parent=None,
                 namespace=Namespace(),
             )
-            host_container = self.default_container("DEFCONT")(context=context)
+            host_container = DefinitionContainer(context=context)
             host_container.add_capture_trigger(lambda x: True)
+        context = host_container.context.inherit()
+        context.new_namespace_node()
         for container in self.containers_from_instruction(
             instruction,
-            context=host_container.context.inherit(),
+            context=context,
             **buildargs,
         ):
             host_container.append(container)
         info("reached end of instruction build")
         return host_container.build()
 
-    def default_container(self, *args):
-        """get the intended container class for the key. Optional default argument."""
-        match args:
-            case (key, default):
-                if (upperkey := key.upper()) in type(self)._default_containers:
-                    return type(self)._default_containers[upperkey]
-                return default
-            case (key,):
-                if (upperkey := key.upper()) in type(self)._default_containers:
-                    return type(self)._default_containers[upperkey]
-                raise KeyError(f"No container class for key {key}")
-            case _:
-                raise ValueError(
-                    "container class can have at most two input arguments"
-                )
-
     @classmethod
-    @log.wrap_call
-    def set_default_container(cls, key, target):
-        """set the container to be used for a certain operation"""
-        cls._default_containers[key.upper()] = target
+    def set_comment_generator(cls, comment_gen):
+        """set the comment generator"""
+        cls._comment = comment_gen
 
     @log.wrap_call
     def comment(self, *lines, context: Context, buildargs):
         """generate one or multiple comment lines"""
-        comment_class = self.default_container("COMMENT", None)
-        if comment_class is not None:
-            assert issubclass(comment_class, CommentLine)
+        if self._comment is not None:
+            assert issubclass(self._comment, CommentLine)
             for line in lines:
-                yield comment_class(
+                yield self._comment(
                     line,
-                    context=context.inherit(),
+                    context=context,
                     **buildargs,
                 )
 
@@ -521,7 +367,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         for child in instruction.instructions:
             yield from self.containers_from_instruction(
                 child,
-                context=context.inherit(),
+                context=context,
                 **buildargs,
             )
 
@@ -530,7 +376,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         """default handler for content instruction"""
         yield from self.containers_from_instruction(
             instruction.content,
-            context=context.inherit(),
+            context=context,
             **buildargs,
         )
 
@@ -538,7 +384,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     def handle_generic_instruction(self, instruction, context, buildargs):
         """default handler for generic instruction"""
         yield from self.comment(
-            str(instruction.to_dict()), context=context, buildargs=buildargs
+            str(instruction.to_dict()),
+            context=context,
+            buildargs=buildargs,
         )
 
     @log.wrap_call_gen
@@ -560,7 +408,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         for environment in instruction.environments:
             yield from self.containers_from_instruction(
                 instruction.content,
-                context=context.inherit(extra_environment=environment),
+                context=context.inherit(environment=environment),
                 **buildargs,
             )
 
@@ -569,7 +417,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         """default handler for variation instruction"""
         yield from self.containers_from_instruction(
             instruction.content,
-            context=context.inherit(),
+            context=context,
             **buildargs,
         )
 
@@ -578,7 +426,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         """default handler for environment instruction"""
         yield from self.containers_from_instruction(
             instruction.content,
-            context=context.inherit(extra_environment=instruction.environment),
+            context=context.inherit(environment=instruction.environment),
             **buildargs,
         )
 

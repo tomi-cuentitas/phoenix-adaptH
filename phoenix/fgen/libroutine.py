@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/02/2025
-# Last Update: 11/02/2025, 20:17
-# Version:     0.0.263
+# Last Update: 07/04/2025, 18:15
+# Version:     0.0.290
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,51 +17,48 @@
 class LibRoutine:
     """
     LibRoutine collects and manages all information for a routine in a library.
+    It stores everything necessary to define, call and import the object.
 
-    # include a backend signature here. The backend can be set from the ADAAs
-    backend when the libroutine is created from the routines.
+    The init does not require instructions or containers, as the object is more
+    of a representative that could also represent code that does not come from
+    containers.
     """
-
-    _implementation = "generic"
 
     def __init__(
         self,
         identifier: str,
-        instruction_group,
-        adaa_outp,
-        adaa_inps,
+        container=None,
         library=None,
-    ) -> None:
+    ):
+        # there has to be a base name, which we refer to as identifier
         self._identifier = identifier
-        self._library = library  # the library the libroutine is attached to
-        self._instruction_group = instruction_group  # the instruction group
-        self._adaa_inps = adaa_inps  # input ADAAs of the routine
-        self._adaa_outs = adaa_outp  # output ADAAs of the routine
-        self._inp_names = [
-            f"src{num}" for num, _ in enumerate(self._adaa_inps)
-        ]
-        self._outp_name = "outp"
+        self._container = container
+        # the library the libroutine is attached to
+        if library is None:
+            raise ValueError("LibRoutine must be associated with a library")
+        self._library = library
 
     @property
     def library(self):
         """read-only access to attribute library"""
-        if self._library is None:
-            self._library = self.to_standalone_library()
         return self._library
 
-    def to_standalone_library(self):
-        """
-        Generates a standalone library that only contains this one routine.
-        Returns the LibraryManager
-        """
-        raise NotImplementedError(
-            "'to_standalone_library' must be implemented in subclass"
-        )
+    @property
+    def container(self):
+        """read-only access to attribute container"""
+        return self._container
 
     @property
     def name(self):
         """read-only access to attribute name"""
-        return f"{self._identifier}_{self._implementation}"
+        suffix = self.get_suffix()
+        if suffix:
+            suffix = f"_{suffix}"
+        return f"{self._identifier}{suffix}"
+
+    def get_suffix(self):
+        """get the naming suffix, which will be some kind of hash"""
+        return ""
 
     @property
     def identifier(self):
@@ -72,8 +69,14 @@ class LibRoutine:
         """return meta information on the library"""
         return {
             "subroutine_name": self.name,
-            "num_instructions": len(self._instruction_group),
-            "implementation": self._implementation,
             "identifier": self.identifier,
-            "library": self.identifier,
+            "library": self.library,
         }
+
+    def get_call(self, **substitutions):
+        """get the container of calling the routine"""
+        self._container.get_call(self, **substitutions)
+
+    def get_signature(self):
+        """get the call signature of the routine"""
+        return self._container.get_signature()

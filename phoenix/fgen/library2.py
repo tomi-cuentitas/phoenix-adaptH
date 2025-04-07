@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 04/04/2025, 11:51
-# Version:     0.0.480
+# Last Update: 07/04/2025, 13:22
+# Version:     0.0.482
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,16 +17,12 @@
 __doc__ = """
 Library module description
 
-I thought about library objects but now I prefer the idea of LibraryManagers.
-Python Libraries can have their own library manager but the actual libraries
-(the imported stuff) are not represented by it, that's why 'Library' would be 
-misleading.
 """
 
 
-class LibraryManager:
+class Library:
     """
-    Library manager class description.
+    Library class description.
 
     Used to create, manage, adapt and compile libraries.
     """
