@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 08/04/2025, 12:55
-# Version:     0.0.438
+# Last Update: 08/04/2025, 14:45
+# Version:     0.0.439
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -253,8 +253,6 @@ container_tree = a.create_routine_container(
     "foo", largegroup, context=outer_defarea.context
 )
 
-
-container_tree.build()
 outer_defarea.build()
 outer_defarea.append(container_tree)
 

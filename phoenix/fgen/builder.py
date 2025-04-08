@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 08/04/2025, 13:03
-# Version:     0.0.1189
+# Last Update: 08/04/2025, 15:26
+# Version:     0.0.1191
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -359,6 +359,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             identifier=name, container=routine_container, library=library
         )
         library.register_libroutine(libroutine)
+        library.append(routine_container)
         return libroutine
 
     @log.wrap_call
@@ -400,7 +401,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         cls._routine_cls = routine_gen
 
     @log.wrap_call
-    def comment(self, *lines, context: Context, buildargs: Dict[str, Any]):
+    def comment(self, *lines, context: Context, **buildargs):
         """generate one or multiple comment lines"""
         if type(self)._comment_cls is not None:
             assert issubclass(self._comment_cls, CommentLine)

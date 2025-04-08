@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 08/04/2025, 12:04
-# Version:     0.0.552
+# Last Update: 08/04/2025, 15:03
+# Version:     0.0.554
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -66,7 +66,7 @@ class Library:
         context = Context(name=self.name)
 
         self._library_container = type(self)._LIBRARY_CONTAINER(
-            context=context
+            self.name, context=context
         )
         self._routines_container = GroupContainer(
             context=self._library_container.context
@@ -272,4 +272,4 @@ y_j <- x_i with extras
 # print(backend_f90_base.xxx)
 
 
-a = Library("test")
+# a = Library("test")

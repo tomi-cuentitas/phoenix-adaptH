@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 08/04/2025, 12:54
-# Version:     0.0.1273
+# Last Update: 08/04/2025, 17:25
+# Version:     0.0.1694
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,6 +20,12 @@ from typing import Generator, Any, Set, Callable, List, Dict, Tuple
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.instructionvar import InstructionEnvironment
 from phoenix.fgen.libroutinevar import LibRoutineVariable, Namespace
+from phoenix.fgen.libroutinevar import (
+    LibRoutineLocalVariable,
+    LibRoutineInputVariable,
+    LibRoutineOutputVariable,
+    LibRoutineInOutVariable,
+)
 
 from phoenix.aux import multiline_iterable, multiline_text
 
@@ -144,7 +150,7 @@ class CodeContainer:
         # all content that may or may not be useful
         # self._data: Dict[str, Any] = {}
 
-        # self._comment = comment
+        self._is_built = False
 
         # collect variables that are used here
         self._requirements: Set[str] = set()
@@ -153,6 +159,8 @@ class CodeContainer:
         self._container_head: list[CodeContainer] = []
         self._container_body: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
+
+        self._special_lines = {}
 
         self._context = context.inherit().set_container(self)
 
@@ -234,12 +242,56 @@ class CodeContainer:
             raise ValueError("variable request got lost!")
         self.parent.requires(variable)
 
+    def set_special_lines(self, key, container):
+        """set special lines"""
+        if isinstance(container, str):
+            self._special_lines[key] = self.line_from_text(container)
+        else:
+            self._special_lines[key] = container
+
+    def special_lines(self, key):
+        """access special lines"""
+        return self._special_lines[key]
+
     def line_from_text(self, text: str) -> CodeContainer:
         """generate a plain codeline from text"""
         return CodeLine(
             line=text,
             context=self.context,
         )
+
+    def mark_as_built(self):
+        """mark as built"""
+        self._is_built = True
+
+    def build(self, **_):
+        """build the container"""
+        self.mark_as_built()
+        return self
+
+    def build_all(self):
+        """call build on the whole container"""
+        for container in self.body:
+            container.build_all()
+        if not self._is_built:
+            self.build()
+        self.mark_as_built()
+
+    def reset(self, **_):
+        """perform a reset on this container"""
+        self._container_head: list[CodeContainer] = []
+        self._container_foot: list[CodeContainer] = []
+        self._is_built = False
+
+    def reset_all(self, **kwargs):
+        """
+        Reset the container. Default behaviour:
+        - reset the head and foot containers
+        - call reset on whole container body
+        """
+        for container in self.body:
+            container.reset_all(**kwargs)
+        self.reset(**kwargs)
 
     def get_codelines_head(
         self, indent: int, **kwargs: Any
@@ -559,13 +611,24 @@ class EnclosingContainer(GroupContainer):
     class and are not occupied by other content.
     """
 
-    def __init__(self, *, context, **buildargs) -> None:
-        super().__init__(context, **buildargs)
-
-    def set_enclosings(self, head_string, foot_string, **buildargs):
+    def make_enclosings_from_text(
+        self, head_strings, foot_strings, **buildargs
+    ):
         """this method later defines the enclosing characters."""
-        self.append_head(self.line_from_text(head_string, **buildargs))
-        self.append_foot(self.line_from_text(foot_string, **buildargs))
+        if not isinstance(head_strings, str):
+            for head_string in head_strings:
+                self.append_head(self.line_from_text(head_string, **buildargs))
+        else:
+            self.append_head(self.line_from_text(head_strings, **buildargs))
+        if not isinstance(foot_strings, str):
+            for foot_string in foot_strings:
+                self.append_foot(self.line_from_text(foot_string, **buildargs))
+        else:
+            self.append_foot(self.line_from_text(foot_strings, **buildargs))
+        return self
+
+    def make_enclosings(self, **_):
+        """make the enclosings"""
         return self
 
 
@@ -585,7 +648,7 @@ class CaptureContainer(CodeContainer):
     def __init__(self, *, context, **buildargs) -> None:
         super().__init__(context=context, **buildargs)
         # new namespace node in capture container
-        self._context.new_namespace_node()
+        self.context.new_namespace_node()
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
         self._captured: Set[LibRoutineVariable] = set()
@@ -637,13 +700,6 @@ class CaptureContainer(CodeContainer):
         else:
             super().requires(variable)
 
-    def build(self):
-        """
-        builds the capture container, which requires that up to that point
-        all potential variables have been captured.
-        """
-        return self
-
 
 class DefinitionContainer(CaptureContainer):
     """
@@ -652,21 +708,36 @@ class DefinitionContainer(CaptureContainer):
     on which type of requirements are implemented here or passed on.
     """
 
-    def __init__(self, *, context, **buildargs):
-        super().__init__(context=context, **buildargs)
-        self.context.new_namespace_node()
-
-    def build(self):
+    def build(self, **kwargs):
         """build head and tail section of the definition container"""
         # append all definition lines in head
         for variable in self.captured:
-            self.append_head(DefinitionLines(variable, context=self.context))
+            self.append_head(
+                DefinitionLines(variable, context=self.context, **kwargs)
+            )
         # perform potential allocations in head
         # perform potential deallocations in tail
-        return self
+        return super().build(**kwargs)
 
 
-class RoutineContainer(CaptureContainer):
+class NamedContainer(EnclosingContainer):
+    """A named region container"""
+
+    def __init__(self, name, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self._name = name
+
+    @property
+    def name(self):
+        """access name"""
+        return self.create_name()
+
+    def create_name(self):
+        """create the name, especially when it is not straightforward"""
+        return self._name
+
+
+class RoutineContainer(NamedContainer, CaptureContainer):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
@@ -677,23 +748,76 @@ class RoutineContainer(CaptureContainer):
     # libraries can provide that and when a library is imported, the
     # signatures are provided
 
+    INDENT_BODY = True
+    DEFCONTAINER = DefinitionContainer
+
     def __init__(self, name, *, context, **buildargs):
-        self._name = name
-        super().__init__(context=context, **buildargs)
+        super().__init__(name, context=context, **buildargs)
+        self._container_defs = []
+        self._call_args = []
 
-    def build(self):
-        """handle the I/O variable captures"""
+    def reset(self, **_):
+        self._container_defs = []
+        self._call_args = []
+        return super().reset()
+
+    def append_defs(self, content):
+        """append to the definitions"""
+        self._container_defs.append(content)
+
+    def distribute_captured_variables(self, repeat_inout=False, **kwargs):
+        """
+        distribute the captured variables into the def line and the call
+        """
         for variable in self.captured:
-            self.append_head(DefinitionLines(variable, context=self.context))
-        return self
+            if isinstance(
+                variable,
+                (
+                    LibRoutineInputVariable,
+                    LibRoutineOutputVariable,
+                    LibRoutineInOutVariable,
+                ),
+            ):
+                self._call_args.append(variable)
+            if not repeat_inout:
+                continue
+            self.append_defs(
+                DefinitionLines(variable, context=self.context, **kwargs)
+            )
 
-    def get_signature(self):
+    def make_enclosings(self, **_):
+        """make the enclosings for this container"""
+        self.append_head(f"FUNCTION {self.name}")
+        self.append_foot(f"END FUNCTION {self.name}")
+
+    def build(self, **buildargs):
+        """handle the I/O variable captures"""
+        self.distribute_captured_variables(**buildargs)
+        self.make_enclosings(**buildargs)
+        return super().build(**buildargs)
+
+    def get_codelines_head(self, indent=0, **kwargs):
+        """get the def lines out"""
+        yield from super().get_codelines_head(indent=indent, **kwargs)
+        for def_container in self._container_defs:
+            yield from def_container.get_codelines(indent=indent + 1, **kwargs)
+
+    def get_args(self):
         """get the call signature of the routine"""
 
     def get_call(self, **substitutions):
         """
         Get the string of how to call it. Plug the proper substitutions into
         the argument line"""
+
+    def capture_check(self, requirement):
+        """perform a capture check for the requirement"""
+        # library level must capture all required variables!
+        if requirement.vtype not in ["IMPORT", "CONSTANT"]:
+            return True
+        raise ValueError(
+            "only constants are allowed to traverse up to library definition level"
+        )
 
 
 class KernelContainer(RoutineContainer):
@@ -710,12 +834,42 @@ class KernelContainer(RoutineContainer):
     """
 
 
-class LibraryContainer(CaptureContainer):
+class LibraryContainer(NamedContainer, CaptureContainer):
     """
     A Library contains routines, constants and more.
     The Library Container provides generalized routines to add
     libroutines, imports, constants, ... that can be called
     """
+
+    def __init__(self, name, *, context, **buildargs):
+        super().__init__(name, context=context, **buildargs)
+        self._container_defs = []
+
+    def reset(self, **_):
+        self._container_defs = []
+        return super().reset()
+
+    def append_defs(self, content):
+        """append to the definitions"""
+        self._container_defs.append(content)
+
+    def make_enclosings(self, **_):
+        """make the enclosings for this container"""
+        self.append_head(f"LIBRARY {self.name}")
+        self.append_foot(f"END LIBRARY {self.name}")
+
+    def build(self, **buildargs):
+        """handle the I/O variable captures"""
+        self.make_enclosings()
+        for variable in self.captured:
+            self.append_defs(variable)
+        return super().build(**buildargs)
+
+    def get_codelines_head(self, indent=0, **kwargs):
+        """get the def lines out"""
+        yield from super().get_codelines_head(indent=indent, **kwargs)
+        for def_container in self._container_defs:
+            yield from def_container.get_codelines(indent=indent + 1, **kwargs)
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""

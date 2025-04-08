@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 07/04/2025, 16:35
-# Version:     0.0.86
+# Last Update: 08/04/2025, 17:25
+# Version:     0.0.178
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -26,6 +26,8 @@ from phoenix.fgen.codecontainer import (
     LoopContainer,
     RoutineContainer,
     ConditionalContainer,
+    NamedContainer,
+    LibraryContainer,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -82,18 +84,6 @@ class F90CommentLine(CommentLine):
     # some_aux_variable = LibRoutineLocalVariable("testvar")
 
 
-class F90SectionContainer(EnclosingContainer):
-    """Plain Text version of a EnvironmentContainer"""
-
-    INDENT_BODY = True
-
-    def make_enclosings(self, section, name, **buildargs):
-        """this method defines the enclosing characters for this special case."""
-        open_string = f"{section.upper()} {name}"
-        close_string = f"END {section.upper()} {name}"
-        return super().set_enclosings(open_string, close_string, **buildargs)
-
-
 class F90LoopContainer(LoopContainer):
     """Plain Text version of a DefinitionContainer"""
 
@@ -103,21 +93,64 @@ class F90LoopContainer(LoopContainer):
 class F90DefinitionContainer(DefinitionContainer):
     """Plain Text version of a DefinitionContainer"""
 
+    INDENT_BODY = False
+
+
+class F90RoutineContainer(RoutineContainer):
+    """Plain Text version of a RoutineDefinition"""
+
+    # def __init__(self, name, *, context, **buildargs):
+    #     return RoutineContainer.__init__
+
     INDENT_BODY = True
 
+    # def build(self):
+    #     print("ASFHAKLJFGJ")
+    #     return self
 
-class F90RoutineDefinition(RoutineContainer):
+    def make_enclosings(self, **buildargs):
+        arg_strings = [var.as_argument() for var in self._call_args]
+        self.append_head(
+            self.line_from_text(
+                f"SUBROUTINE {self.name}({', '.join(arg_strings)})"
+            )
+        )
+        self.append_foot(self.line_from_text(f"END SUBROUTINE {self.name}"))
+
+    def build(self, **kwargs):
+        return super().build(repeat_inout=True, **kwargs)
+
+
+class F90LibraryContainer(LibraryContainer):
     """Plain Text version of a RoutineDefinition"""
 
-    # routine definition
-    # variable initialization
-    # body
+    INDENT_BODY = True
 
+    def __init__(self, name, *, context, **buildargs):
+        super().__init__(name, context=context, **buildargs)
 
-class F90LibraryDefinition(RoutineContainer):
-    """Plain Text version of a RoutineDefinition"""
+    def make_enclosings(self, **buildargs):
+        self.append_head(self.line_from_text(f"MODULE {self.name}"))
+        self.append_foot(self.line_from_text(f"END MODULE {self.name}"))
 
-    # collect all library routines
+    def build(self, **kwargs):
+        self.set_special_lines(
+            "implicit none", self.line_from_text("IMPLICIT NONE")
+        )
+        self.set_special_lines("contains", self.line_from_text("CONTAINS"))
+        return super().build(**kwargs)
+
+    def get_codelines_head(self, indent=0, **kwargs):
+        """get the def lines out"""
+        yield from super().get_codelines_head(indent=indent, **kwargs)
+        yield from self.special_lines("implicit none").get_codelines(
+            indent=indent, **kwargs
+        )
+        for def_container in self._container_defs:
+            yield from def_container.get_codelines(indent=indent + 1, **kwargs)
+        yield from self.special_lines("contains").get_codelines(
+            indent=indent, **kwargs
+        )
 
 
 class F90LibRoutineVariable(LibRoutineVariable):
@@ -215,8 +248,13 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
 ###############################################################################
 
 
+my_fancy_var = F90InOutVariable("my_fancy_var", dtype="f64", size=20)
+
+
 class Fortran90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
+
+    _routine_cls = F90RoutineContainer
 
     def handle_group_instruction(self, instruction, context, buildargs):
         yield from super().handle_group_instruction(
@@ -254,6 +292,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             dtype="i64",
         )
         foo.format(foo=f"{temp1.expr_at(5)} + 2")
+        foo.requires(my_fancy_var)
         yield foo
 
 
@@ -281,10 +320,33 @@ test = InstructionGroup(
 
 largegroup = InstructionGroup([test, test, test])
 
-container_tree = test_chain.build(largegroup)
 
-for indent, line in container_tree.get_codelines():
+ctxt = Context()
+
+largegroup = InstructionGroup([test, test, test])
+
+outer_defarea = F90LibraryContainer("test_library", context=ctxt)
+outer_defarea.add_capture_trigger(lambda x: True)
+
+# container_tree = a.create_routine_container(
+#     "foo", largegroup, context=outer_defarea.context
+# )
+
+container_tree = my_builder.create_routine_container(
+    # container_tree = my_builder.build(
+    "foo",
+    largegroup,
+    context=outer_defarea.context,
+)
+
+
+outer_defarea.build()
+outer_defarea.append(container_tree)
+
+
+for indent, line in outer_defarea.get_codelines():
     print(indent * "  " + line)
+
 
 sys.exit()
 

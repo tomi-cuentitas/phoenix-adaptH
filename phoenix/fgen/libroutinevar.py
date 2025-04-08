@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 07/04/2025, 17:43
-# Version:     0.0.563
+# Last Update: 08/04/2025, 16:56
+# Version:     0.0.567
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -261,12 +261,17 @@ class LibRoutineVariable:
         else:
             yield f":DEFINE {status} {self.datatype} {self.name}[{self.size}]"
 
+    def as_argument(self):
+        """get the variable as an argument for a function"""
+        return self.name
+
     def free_name(self):
         """discard the name in the namespace"""
         try:
             self._namespace.remove(self)
         except KeyError:
-            print("not found in namespace")
+            pass
+            # print("not found in namespace")
         except AttributeError:
             print("this should not have happened.")
 
