@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 07/04/2025, 18:11
-# Version:     0.0.546
+# Last Update: 08/04/2025, 12:04
+# Version:     0.0.552
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -21,7 +21,6 @@ Library module description
 
 from phoenix.fgen.codecontainer import (
     LibraryContainer,
-    DefinitionContainer,
     GroupContainer,
     RoutineContainer,
 )
@@ -38,8 +37,8 @@ class Library:
     FILEENDING = "txt"
     INDENTSTR = "  "
 
-    LIBRARY_CONTAINER = LibraryContainer
-    ROUTINE_CONTAINER = RoutineContainer
+    _LIBRARY_CONTAINER = LibraryContainer
+    _ROUTINE_CONTAINER = RoutineContainer
 
     def __init__(self, libname):
         self._libname = libname
@@ -54,20 +53,21 @@ class Library:
             "created": False,
             "compiled": False,
         }
-        self._dependencies = set()
+        self._dependencies = set()  # other libraries
         self._libroutines = {}
 
         self._library_container = None
         self._routines_container = None
 
-        self._content_context = None
         self.initialize_library_containers()
 
     def initialize_library_containers(self):
         """initialize the library container"""
         context = Context(name=self.name)
 
-        self._library_container = type(self).LIBRARY_CONTAINER(context=context)
+        self._library_container = type(self)._LIBRARY_CONTAINER(
+            context=context
+        )
         self._routines_container = GroupContainer(
             context=self._library_container.context
         )
@@ -83,45 +83,45 @@ class Library:
         """access the context where to put new stuff"""
         return self._routines_container.context
 
-    def append_from_instructions(
-        self,
-        name,
-        instruction_tree,
-        builder,
-        assignments,
-    ):
-        """append a routine from an instruction_tree"""
-        # consider to hash the environment and the builder settings to include
-        # that in the libroutine hash.
-        # assume that any environment is already mapped onto the instruction vars
-        # assignments from signature, where signature is the instr_var to adaa mapping
-        # and assignments map to libroutinevars directly
+    # def append_from_instructions(
+    #     self,
+    #     name,
+    #     instruction_tree,
+    #     builder,
+    #     assignments,
+    # ):
+    #     """append a routine from an instruction_tree"""
+    #     # consider to hash the environment and the builder settings to include
+    #     # that in the libroutine hash.
+    #     # assume that any environment is already mapped onto the instruction vars
+    #     # assignments from signature, where signature is the instr_var to adaa mapping
+    #     # and assignments map to libroutinevars directly
 
-        # create an empty routine container based on context
-        routine_container = type(self)._ROUTINE_CONTAINER(
-            name=name, context=self.context
-        )
+    #     # create an empty routine container based on context
+    #     routine_container = type(self)._ROUTINE_CONTAINER(
+    #         name=name, context=self.context
+    #     )
 
-        # transfer the assigned variables
-        for (instr_var_class, key), libroutinevar in assignments.items():
-            routine_container.context.namespace.assign(
-                instr_var_class, key, libroutinevar
-            )
+    #     # transfer the assigned variables
+    #     for (instr_var_class, key), libroutinevar in assignments.items():
+    #         routine_container.context.namespace.assign(
+    #             instr_var_class, key, libroutinevar
+    #         )
 
-        # generate the tree inside the routine host container
-        builder.generate_container_tree(
-            instruction_tree,
-            host_container=routine_container,
-        )
+    #     # generate the tree inside the routine host container
+    #     builder.generate_container_tree(
+    #         instruction_tree,
+    #         host_container=routine_container,
+    #     )
 
-        # generate a libroutine from that
-        libroutine = LibRoutine(
-            name=routine_container.display_name,
-            container=routine_container,
-            library=self,
-        )
-        self.register_libroutine(libroutine)
-        return libroutine
+    #     # generate a libroutine from that
+    #     libroutine = LibRoutine(
+    #         name=routine_container.display_name,
+    #         container=routine_container,
+    #         library=self,
+    #     )
+    #     self.register_libroutine(libroutine)
+    #     return libroutine
 
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""

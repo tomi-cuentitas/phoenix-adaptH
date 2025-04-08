@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/02/2025
-# Last Update: 07/04/2025, 18:15
-# Version:     0.0.290
+# Last Update: 08/04/2025, 12:00
+# Version:     0.0.293
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -80,3 +80,7 @@ class LibRoutine:
     def get_signature(self):
         """get the call signature of the routine"""
         return self._container.get_signature()
+
+    def get_import(self):
+        """get the import statement for this libroutine"""
+        return f"from {self.library.name} import {self.identifier}"

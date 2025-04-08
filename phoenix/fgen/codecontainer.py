@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 07/04/2025, 18:16
-# Version:     0.0.1260
+# Last Update: 08/04/2025, 12:54
+# Version:     0.0.1273
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -372,10 +372,10 @@ class CodeContainer:
                     known.add(requirement)
                     yield requirement
 
-    def reset_provided_requirements(self) -> None:
+    def reset_captured_requirements(self) -> None:
         """reset the provided requirements"""
         for content in self.content:
-            content.reset_provided_requirements()
+            content.reset_captured_requirements()
 
     def append_head(self, *containers: CodeContainer) -> None:
         """append at head"""
@@ -588,7 +588,7 @@ class CaptureContainer(CodeContainer):
         self._context.new_namespace_node()
         self._filter_func_customs: Set[Callable] = set()
         self._filter_func_captures: Set[str] = set()
-        self._provided: Set[LibRoutineVariable] = set()
+        self._captured: Set[LibRoutineVariable] = set()
         self._callbacks: List[Callable] = []
 
     def add_callback(self, callback: Callable) -> None:
@@ -609,7 +609,7 @@ class CaptureContainer(CodeContainer):
     @property
     def captured(self):
         """get the captured libvariables"""
-        yield from self._provided
+        yield from self._captured
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
@@ -625,7 +625,7 @@ class CaptureContainer(CodeContainer):
         This CaptureContainer provides a variable.
         It is also added to the namespace and can be seen from all derived namespaces.
         """
-        self._provided.add(variable)
+        self._captured.add(variable)
         self.namespace.add(variable)
         for callback in self._callbacks:
             callback(variable)
@@ -636,11 +636,6 @@ class CaptureContainer(CodeContainer):
             self.provides(variable)
         else:
             super().requires(variable)
-
-    @property
-    def provided(self):
-        """access provided LibRoutineVariables"""
-        yield from self._provided
 
     def build(self):
         """
@@ -682,8 +677,15 @@ class RoutineContainer(CaptureContainer):
     # libraries can provide that and when a library is imported, the
     # signatures are provided
 
+    def __init__(self, name, *, context, **buildargs):
+        self._name = name
+        super().__init__(context=context, **buildargs)
+
     def build(self):
         """handle the I/O variable captures"""
+        for variable in self.captured:
+            self.append_head(DefinitionLines(variable, context=self.context))
+        return self
 
     def get_signature(self):
         """get the call signature of the routine"""

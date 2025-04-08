@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 07/04/2025, 17:03
-# Version:     0.0.3003
+# Last Update: 08/04/2025, 12:39
+# Version:     0.0.3004
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1370,7 +1370,7 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
 # ======================
 
 
-class RoutineInstruction(ContentInstruction, ftype="subroutine"):
+class RoutineRequestInstruction(ContentInstruction, ftype="subroutine"):
     """
     SubroutineGroup
 
@@ -1621,7 +1621,7 @@ if __name__ == "__main__":
     for instruction in test_instructions.instructions:
         print(instruction._obj_id)
 
-    print(RoutineInstruction._obj_id_count)
+    print(RoutineRequestInstruction._obj_id_count)
     print(PolynomialInstruction._obj_id_count)
     print(LinearOperationInstruction._obj_id_count)
     print(AffineOperationInstruction._obj_id_count)

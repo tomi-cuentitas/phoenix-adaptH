@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 07/04/2025, 16:35
-# Version:     0.0.421
+# Last Update: 08/04/2025, 12:55
+# Version:     0.0.438
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -246,9 +246,19 @@ ctxt = Context()
 
 largegroup = InstructionGroup([test, test, test])
 
-container_tree = a.generate_container_tree(largegroup)
+outer_defarea = DefinitionContainer(context=ctxt)
+outer_defarea.add_capture_trigger(lambda x: True)
 
-for indent, line in container_tree.get_codelines():
+container_tree = a.create_routine_container(
+    "foo", largegroup, context=outer_defarea.context
+)
+
+
+container_tree.build()
+outer_defarea.build()
+outer_defarea.append(container_tree)
+
+for indent, line in outer_defarea.get_codelines():
     print(indent * "  " + line)
 
 sys.exit()

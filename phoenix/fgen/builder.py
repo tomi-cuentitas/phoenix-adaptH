@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 07/04/2025, 18:00
-# Version:     0.0.1121
+# Last Update: 08/04/2025, 13:03
+# Version:     0.0.1189
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -19,6 +19,7 @@ from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
 
 from phoenix.fgen.library import Library
+from phoenix.fgen.libroutine import LibRoutine
 
 from phoenix.fgen.context import Context
 
@@ -31,7 +32,7 @@ from phoenix.fgen.instruction import (
     EnvironmentInstruction,
     MapApplyInstruction,
     InstructionGroup,
-    RoutineInstruction,
+    RoutineRequestInstruction,
     ContentInstruction,
     VariationInstruction,
     LeafInstruction,
@@ -40,7 +41,11 @@ from phoenix.fgen.instruction import (
 )
 
 
-from phoenix.fgen.codecontainer import CommentLine, DefinitionContainer
+from phoenix.fgen.codecontainer import (
+    CommentLine,
+    DefinitionContainer,
+    RoutineContainer,
+)
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
 
@@ -59,6 +64,9 @@ class BuilderSegment:
     _VERSN = 0
     _BUILD = 0
 
+    def __init__(self, **params):
+        self._params: Dict[str, Any] = params
+
     def _welcome_log(self):
         info(*self._welcome_log_lines())
 
@@ -72,9 +80,12 @@ class BuilderSegment:
         yield from self._detail_log_lines()
 
     def _detail_log_lines(self):
-        yield f"parameters ({len(self._params)}):"
-        for param, value in self._params.items():
-            yield f"  - {param}={value}"
+        if self._params:
+            yield f"parameters ({len(self._params)}):"
+            for param, value in self._params.items():
+                yield f"  - {param}={value}"
+        else:
+            yield "[no parameters given]"
 
     @property
     def identifier(self):
@@ -100,14 +111,6 @@ class BuilderSegment:
 class Optimizer(BuilderSegment):
     """Optimize the instruction tree w.r.t. certain aspects"""
 
-    def __init__(self, _internal=None, **params):
-        self._params: Dict[str, Any] = params
-        if _internal is None:
-            _internal = {}
-        _log_welcome = _internal.get("_log_welcome", True)
-        if _log_welcome:
-            self._welcome_log()
-
     def __str__(self):
         param_string = "|".join(
             [f"{key}={val}" for key, val in self._params.items()]
@@ -121,7 +124,7 @@ class Optimizer(BuilderSegment):
         return f"<{self._CLSNAME_PREFIX}.{self.identifier}>"
 
     @log.wrap_call
-    def apply(self, instruction_tree):
+    def apply(self, instruction, **extra_args):
         """apply the optimizer"""
         raise NotImplementedError(
             "apply method must be implemented in subclass"
@@ -137,17 +140,14 @@ class Validator(BuilderSegment):
 
     _CLSNAME_PREFIX = "VALIDATOR"
 
-    def __init__(self, **parameters):
-        self._params = parameters
-
-    def validate(self, instruction_tree):
+    def validate(self, instruction, report, **extra_args):
         """apply the validator to an instruction tree"""
         # check if all requirements are fulfilled
         return True
 
-    def raise_exception(self, message):
+    def handle_fail(self, details, report, **extra_args):
         """raise an exception from the tree"""
-        return ValidationError(message)
+        return ValidationError(details)
 
 
 class Builder(BuilderSegment, identifier="GENERIC"):
@@ -177,29 +177,49 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _supp_instr_handler: Dict[type, Generator] = {}
     _excl_instr_classes: Set[type] = set()
 
-    _comment = None
+    _comment_cls = CommentLine
+    _routine_cls = RoutineContainer
 
     def __init_subclass__(cls, identifier=None):
         super().__init_subclass__(identifier=identifier)
         cls.set_default_handlers()
 
-    def __init__(self, **params):
-        self._params = params
-        self._welcome_log()
-
-        self._extra_instr_handler: Dict[type, Generator] = {}
-        self._avoid_instr_classes: Set[type] = set()
+    def __init__(
+        self,
+        extra_instr_handler=None,
+        avoid_instr_classes=None,
+        **params,
+    ):
+        if extra_instr_handler is None:
+            extra_instr_handler = {}
+        if avoid_instr_classes is None:
+            avoid_instr_classes = set()
+        self._extra_instr_handler: Dict[type, Generator] = extra_instr_handler
+        self._avoid_instr_classes: Set[type] = avoid_instr_classes
+        super().__init__(**params)
 
     def _detail_log_lines(self):
         yield from BuilderSegment._detail_log_lines(self)
         supported = list(type(self)._supp_instr_handler.keys())
-        yield f"supported ({len(supported)}):"
-        for instruction_type in supported:
-            yield f"  + {instruction_type.class_identifier()}"
+        if supported:
+            yield f"supported ({len(supported)}):"
+            for instruction_type in supported:
+                yield f"  + {instruction_type.class_identifier()}"
         excluded = list(type(self)._excl_instr_classes)
-        yield f"excluded ({len(excluded)}):"
-        for instruction_type in excluded:
-            yield f"  - {instruction_type}"
+        if excluded:
+            yield f"excluded ({len(excluded)}):"
+            for instruction_type in excluded:
+                yield f"  - {instruction_type}"
+        additional = list(self._extra_instr_handler.keys())
+        if additional:
+            yield f"additional ({len(additional)}):"
+            for instruction_type in additional:
+                yield f"  + {instruction_type.class_identifier()}"
+        forbidden = list(self._avoid_instr_classes)
+        if forbidden:
+            yield f"forbidden ({len(forbidden)}):"
+            for instruction_type in forbidden:
+                yield f"  - {instruction_type}"
 
     def add_supported_instruction_class(self, instruction_class, handler):
         """add a supported instruction class and its handler"""
@@ -259,11 +279,22 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
     @log.wrap_call
     def as_external(
-        self, instruction_tree, name, context, library=None, **genargs
+        self,
+        instruction,
+        name,
+        context,
+        library=None,
+        buildargs=None,
+        **genargs,
     ):
         """treat the instruction tree as an external auxilliary routine"""
         # generate a new libroutine object in library
-        libroutine = None
+        libroutine = self.instructions_to_libroutine(
+            name,
+            instruction,
+            library,
+            buildargs,
+        )
         return libroutine
 
     @log.wrap_call_gen
@@ -310,42 +341,71 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         # to implement that lazy as well.
 
     @log.wrap_call
-    def generate_container_tree(
-        self, instruction, host_container=None, **buildargs
+    def instructions_to_libroutine(
+        self,
+        name,
+        instructions,
+        library,
+        **buildargs,
     ):
-        """generate the container tree from instruction"""
-        if host_container is None:
-            context = Context(
-                level=0,
-                environment=InstructionEnvironment(),
-                parent=None,
-                namespace=Namespace(),
-            )
-            host_container = DefinitionContainer(context=context)
-            host_container.add_capture_trigger(lambda x: True)
-        context = host_container.context.inherit()
-        context.new_namespace_node()
-        for container in self.containers_from_instruction(
-            instruction,
-            context=context,
+        """generate a libroutine in a library from instructions"""
+        routine_container = self.create_routine_container(
+            name,
+            instructions,
+            context=library.context,
             **buildargs,
-        ):
-            host_container.append(container)
-        info("reached end of instruction build")
-        return host_container.build()
-
-    @classmethod
-    def set_comment_generator(cls, comment_gen):
-        """set the comment generator"""
-        cls._comment = comment_gen
+        )
+        libroutine = LibRoutine(
+            identifier=name, container=routine_container, library=library
+        )
+        library.register_libroutine(libroutine)
+        return libroutine
 
     @log.wrap_call
-    def comment(self, *lines, context: Context, buildargs):
+    def create_routine_container(
+        self, name, instructions, context, **buildargs
+    ):
+        """generate the container tree from instruction"""
+        routine_container = self.prepare_routine_container(
+            name, context, **buildargs
+        )
+        for container in self.containers_from_instruction(
+            instructions,
+            context=routine_container.context,
+            **buildargs,
+        ):
+            routine_container.append(container)
+        info("reached end of routine build")
+        return routine_container.build()
+
+    @log.wrap_call
+    def prepare_routine_container(self, name, context, **buildargs):
+        """
+        Create a routine body.
+        This method is only factored out that creating new builders
+        on other containers is more straight forward
+        """
+        return type(self)._routine_cls(name, context=context, **buildargs)
+
+    @classmethod
+    @log.wrap_call
+    def set_comment_generator(cls, comment_gen):
+        """set the comment generator"""
+        cls._comment_cls = comment_gen
+
+    @classmethod
+    @log.wrap_call
+    def set_routine_generator(cls, routine_gen):
+        """set the routine generator"""
+        cls._routine_cls = routine_gen
+
+    @log.wrap_call
+    def comment(self, *lines, context: Context, buildargs: Dict[str, Any]):
         """generate one or multiple comment lines"""
-        if self._comment is not None:
-            assert issubclass(self._comment, CommentLine)
+        if type(self)._comment_cls is not None:
+            assert issubclass(self._comment_cls, CommentLine)
             for line in lines:
-                yield self._comment(
+                yield self._comment_cls(
                     line,
                     context=context,
                     **buildargs,
@@ -386,14 +446,14 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         yield from self.comment(
             str(instruction.to_dict()),
             context=context,
-            buildargs=buildargs,
+            **buildargs,
         )
 
     @log.wrap_call_gen
     def handle_leaf_instruction(self, instruction, context, buildargs):
         """default handler for leaf instruction, mapping back to generic"""
         yield from self.handle_generic_instruction(
-            instruction, context=context, buildargs=buildargs
+            instruction, context=context, **buildargs
         )
 
     @log.wrap_call_gen
@@ -462,7 +522,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             (LeafInstruction, cls.handle_leaf_instruction),
             #
             # content based
-            (RoutineInstruction, cls.handle_routine_instruction),
+            (RoutineRequestInstruction, cls.handle_routine_instruction),
             (MapApplyInstruction, cls.handle_mapapply_instruction),
             (VariationInstruction, cls.handle_variation_instruction),
             #
@@ -502,61 +562,66 @@ class BuildChain:
         self._validators.append(validator)
 
     @log.wrap_call
-    def perform_optimization(self, instruction):
+    def perform_optimization(self, instruction, **extra_args):
         """perform the optimization steps"""
 
         for num, optimizer in enumerate(self._optimizers):
             info(f"apply optimizer #{num + 1}")
-            instruction = optimizer.apply(instruction)
+            instruction = optimizer.apply(instruction, **extra_args)
 
         for num, optimizer in enumerate(type(self)._class_optimizers):
             info(f"apply class optimizer #{num + 1}")
-            instruction = optimizer.apply(instruction)
+            instruction = optimizer.apply(instruction, **extra_args)
 
         return instruction
 
     @log.wrap_call
-    def perform_validation(self, instruction):
+    def perform_validation(self, instruction, **extra_args):
         """perform the validation steps"""
 
         report = {}
 
         for num, validator in enumerate(self._validators):
             info(f"apply validator #{num + 1}")
-            passed, details = validator.validate(instruction, report)
+            passed, details = validator.validate(
+                instruction, report, **extra_args
+            )
             if not passed:
-                validator.handle_fail(details)
+                validator.handle_fail(details, report, **extra_args)
                 return False, report
 
         for num, validator in enumerate(type(self)._class_validators):
             info(f"apply class validator #{num + 1}")
-            passed, details = validator.validate(instruction, report)
+            passed, details = validator.validate(
+                instruction, report, **extra_args
+            )
             if not passed:
-                validator.handle_fail(details)
+                validator.handle_fail(details, report, **extra_args)
                 return False, report
 
         return True, report
 
     @log.wrap_call
-    def perform_build(self, instruction, host_container=None):
+    def perform_build(self, name, instruction, context, **extra_args):
         """perform the build step"""
-        return self._builder.generate_container_tree(
-            instruction, host_container=host_container
+        return self._builder.create_routine_container(
+            name, instruction, context, **extra_args
         )
 
     @log.wrap_call
-    def build(self, instruction, host_container=None):
-        optimized_tree = self.perform_optimization(instruction)
-        passed, report = self.perform_validation(optimized_tree)
+    def build(self, name, instruction, context, **extra_args):
+        """build an instruction using the whole chain"""
+        optimized_tree = self.perform_optimization(instruction, **extra_args)
+        passed, report = self.perform_validation(optimized_tree, **extra_args)
         if not passed:
             print(report)
             raise ValueError("Validation failed")
         return self.perform_build(
-            optimized_tree, host_container=host_container
+            name, optimized_tree, context=context, **extra_args
         )
 
     @log.wrap_call
-    def prepare_instructions(self, instructions, **buildargs):
+    def prepare_instructions(self, instructions, buildargs):
         """
         run instructions through the preparation steps of the builder.
         """
