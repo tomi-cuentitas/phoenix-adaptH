@@ -61,6 +61,11 @@ class LibRoutine:
         return ""
 
     @property
+    def key(self):
+        """read-only access to attribute identifier"""
+        return self.create_key()
+
+    @property
     def identifier(self):
         """read-only access to attribute identifier"""
         return str(self._identifier)
@@ -84,3 +89,7 @@ class LibRoutine:
     def get_import(self):
         """get the import statement for this libroutine"""
         return f"from {self.library.name} import {self.identifier}"
+
+    def create_key(self):
+        """create a key that represents the libroutine in lists etc"""
+        return self._identifier

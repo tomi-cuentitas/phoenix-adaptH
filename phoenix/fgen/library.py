@@ -25,6 +25,7 @@ from phoenix.fgen.codecontainer import (
     RoutineContainer,
 )
 from phoenix.fgen.context import Context
+from phoenix.fgen.libroutine import LibRoutine
 
 
 class Library:
@@ -37,8 +38,8 @@ class Library:
     FILEENDING = "txt"
     INDENTSTR = "  "
 
-    _LIBRARY_CONTAINER = LibraryContainer
-    _ROUTINE_CONTAINER = RoutineContainer
+    LIBRARY_CONTAINER = LibraryContainer
+    LIBROUTINE_CLS = LibRoutine
 
     def __init__(self, libname):
         self._libname = libname
@@ -65,7 +66,7 @@ class Library:
         """initialize the library container"""
         context = Context(name=self.name)
 
-        self._library_container = type(self)._LIBRARY_CONTAINER(
+        self._library_container = type(self).LIBRARY_CONTAINER(
             self.name, context=context
         )
         self._routines_container = GroupContainer(
@@ -83,49 +84,17 @@ class Library:
         """access the context where to put new stuff"""
         return self._routines_container.context
 
-    # def append_from_instructions(
-    #     self,
-    #     name,
-    #     instruction_tree,
-    #     builder,
-    #     assignments,
-    # ):
-    #     """append a routine from an instruction_tree"""
-    #     # consider to hash the environment and the builder settings to include
-    #     # that in the libroutine hash.
-    #     # assume that any environment is already mapped onto the instruction vars
-    #     # assignments from signature, where signature is the instr_var to adaa mapping
-    #     # and assignments map to libroutinevars directly
-
-    #     # create an empty routine container based on context
-    #     routine_container = type(self)._ROUTINE_CONTAINER(
-    #         name=name, context=self.context
-    #     )
-
-    #     # transfer the assigned variables
-    #     for (instr_var_class, key), libroutinevar in assignments.items():
-    #         routine_container.context.namespace.assign(
-    #             instr_var_class, key, libroutinevar
-    #         )
-
-    #     # generate the tree inside the routine host container
-    #     builder.generate_container_tree(
-    #         instruction_tree,
-    #         host_container=routine_container,
-    #     )
-
-    #     # generate a libroutine from that
-    #     libroutine = LibRoutine(
-    #         name=routine_container.display_name,
-    #         container=routine_container,
-    #         library=self,
-    #     )
-    #     self.register_libroutine(libroutine)
-    #     return libroutine
+    def new_libroutine(self, identifier, container):
+        """create a new libroutine from a container and an identifier"""
+        libroutine = type(self).LIBROUTINE_CLS(
+            identifier=identifier, container=container, library=self
+        )
+        self.append(libroutine)
 
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""
         self._libroutines[libroutine.name] = libroutine
+        self.container.append(libroutine.container)
 
     @property
     def fileending(self):
@@ -146,11 +115,9 @@ class Library:
         """append a routine to the library"""
         if libroutine.key in self._libroutines:
             if exception_existing:
-                raise KeyError(
-                    f"Routine '{libroutine.name}' already exists in library"
-                )
+                raise KeyError(f"Routine '{libroutine.name}' already exists in library")
             return
-        self._libroutines[libroutine.key] = libroutine
+        self.register_libroutine(libroutine)
 
     def __getitem__(self, key):
         return self._libroutines.get(key)

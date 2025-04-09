@@ -112,9 +112,7 @@ class Optimizer(BuilderSegment):
     """Optimize the instruction tree w.r.t. certain aspects"""
 
     def __str__(self):
-        param_string = "|".join(
-            [f"{key}={val}" for key, val in self._params.items()]
-        )
+        param_string = "|".join([f"{key}={val}" for key, val in self._params.items()])
         return f"<{self._CLSNAME_PREFIX}.{self.identifier}: {param_string}>"
 
     def __repr__(self):
@@ -126,9 +124,7 @@ class Optimizer(BuilderSegment):
     @log.wrap_call
     def apply(self, instruction, **extra_args):
         """apply the optimizer"""
-        raise NotImplementedError(
-            "apply method must be implemented in subclass"
-        )
+        raise NotImplementedError("apply method must be implemented in subclass")
 
 
 class ValidationError(Exception):
@@ -266,9 +262,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         return None
 
     @log.wrap_call
-    def request_temp(
-        self, container, name, generating, autorequire=True, **genargs
-    ):
+    def request_temp(self, container, name, generating, autorequire=True, **genargs):
         """request a temporary variable"""
         variable = container.context.namespace.request_temp(
             generating, name, origin=container, **genargs
@@ -355,21 +349,15 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             context=library.context,
             **buildargs,
         )
-        libroutine = LibRoutine(
-            identifier=name, container=routine_container, library=library
+        libroutine = library.new_libroutine(
+            identifier=name, container=routine_container
         )
-        library.register_libroutine(libroutine)
-        library.append(routine_container)
         return libroutine
 
     @log.wrap_call
-    def create_routine_container(
-        self, name, instructions, context, **buildargs
-    ):
+    def create_routine_container(self, name, instructions, context, **buildargs):
         """generate the container tree from instruction"""
-        routine_container = self.prepare_routine_container(
-            name, context, **buildargs
-        )
+        routine_container = self.prepare_routine_container(name, context, **buildargs)
         for container in self.containers_from_instruction(
             instructions,
             context=routine_container.context,
@@ -377,7 +365,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         ):
             routine_container.append(container)
         info("reached end of routine build")
-        return routine_container.build()
+        return routine_container.reset_all().build_all()
 
     @log.wrap_call
     def prepare_routine_container(self, name, context, **buildargs):
@@ -584,18 +572,14 @@ class BuildChain:
 
         for num, validator in enumerate(self._validators):
             info(f"apply validator #{num + 1}")
-            passed, details = validator.validate(
-                instruction, report, **extra_args
-            )
+            passed, details = validator.validate(instruction, report, **extra_args)
             if not passed:
                 validator.handle_fail(details, report, **extra_args)
                 return False, report
 
         for num, validator in enumerate(type(self)._class_validators):
             info(f"apply class validator #{num + 1}")
-            passed, details = validator.validate(
-                instruction, report, **extra_args
-            )
+            passed, details = validator.validate(instruction, report, **extra_args)
             if not passed:
                 validator.handle_fail(details, report, **extra_args)
                 return False, report
@@ -617,9 +601,7 @@ class BuildChain:
         if not passed:
             print(report)
             raise ValueError("Validation failed")
-        return self.perform_build(
-            name, optimized_tree, context=context, **extra_args
-        )
+        return self.perform_build(name, optimized_tree, context=context, **extra_args)
 
     @log.wrap_call
     def prepare_instructions(self, instructions, buildargs):

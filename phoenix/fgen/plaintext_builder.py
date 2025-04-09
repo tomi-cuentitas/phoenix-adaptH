@@ -74,6 +74,7 @@ class TestLineWithVariable(CodeLine):
         temp2 = self.request_temp(
             "test_temporary2", LibRoutineLocalVariable, size=12, dtype="i64"
         )
+        self.requires(temp2)
         var = temp2.expr_at(1, temp1, 3, 4, simplify=False)
         longline = f"{line} yadayada 42 + {var}"
         self.set_line(longline)
@@ -94,6 +95,15 @@ class PTBracketContainer(EnclosingContainer):
 
     INDENT_BODY = True
 
+    def __init__(self, name, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self._name = name
+
+    def make_enclosings(self, **_):
+        head_string = (f"BEGIN {self._name}",)
+        foot_string = (f"END {self._name}",)
+        return self.make_enclosings_from_text(head_string, foot_string)
+
 
 class PTLoopContainer(LoopContainer):
     """Plain Text version of a DefinitionContainer"""
@@ -108,9 +118,9 @@ class PTDefinitionContainer(DefinitionContainer):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.append_head(
-            PTCodeLine("BEGIN DEFINITION CONTAINER", context=self.context)
-        )
+
+    def make_enclosings(self, **_):
+        self.append_head(PTCodeLine("BEGIN DEFINITION CONTAINER", context=self.context))
         self.append_foot(
             PTCodeLine("END OF DEFINITION CONTAINER", context=self.context)
         )
@@ -148,21 +158,16 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
     """PlainTextBuilder"""
 
     def handle_basic_instruction(self, instruction, context, buildargs):
-        yield PTCodeLine(
-            f"Unknown instruction {instruction}", context, **buildargs
-        )
+        yield PTCodeLine(f"Unknown instruction {instruction}", context, **buildargs)
 
     def handle_group_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
-            context=context, **buildargs
-        ).set_enclosings(
-            head_string=f"BEGIN Group {instruction.identifier} {{ ",
-            foot_string=f"END Group {instruction.identifier} }} ",
+            name=f"GROUP {instruction.identifier}", context=context, **buildargs
         )
         for inner_instruction in instruction.instructions:
             for inner_container in self.containers_from_instruction(
                 inner_instruction,
-                context=context,
+                context=outer.context,
                 **buildargs,
             ):
                 outer.append(inner_container)
@@ -170,21 +175,18 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
 
     def handle_content_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
-            context=context, **buildargs
-        ).set_enclosings(
-            head_string=f"BEGIN Content Group {instruction.identifier} {{ ",
-            foot_string=f"END Content Group {instruction.identifier} }} ",
+            name=f"Content Group {instruction.identifier}", context=context, **buildargs
         )
         for key, value in instruction.items():
             if key in ["identifier", "content"]:
                 continue
             outer.append(
-                PTCodeLine(f":{key}={value}", context=context, **buildargs)
+                PTCodeLine(f":{key}={value}", context=outer.context, **buildargs)
             )
         for inner_instruction in instruction.content:
             for inner_container in self.containers_from_instruction(
                 inner_instruction,
-                context=context,
+                context=outer.context,
                 **buildargs,
             ):
                 outer.append(inner_container)
@@ -203,19 +205,13 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         yield TestLineWithVariable("fooo", context=context, **buildargs)
 
     def handle_routine_instruction(self, instruction, context, buildargs):
-        yield from super().handle_routine_instruction(
-            instruction, context, buildargs
-        )
+        yield from super().handle_routine_instruction(instruction, context, buildargs)
 
     def handle_mapapply_instruction(self, instruction, context, buildargs):
-        yield from super().handle_mapapply_instruction(
-            instruction, context, buildargs
-        )
+        yield from super().handle_mapapply_instruction(instruction, context, buildargs)
 
     def handle_variation_instruction(self, instruction, context, buildargs):
-        yield from super().handle_variation_instruction(
-            instruction, context, buildargs
-        )
+        yield from super().handle_variation_instruction(instruction, context, buildargs)
 
     def handle_environment_instruction(self, instruction, context, buildargs):
         yield from super().handle_environment_instruction(
@@ -252,11 +248,9 @@ outer_defarea.add_capture_trigger(lambda x: True)
 container_tree = a.create_routine_container(
     "foo", largegroup, context=outer_defarea.context
 )
-
-outer_defarea.build()
 outer_defarea.append(container_tree)
 
-for indent, line in outer_defarea.get_codelines():
+for indent, line in outer_defarea.reset_all().build_all().get_codelines():
     print(indent * "  " + line)
 
 sys.exit()

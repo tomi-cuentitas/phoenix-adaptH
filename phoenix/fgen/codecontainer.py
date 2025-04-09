@@ -150,8 +150,6 @@ class CodeContainer:
         # all content that may or may not be useful
         # self._data: Dict[str, Any] = {}
 
-        self._is_built = False
-
         # collect variables that are used here
         self._requirements: Set[str] = set()
 
@@ -260,28 +258,22 @@ class CodeContainer:
             context=self.context,
         )
 
-    def mark_as_built(self):
-        """mark as built"""
-        self._is_built = True
-
     def build(self, **_):
         """build the container"""
-        self.mark_as_built()
         return self
 
     def build_all(self):
         """call build on the whole container"""
         for container in self.body:
             container.build_all()
-        if not self._is_built:
-            self.build()
-        self.mark_as_built()
+        self.build()
+        return self
 
     def reset(self, **_):
         """perform a reset on this container"""
         self._container_head: list[CodeContainer] = []
         self._container_foot: list[CodeContainer] = []
-        self._is_built = False
+        return self
 
     def reset_all(self, **kwargs):
         """
@@ -292,6 +284,7 @@ class CodeContainer:
         for container in self.body:
             container.reset_all(**kwargs)
         self.reset(**kwargs)
+        return self
 
     def get_codelines_head(
         self, indent: int, **kwargs: Any
@@ -331,9 +324,7 @@ class CodeContainer:
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
         yield from self.get_codelines_head(indent, **kwargs)
-        yield from self.get_codelines_body(
-            indent + int(self.INDENT_BODY), **kwargs
-        )
+        yield from self.get_codelines_body(indent + int(self.INDENT_BODY), **kwargs)
         yield from self.get_codelines_foot(indent, **kwargs)
 
     def get_indent(self, level: int = 0) -> str:
@@ -611,9 +602,7 @@ class EnclosingContainer(GroupContainer):
     class and are not occupied by other content.
     """
 
-    def make_enclosings_from_text(
-        self, head_strings, foot_strings, **buildargs
-    ):
+    def make_enclosings_from_text(self, head_strings, foot_strings, **buildargs):
         """this method later defines the enclosing characters."""
         if not isinstance(head_strings, str):
             for head_string in head_strings:
@@ -630,6 +619,10 @@ class EnclosingContainer(GroupContainer):
     def make_enclosings(self, **_):
         """make the enclosings"""
         return self
+
+    def build(self, **_):
+        self.make_enclosings()
+        return super().build()
 
 
 class LoopContainer(EnclosingContainer):
@@ -665,9 +658,7 @@ class CaptureContainer(CodeContainer):
         elif callable(capture):
             self._filter_func_customs.add(capture)
         else:
-            raise ValueError(
-                f"Invalid filter arg {capture}. Must be str|callable."
-            )
+            raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -712,9 +703,7 @@ class DefinitionContainer(CaptureContainer):
         """build head and tail section of the definition container"""
         # append all definition lines in head
         for variable in self.captured:
-            self.append_head(
-                DefinitionLines(variable, context=self.context, **kwargs)
-            )
+            self.append_head(DefinitionLines(variable, context=self.context, **kwargs))
         # perform potential allocations in head
         # perform potential deallocations in tail
         return super().build(**kwargs)
@@ -765,7 +754,7 @@ class RoutineContainer(NamedContainer, CaptureContainer):
         """append to the definitions"""
         self._container_defs.append(content)
 
-    def distribute_captured_variables(self, repeat_inout=False, **kwargs):
+    def distribute_captured_variables(self, repeat_inout=True, **kwargs):
         """
         distribute the captured variables into the def line and the call
         """
@@ -781,19 +770,19 @@ class RoutineContainer(NamedContainer, CaptureContainer):
                 self._call_args.append(variable)
             if not repeat_inout:
                 continue
-            self.append_defs(
-                DefinitionLines(variable, context=self.context, **kwargs)
-            )
+            self.append_defs(DefinitionLines(variable, context=self.context, **kwargs))
 
     def make_enclosings(self, **_):
         """make the enclosings for this container"""
-        self.append_head(f"FUNCTION {self.name}")
-        self.append_foot(f"END FUNCTION {self.name}")
+        self.make_enclosings_from_text(
+            f"FUNCTION {self.name}",
+            f"END FUNCTION {self.name}",
+        )
 
     def build(self, **buildargs):
         """handle the I/O variable captures"""
         self.distribute_captured_variables(**buildargs)
-        self.make_enclosings(**buildargs)
+        # self.make_enclosings(**buildargs)
         return super().build(**buildargs)
 
     def get_codelines_head(self, indent=0, **kwargs):
@@ -860,7 +849,7 @@ class LibraryContainer(NamedContainer, CaptureContainer):
 
     def build(self, **buildargs):
         """handle the I/O variable captures"""
-        self.make_enclosings()
+        # self.make_enclosings()
         for variable in self.captured:
             self.append_defs(variable)
         return super().build(**buildargs)
