@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 10/04/2025, 11:14
-# Version:     0.0.1192
+# Last Update: 10/04/2025, 16:25
+# Version:     0.0.1205
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -388,27 +388,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
     @classmethod
     @log.wrap_call
-    def set_comment_generator(cls, comment_gen):
-        """set the comment generator"""
-        cls._comment_cls = comment_gen
-
-    @classmethod
-    @log.wrap_call
     def set_routine_generator(cls, routine_gen):
         """set the routine generator"""
         cls._routine_cls = routine_gen
-
-    @log.wrap_call
-    def comment(self, *lines, context: Context, **buildargs):
-        """generate one or multiple comment lines"""
-        if type(self)._comment_cls is not None:
-            assert issubclass(self._comment_cls, CommentLine)
-            for line in lines:
-                yield self._comment_cls(
-                    line,
-                    context=context,
-                    **buildargs,
-                )
 
     @log.wrap_call_gen
     def handle_basic_instruction(self, instruction, context, buildargs):
@@ -442,9 +424,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @log.wrap_call_gen
     def handle_generic_instruction(self, instruction, context, buildargs):
         """default handler for generic instruction"""
-        yield from self.comment(
+        yield self.comment_from_text(
             str(instruction.to_dict()),
-            context=context,
+            context=context.inherit(),
             **buildargs,
         )
 
@@ -530,6 +512,17 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         ]
         for instruction_class, handler in default_handler_mappings:
             cls.set_instruction_class_handler(instruction_class, handler)
+
+    @classmethod
+    def set_comment_class(cls, comment_class):
+        """set the comment class"""
+        cls._comment_class = comment_class
+
+    def comment_from_text(self, line, *, context, **buildargs):
+        """create a comment"""
+        if type(self)._comment_class is None:
+            return None
+        return type(self)._comment_class(line, context=context, **buildargs)
 
 
 class BuildChain:

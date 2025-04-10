@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 10/04/2025, 12:23
-# Version:     0.0.197
+# Last Update: 10/04/2025, 16:23
+# Version:     0.0.220
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -105,7 +105,7 @@ class F90RoutineContainer(RoutineContainer):
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = self.get_call_arguments()
+        call_args = list(self.get_call_arguments())
         yield self.codeline_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
         )
@@ -130,9 +130,13 @@ class F90LibraryContainer(LibraryContainer):
         yield self.codeline_from_text(f"END MODULE {self.name}")
 
     def generate_preamble_containers(self, **_):
-        yield self.codeline_from_text("implicit none")
+        yield self.codeline_from_text("")
+        yield self.codeline_from_text("IMPLICIT NONE")
+        yield self.codeline_from_text("")
         yield from super().generate_preamble_containers()
-        yield self.codeline_from_text("contains")
+        yield self.codeline_from_text("")
+        yield self.codeline_from_text("CONTAINS")
+        yield self.codeline_from_text("")
 
 
 class F90LibRoutineVariable(LibRoutineVariable):
@@ -173,6 +177,12 @@ class F90LibRoutineVariable(LibRoutineVariable):
             case "i32":
                 return "integer"
         raise ValueError(f"Unknown dtype: {dtype}")
+
+
+class F90LibRoutineLocalVariable(
+    F90LibRoutineVariable, LibRoutineLocalVariable
+):
+    """LibRoutineVariable F90 Base class"""
 
 
 class F90InputVariable(F90LibRoutineVariable, LibRoutineInputVariable):
@@ -237,6 +247,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
     _routine_cls = F90RoutineContainer
+    _comment_cls = F90CommentLine
 
     def handle_group_instruction(self, instruction, context, buildargs):
         yield from super().handle_group_instruction(
@@ -269,7 +280,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         temp1 = self.request_temp(
             foo,
             "test_temporary1",
-            F90LibRoutineVariable,
+            F90LibRoutineLocalVariable,
             size=42,
             dtype="i64",
         )
@@ -278,7 +289,8 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         yield foo
 
 
-Fortran90Builder.set_comment_generator(F90CommentLine)
+F90LibraryContainer.set_comment_class(F90CommentLine)
+Fortran90Builder.set_comment_class(F90CommentLine)
 
 
 from phoenix.fgen.builder import Context
@@ -308,7 +320,7 @@ ctxt = Context()
 largegroup = InstructionGroup([test, test, test])
 
 outer_defarea = F90LibraryContainer("test_library", context=ctxt)
-outer_defarea.add_capture_trigger(lambda x: True)
+# outer_defarea.add_capture_trigger(lambda x: True)
 
 # container_tree = a.create_routine_container(
 #     "foo", largegroup, context=outer_defarea.context

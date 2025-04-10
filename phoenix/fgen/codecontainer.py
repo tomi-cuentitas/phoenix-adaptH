@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 10/04/2025, 12:23
-# Version:     0.0.1795
+# Last Update: 10/04/2025, 16:16
+# Version:     0.0.1884
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -145,6 +145,9 @@ class CodeContainer:
     """
 
     INDENT_BODY = False
+    _default_classes = {
+        "comment": None,
+    }
 
     def __init__(self, context, **_) -> None:
         # all content that may or may not be useful
@@ -235,7 +238,9 @@ class CodeContainer:
         if not isinstance(variable, LibRoutineVariable):
             raise TypeError("Dependencies must be LibRoutineVariables")
         if self.parent is None:
-            raise ValueError("variable request got lost!")
+            raise ValueError(
+                f"variable request got lost for variable {variable} ({variable.vtype})!"
+            )
         self.parent.requires(variable)
 
     def codeline_from_text(self, text: str) -> CodeContainer:
@@ -244,6 +249,22 @@ class CodeContainer:
             line=text,
             context=self.context,
         )
+
+    @classmethod
+    @log.wrap_call
+    def set_comment_class(cls, comment_gen):
+        """set the comment generator"""
+        cls._default_classes["comment"] = comment_gen
+
+    @log.wrap_call
+    def comment_from_text(self, line, **buildargs):
+        """generate one or multiple comment lines"""
+        if type(self)._default_classes["comment"] is not None:
+            return type(self)._default_classes["comment"](
+                line,
+                context=self.context.inherit(),
+                **buildargs,
+            )
 
     def build(self, **_):
         """build the container"""
@@ -436,35 +457,9 @@ class EmbeddingContainer(CodeContainer):
     @property
     def content(self):
         """iterate through foot content only"""
-        # print("content yield @ embedding")
-        # print("content yield: head")
         yield from self.head
-        # print("content yield: super.content")
         yield from super().content
-        # print("content yield: foot")
         yield from self.foot
-
-
-# class MemoryContainer(CodeContainer):
-#     """
-#     A container class allowing to remember special lines by key.
-#     The intention is purely to make these lines available during build.
-#     """
-
-#     def __init__(self, *, context, **buildargs):
-#         super().__init__(context=context, **buildargs)
-#         self._memory = {}
-
-#     def memorize(self, key, container):
-#         """remind builder"""
-#         if isinstance(container, str):
-#             self._memory[key] = self.codeline_from_text(container)
-#         else:
-#             self._memory[key] = container
-
-#     def remember(self, key):
-#         """access special lines"""
-#         return self._memory[key]
 
 
 class PreambleContainer(CodeContainer):
@@ -731,7 +726,8 @@ class CaptureContainer(CodeContainer):
         # new namespace node in capture container
         self.context.new_namespace_node()
         self._filter_func_customs: List[Tuple(Callable, Callable | None)] = []
-        self._filter_func_captures: List[Tuple(str, Callable | None)] = []
+        self._filter_func_vtypes: List[Tuple(str, Callable | None)] = []
+        self._filter_func_types: List[Tuple(type, Callable | None)] = []
         self._captured: Set[LibRoutineVariable] = set()
 
     def add_capture_trigger(
@@ -741,7 +737,9 @@ class CaptureContainer(CodeContainer):
     ) -> None:
         """add a type of requirement to capture"""
         if isinstance(capture, str):
-            self._filter_func_captures.append((capture, callback))
+            self._filter_func_vtypes.append((capture, callback))
+        elif issubclass(capture, LibRoutineVariable):
+            self._filter_func_types.append((capture, callback))
         elif callable(capture):
             self._filter_func_customs.append((capture, callback))
         else:
@@ -756,15 +754,26 @@ class CaptureContainer(CodeContainer):
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
+        debug(f"capture check at {self} of requirement {requirement}")
+        if requirement.vtype in self._filter_func_vtypes:
+            callback = self._filter_func_vtypes[requirement.vtype]
+            if callback is not None:
+                callback(requirement)
+            debug(f"vtype in {self._filter_func_vtypes}")
+            return True
         for func, callback in self._filter_func_customs:
             if func(requirement):
                 if callback is not None:
                     callback(requirement)
+                debug(f"function approved")
                 return True
-            if requirement.vtype in self._filter_func_captures:
+        for reference_class, callback in self._filter_func_types:
+            if isinstance(requirement, reference_class):
                 if callback is not None:
                     callback(requirement)
+                debug(f"is subtype of {reference_class}")
                 return True
+        debug("failed")
         return False
 
     def provides(self, variable):
@@ -795,9 +804,7 @@ class DefinitionContainer(CaptureContainer, PreambleContainer):
             yield DefinitionLines(variable, context=self.context, **kwargs)
 
 
-class RoutineContainer(
-    NamedContainer, EmbeddingContainer, PreambleContainer, CaptureContainer
-):
+class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
@@ -813,26 +820,38 @@ class RoutineContainer(
 
     def __init__(self, name, *, context, **buildargs):
         # print("routine init")
-        super().__init__(name, context=context, **buildargs)
+        self._def_layer = CaptureContainer(context=context)
+        self._var_layer = CaptureContainer(context=self._def_layer.context)
+        super().__init__(name, context=self._var_layer.context, **buildargs)
+        self._var_layer.add_capture_trigger(LibRoutineInputVariable)
+        self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
+        self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
+        self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
+
+    def get_argument_variables(self, **_):
+        for variable in self._var_layer.captured:
+            yield variable
 
     def get_call_arguments(self, **_):
-        for variable in self.captured:
-            if isinstance(
-                variable,
-                (
-                    LibRoutineInputVariable,
-                    LibRoutineOutputVariable,
-                    LibRoutineInOutVariable,
-                ),
-            ):
-                yield variable.as_argument()
+        for variable in self.get_argument_variables():
+            yield variable.as_argument()
+
+    def get_inner_variables(self, **_):
+        for variable in self._def_layer.captured:
+            yield variable
 
     def generate_preamble_containers(self, **kwargs):
         """
         distribute the captured variables into the def line and the call
         """
-        for variable in self.captured:
+        yield self.codeline_from_text("")
+        yield self.comment_from_text("IN/OUT/INOUT")
+        for variable in self.get_argument_variables():
             yield DefinitionLines(variable, context=self.context, **kwargs)
+        yield self.codeline_from_text("")
+        for variable in self.get_inner_variables():
+            yield DefinitionLines(variable, context=self.context, **kwargs)
+        yield self.codeline_from_text("")
 
     def generate_head_containers(self, **_):
         yield self.codeline_from_text(f"FUNCTION {self.name}")
@@ -845,14 +864,14 @@ class RoutineContainer(
         Get the string of how to call it. Plug the proper substitutions into
         the argument line"""
 
-    def capture_check(self, requirement):
-        """perform a capture check for the requirement"""
-        # library level must capture all required variables!
-        if requirement.vtype not in ["IMPORT", "CONSTANT"]:
-            return True
-        raise ValueError(
-            "only constants are allowed to traverse up to library definition level"
-        )
+    # def capture_check(self, requirement):
+    #     """perform a capture check for the requirement"""
+    #     # library level must capture all required variables!
+    #     if requirement.vtype not in ["IMPORT", "CONSTANT"]:
+    #         return True
+    #     raise ValueError(
+    #         "only constants are allowed to traverse up to library definition level"
+    #     )
 
 
 class KernelContainer(RoutineContainer):
@@ -869,9 +888,7 @@ class KernelContainer(RoutineContainer):
     """
 
 
-class LibraryContainer(
-    NamedContainer, EmbeddingContainer, PreambleContainer, CaptureContainer
-):
+class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     """
     A Library contains routines, constants and more.
     The Library Container provides generalized routines to add
@@ -880,7 +897,11 @@ class LibraryContainer(
 
     def __init__(self, name, *, context, **buildargs):
         # print("library init")
-        super().__init__(name, context=context, **buildargs)
+        self._imp_layer = DefinitionContainer(context=context)
+        self._def_layer = DefinitionContainer(context=self._imp_layer.context)
+        super().__init__(name, context=self._def_layer.context, **buildargs)
+        self._def_layer.add_capture_trigger("CONSTANT")
+        self._imp_layer.add_capture_trigger("IMPORT")
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""
@@ -889,14 +910,14 @@ class LibraryContainer(
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f"END LIBRARY {self.name}")
 
-    def capture_check(self, requirement):
-        """perform a capture check for the requirement"""
-        # library level must capture all required variables!
-        if requirement.vtype in ["IMPORT", "CONSTANT"]:
-            return True
-        raise ValueError(
-            "only constants are allowed to traverse up to library definition level"
-        )
+    # def capture_check(self, requirement):
+    #     """perform a capture check for the requirement"""
+    #     # library level must capture all required variables!
+    #     if requirement.vtype in ["IMPORT", "CONSTANT"]:
+    #         return True
+    #     raise ValueError(
+    #         "only constants are allowed to traverse up to library definition level"
+    #     )
 
 
 if __name__ == "__main__":
