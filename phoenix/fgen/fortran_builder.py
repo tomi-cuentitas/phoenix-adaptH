@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 08/04/2025, 17:25
-# Version:     0.0.178
+# Last Update: 10/04/2025, 12:23
+# Version:     0.0.197
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -21,7 +21,7 @@ from phoenix.fgen.builder import Builder, BuildChain
 from phoenix.fgen.codecontainer import (
     CodeLine,
     CommentLine,
-    EnclosingContainer,
+    EmbeddingContainer,
     DefinitionContainer,
     LoopContainer,
     RoutineContainer,
@@ -104,21 +104,14 @@ class F90RoutineContainer(RoutineContainer):
 
     INDENT_BODY = True
 
-    # def build(self):
-    #     print("ASFHAKLJFGJ")
-    #     return self
-
-    def make_enclosings(self, **buildargs):
-        arg_strings = [var.as_argument() for var in self._call_args]
-        self.append_head(
-            self.line_from_text(
-                f"SUBROUTINE {self.name}({', '.join(arg_strings)})"
-            )
+    def generate_head_containers(self, **_):
+        call_args = self.get_call_arguments()
+        yield self.codeline_from_text(
+            f"SUBROUTINE {self.name}({', '.join(call_args)})"
         )
-        self.append_foot(self.line_from_text(f"END SUBROUTINE {self.name}"))
 
-    def build(self, **kwargs):
-        return super().build(repeat_inout=True, **kwargs)
+    def generate_foot_containers(self, **_):
+        yield self.codeline_from_text(f"END SUBROUTINE {self.name}")
 
 
 class F90LibraryContainer(LibraryContainer):
@@ -127,30 +120,19 @@ class F90LibraryContainer(LibraryContainer):
     INDENT_BODY = True
 
     def __init__(self, name, *, context, **buildargs):
+        # print("f90lib init")
         super().__init__(name, context=context, **buildargs)
 
-    def make_enclosings(self, **buildargs):
-        self.append_head(self.line_from_text(f"MODULE {self.name}"))
-        self.append_foot(self.line_from_text(f"END MODULE {self.name}"))
+    def generate_head_containers(self, **_):
+        yield self.codeline_from_text(f"MODULE {self.name}")
 
-    def build(self, **kwargs):
-        self.set_special_lines(
-            "implicit none", self.line_from_text("IMPLICIT NONE")
-        )
-        self.set_special_lines("contains", self.line_from_text("CONTAINS"))
-        return super().build(**kwargs)
+    def generate_foot_containers(self, **_):
+        yield self.codeline_from_text(f"END MODULE {self.name}")
 
-    def get_codelines_head(self, indent=0, **kwargs):
-        """get the def lines out"""
-        yield from super().get_codelines_head(indent=indent, **kwargs)
-        yield from self.special_lines("implicit none").get_codelines(
-            indent=indent, **kwargs
-        )
-        for def_container in self._container_defs:
-            yield from def_container.get_codelines(indent=indent + 1, **kwargs)
-        yield from self.special_lines("contains").get_codelines(
-            indent=indent, **kwargs
-        )
+    def generate_preamble_containers(self, **_):
+        yield self.codeline_from_text("implicit none")
+        yield from super().generate_preamble_containers()
+        yield self.codeline_from_text("contains")
 
 
 class F90LibRoutineVariable(LibRoutineVariable):

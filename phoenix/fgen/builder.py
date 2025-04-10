@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 08/04/2025, 15:26
-# Version:     0.0.1191
+# Last Update: 10/04/2025, 11:14
+# Version:     0.0.1192
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -112,7 +112,9 @@ class Optimizer(BuilderSegment):
     """Optimize the instruction tree w.r.t. certain aspects"""
 
     def __str__(self):
-        param_string = "|".join([f"{key}={val}" for key, val in self._params.items()])
+        param_string = "|".join(
+            [f"{key}={val}" for key, val in self._params.items()]
+        )
         return f"<{self._CLSNAME_PREFIX}.{self.identifier}: {param_string}>"
 
     def __repr__(self):
@@ -124,7 +126,9 @@ class Optimizer(BuilderSegment):
     @log.wrap_call
     def apply(self, instruction, **extra_args):
         """apply the optimizer"""
-        raise NotImplementedError("apply method must be implemented in subclass")
+        raise NotImplementedError(
+            "apply method must be implemented in subclass"
+        )
 
 
 class ValidationError(Exception):
@@ -237,7 +241,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @classmethod
     @log.wrap_call
     def set_default_forbidden(cls, instruction_class):
-        """remember that this kind of instruction is not supported"""
+        """remind that this kind of instruction is not supported"""
         cls._excl_instr_classes.add(instruction_class)
         if instruction_class in cls._supp_instr_handler:
             del cls._supp_instr_handler[instruction_class]
@@ -262,7 +266,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         return None
 
     @log.wrap_call
-    def request_temp(self, container, name, generating, autorequire=True, **genargs):
+    def request_temp(
+        self, container, name, generating, autorequire=True, **genargs
+    ):
         """request a temporary variable"""
         variable = container.context.namespace.request_temp(
             generating, name, origin=container, **genargs
@@ -355,9 +361,13 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         return libroutine
 
     @log.wrap_call
-    def create_routine_container(self, name, instructions, context, **buildargs):
+    def create_routine_container(
+        self, name, instructions, context, **buildargs
+    ):
         """generate the container tree from instruction"""
-        routine_container = self.prepare_routine_container(name, context, **buildargs)
+        routine_container = self.prepare_routine_container(
+            name, context, **buildargs
+        )
         for container in self.containers_from_instruction(
             instructions,
             context=routine_container.context,
@@ -572,14 +582,18 @@ class BuildChain:
 
         for num, validator in enumerate(self._validators):
             info(f"apply validator #{num + 1}")
-            passed, details = validator.validate(instruction, report, **extra_args)
+            passed, details = validator.validate(
+                instruction, report, **extra_args
+            )
             if not passed:
                 validator.handle_fail(details, report, **extra_args)
                 return False, report
 
         for num, validator in enumerate(type(self)._class_validators):
             info(f"apply class validator #{num + 1}")
-            passed, details = validator.validate(instruction, report, **extra_args)
+            passed, details = validator.validate(
+                instruction, report, **extra_args
+            )
             if not passed:
                 validator.handle_fail(details, report, **extra_args)
                 return False, report
@@ -601,7 +615,9 @@ class BuildChain:
         if not passed:
             print(report)
             raise ValueError("Validation failed")
-        return self.perform_build(name, optimized_tree, context=context, **extra_args)
+        return self.perform_build(
+            name, optimized_tree, context=context, **extra_args
+        )
 
     @log.wrap_call
     def prepare_instructions(self, instructions, buildargs):

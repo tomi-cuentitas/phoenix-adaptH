@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 08/04/2025, 17:25
-# Version:     0.0.1694
+# Last Update: 10/04/2025, 12:23
+# Version:     0.0.1795
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -151,14 +151,12 @@ class CodeContainer:
         # self._data: Dict[str, Any] = {}
 
         # collect variables that are used here
-        self._requirements: Set[str] = set()
+        # self._requirements: Set[str] = set()
 
         # content, divided in three sections, head, body, foot
-        self._container_head: list[CodeContainer] = []
         self._container_body: list[CodeContainer] = []
-        self._container_foot: list[CodeContainer] = []
 
-        self._special_lines = {}
+        self._memory = {}
 
         self._context = context.inherit().set_container(self)
 
@@ -240,18 +238,7 @@ class CodeContainer:
             raise ValueError("variable request got lost!")
         self.parent.requires(variable)
 
-    def set_special_lines(self, key, container):
-        """set special lines"""
-        if isinstance(container, str):
-            self._special_lines[key] = self.line_from_text(container)
-        else:
-            self._special_lines[key] = container
-
-    def special_lines(self, key):
-        """access special lines"""
-        return self._special_lines[key]
-
-    def line_from_text(self, text: str) -> CodeContainer:
+    def codeline_from_text(self, text: str) -> CodeContainer:
         """generate a plain codeline from text"""
         return CodeLine(
             line=text,
@@ -264,15 +251,13 @@ class CodeContainer:
 
     def build_all(self):
         """call build on the whole container"""
-        for container in self.body:
+        for container in self.content:
             container.build_all()
         self.build()
         return self
 
     def reset(self, **_):
         """perform a reset on this container"""
-        self._container_head: list[CodeContainer] = []
-        self._container_foot: list[CodeContainer] = []
         return self
 
     def reset_all(self, **kwargs):
@@ -281,21 +266,10 @@ class CodeContainer:
         - reset the head and foot containers
         - call reset on whole container body
         """
-        for container in self.body:
-            container.reset_all(**kwargs)
         self.reset(**kwargs)
+        for container in self.content:
+            container.reset_all(**kwargs)
         return self
-
-    def get_codelines_head(
-        self, indent: int, **kwargs: Any
-    ) -> Generator[str, None, None]:
-        """
-        Get the codelines from the head section of the container.
-        This yields text and/or forwards into other containers.
-        """
-        if self._container_head is not None:
-            for content in self._container_head:
-                yield from content.get_codelines(indent=indent, **kwargs)
 
     def get_codelines_body(
         self, indent: int, **kwargs: Any
@@ -307,25 +281,6 @@ class CodeContainer:
         if self._container_body is not None:
             for content in self._container_body:
                 yield from content.get_codelines(indent=indent, **kwargs)
-
-    def get_codelines_foot(
-        self, indent: int, **kwargs: Any
-    ) -> Generator[str, None, None]:
-        """
-        Get the codelines from the foot section of the container.
-        This yields text and/or forwards into other containers.
-        """
-        if self._container_foot is not None:
-            for content in self._container_foot:
-                yield from content.get_codelines(indent=indent, **kwargs)
-
-    def get_codelines(
-        self, indent: int = 0, **kwargs: Any
-    ) -> Generator[str, None, None]:
-        """get the codelines from the container"""
-        yield from self.get_codelines_head(indent, **kwargs)
-        yield from self.get_codelines_body(indent + int(self.INDENT_BODY), **kwargs)
-        yield from self.get_codelines_foot(indent, **kwargs)
 
     def get_indent(self, level: int = 0) -> str:
         """convert the indent level into a string"""
@@ -360,32 +315,113 @@ class CodeContainer:
         """access the parent but prohibit setting it manually"""
         return self.context.parent
 
-    # @property
-    # def parent(self) -> CodeContainer | None:
-    #     """access the parent"""
-    #     if self._wr_parent is None:
-    #         return None
-    #     if (parent := self._wr_parent()) is None:
-    #         raise ValueError("Parent has been garbage collected")
-    #     return parent
-
-    # @parent.setter
-    # def parent(self, parent: CodeContainer) -> None:
-    #     """safe-set parent, IF ALLOWED"""
-    #     if not ALLOW_FOSTER_PARENTING:
-    #         if self.parent == parent:
-    #             return
-    #         raise RuntimeError("The Lord does not allow that!")
-    #     if self._wr_parent is None:
-    #         if isinstance(parent, CodeContainer):
-    #             self._wr_parent = ref(parent)
-    #     else:
-    #         raise ValueError("Parent already set")
-
     @property
     def body(self):
         """iterate through body content only"""
         yield from self._container_body
+
+    @property
+    def content(self):
+        """iterate through foot content only"""
+        yield from self.body
+
+    def get_codelines(
+        self, indent: int = 0, **kwargs: Any
+    ) -> Generator[str, None, None]:
+        """get the codelines from the container"""
+        yield from self.get_codelines_body(indent, **kwargs)
+
+    def reset_captured(self) -> None:
+        """reset the provided requirements"""
+        for content in self.content:
+            content.reset_captured()
+
+    def append_body(self, *containers: CodeContainer) -> None:
+        """append at body"""
+        for container in containers:
+            if container is None:
+                continue
+            self._container_body.append(container)
+
+
+class EmbeddingContainer(CodeContainer):
+    """
+    A container that is embedded in head and foot lines.
+    """
+
+    def __init__(self, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self._container_head: list[CodeContainer] = []
+        self._container_foot: list[CodeContainer] = []
+
+    def append_head(self, *containers: CodeContainer) -> None:
+        """append at head"""
+        for container in containers:
+            if container is None:
+                continue
+            self._container_head.append(container)
+
+    def append_foot(self, *containers: CodeContainer) -> None:
+        """append at foot"""
+        for container in containers:
+            if container is None:
+                continue
+            self._container_foot.append(container)
+
+    def get_codelines_head(
+        self, indent: int, **kwargs: Any
+    ) -> Generator[str, None, None]:
+        """
+        Get the codelines from the head section of the container.
+        This yields text and/or forwards into other containers.
+        """
+        if self._container_head is not None:
+            for content in self._container_head:
+                yield from content.get_codelines(indent=indent, **kwargs)
+
+    def get_codelines_foot(
+        self, indent: int, **kwargs: Any
+    ) -> Generator[str, None, None]:
+        """
+        Get the codelines from the foot section of the container.
+        This yields text and/or forwards into other containers.
+        """
+        if self._container_foot is not None:
+            for content in self._container_foot:
+                yield from content.get_codelines(indent=indent, **kwargs)
+
+    def get_codelines(
+        self, indent: int = 0, **kwargs: Any
+    ) -> Generator[str, None, None]:
+        """get the codelines from the container"""
+        yield from self.get_codelines_head(indent, **kwargs)
+        yield from super().get_codelines(
+            indent + int(self.INDENT_BODY), **kwargs
+        )
+        yield from self.get_codelines_foot(indent, **kwargs)
+
+    def generate_head_containers(self):
+        """build the head section of the container"""
+        return
+        yield
+
+    def generate_foot_containers(self):
+        """build the foot section of the container"""
+        return
+        yield
+
+    def build(self, **_):
+        for container in self.generate_head_containers():
+            self.append_head(container)
+        for container in self.generate_foot_containers():
+            self.append_foot(container)
+        return super().build()
+
+    def reset(self, **_):
+        """perform a reset on this container"""
+        self._container_head: list[CodeContainer] = []
+        self._container_foot: list[CodeContainer] = []
+        return super().reset()
 
     @property
     def head(self):
@@ -400,66 +436,144 @@ class CodeContainer:
     @property
     def content(self):
         """iterate through foot content only"""
+        # print("content yield @ embedding")
+        # print("content yield: head")
         yield from self.head
-        yield from self.body
+        # print("content yield: super.content")
+        yield from super().content
+        # print("content yield: foot")
         yield from self.foot
 
-    def update_requirements(
-        self,
-    ) -> Generator[LibRoutineVariable, None, None]:
-        """iterate over all possible requirements. Eliminate duplicates"""
-        known = set()
-        for cont in self.content:
-            for requirement in cont.update_requirements():
-                if requirement not in known:
-                    known.add(requirement)
-                    yield requirement
 
-    def reset_captured_requirements(self) -> None:
-        """reset the provided requirements"""
-        for content in self.content:
-            content.reset_captured_requirements()
+# class MemoryContainer(CodeContainer):
+#     """
+#     A container class allowing to remember special lines by key.
+#     The intention is purely to make these lines available during build.
+#     """
 
-    def append_head(self, *containers: CodeContainer) -> None:
-        """append at head"""
+#     def __init__(self, *, context, **buildargs):
+#         super().__init__(context=context, **buildargs)
+#         self._memory = {}
+
+#     def memorize(self, key, container):
+#         """remind builder"""
+#         if isinstance(container, str):
+#             self._memory[key] = self.codeline_from_text(container)
+#         else:
+#             self._memory[key] = container
+
+#     def remember(self, key):
+#         """access special lines"""
+#         return self._memory[key]
+
+
+class PreambleContainer(CodeContainer):
+    """A container allowing for a preamble"""
+
+    def __init__(self, *, context, **buildargs):
+        # print("preamble init")
+        super().__init__(context=context, **buildargs)
+        self._container_prmb: list[CodeContainer] = []
+
+    def get_codelines_preamble(
+        self, indent: int = 0, **kwargs: Any
+    ) -> Generator[str, None, None]:
+        if self._container_prmb is not None:
+            for content in self._container_prmb:
+                yield from content.get_codelines(indent=indent, **kwargs)
+
+    def get_codelines(
+        self, indent: int = 0, **kwargs: Any
+    ) -> Generator[str, None, None]:
+        """get the codelines from the container"""
+        yield from self.get_codelines_preamble(
+            indent + int(self.INDENT_BODY), **kwargs
+        )
+        yield from super().get_codelines(
+            indent + int(self.INDENT_BODY), **kwargs
+        )
+
+    def generate_preamble_containers(self):
+        """build the preamble section of the container"""
+        return
+        yield
+
+    def build(self, **_):
+        for container in self.generate_preamble_containers():
+            self.append_preamble(container)
+        return super().build()
+
+    def reset(self, **_):
+        """perform a reset on this container"""
+        self._container_prmb: list[CodeContainer] = []
+        return super().reset()
+
+    def append_preamble(self, *containers: CodeContainer) -> None:
+        """append at preamble"""
         for container in containers:
-            self._container_head.append(container)
+            if container is None:
+                continue
+            self._container_prmb.append(container)
 
-    def append_body(self, *containers: CodeContainer) -> None:
-        """append at body"""
-        for container in containers:
-            self._container_body.append(container)
+    @property
+    def preamble(self):
+        """iterate through foot content only"""
+        yield from self._container_prmb
 
-    def append_foot(self, *containers: CodeContainer) -> None:
-        """append at foot"""
-        for container in containers:
-            self._container_foot.append(container)
-
-    # def add_capture_trigger(self, capture: str | Callable) -> None:
-    #     """add a type of requirement to capture"""
-    #     raise TypeError(f"Cannot have caputure in class {type(self)}.")
-
-    # def capture_check(self, requirement):
-    #     """perform a capture check for the requirement"""
-    #     # if not overwritten, generic CodeContainers do not captere anything
-    #     return False
-
-    # @classmethod
-    # def compatibility_check(cls, signature):
-    #     """checks if anything speaks against using this container"""
-    #     return True
+    @property
+    def content(self):
+        """iterate through foot content only"""
+        # print("content yield @ preamble")
+        # print("content yield: preamble")
+        yield from self.preamble
+        # print("content yield: super.content")
+        yield from super().content
 
 
-class GroupContainer(CodeContainer):
+class NamedContainer(CodeContainer):
+    """A named region container. Simply provides the name attribute"""
+
+    def __init__(self, name, *, context, **buildargs):
+        # print("named init")
+        super().__init__(context=context, **buildargs)
+        self._name = name
+
+    def build(self, **_):
+        return super().build()
+
+    @property
+    def name(self):
+        """access name"""
+        return self.create_name()
+
+    def create_name(self):
+        """
+        create the name from context, especially when it is not
+        just the name straightforwardly"""
+        return self._name
+
+    @property
+    def content(self):
+        """iterate through foot content only"""
+        yield from super().content
+
+
+class GroupContainer(EmbeddingContainer):
     """
-    A GroupContainer is made from a group instruction and potentially holds
-    several other containers inside. The grouping might only be symbolically.
-    Head and Foot are not occupyable by anything other than formal block
+    A holds multiple containers inside. The grouping might only be symbolically.
+    Head and Foot are not occupyable by anything other than formal enclosings
     delimiters and comments.
     """
 
+    def build(self, **_):
+        return super().build()
 
-class CodeBlock(GroupContainer):
+    def generate_head_containers(self, **_):
+        yield ""
+        yield from super().generate_head_containers()
+
+
+class CodeBlock(CodeContainer):
     """A block of code that can only contain codelines but no control structures"""
 
     # should default to getting the content of body without any extras.
@@ -476,23 +590,20 @@ class CodeBlock(GroupContainer):
 
 
 class CodeLine(CodeContainer):
-    """Recursion-Breaking. Literally a single line."""
+    """Recursion-Breaking. Literally a single line. Leaf container base class."""
 
     def __init__(self, line=None, *, context, **params):
         super().__init__(context=context, **params)
         self._line = line
 
     def get_codelines_body(self, indent, **kwargs):
+        """
+        When the codelines are requested, the container generates them on the fly.
+        Therefore, the content stays dynamic until the code is completely generated
+        and ready to be created.
+        """
         for line in self.construct_code_lines(**kwargs):
             yield indent, line
-
-    def get_codelines_head(self, indent, **kwargs):
-        return
-        yield
-
-    def get_codelines_foot(self, indent, **kwargs):
-        return
-        yield
 
     @property
     def line(self):
@@ -506,13 +617,7 @@ class CodeLine(CodeContainer):
         """write-access. Maybe disallow in the future."""
         self.set_line(line)
 
-    def append_head(self, *_):
-        raise ValueError("Cannot append to head in StatementLine")
-
     def append_body(self, *_):
-        raise ValueError("Cannot append to head in StatementLine")
-
-    def append_foot(self, *_):
         raise ValueError("Cannot append to head in StatementLine")
 
     def set_line(self, line):
@@ -593,43 +698,25 @@ class DefinitionLines(CodeLine):
         return self
 
 
-class EnclosingContainer(GroupContainer):
-    """
-    An Environment block. Opening and closing operators so pairs always match.
-    Indent optional. Made for brackets, parenthesis, definitions, ...
-    Brackets in brackets are treated, ignored or combined.
-    As the group container requires, head and foot are defined by the Enclosing
-    class and are not occupied by other content.
-    """
-
-    def make_enclosings_from_text(self, head_strings, foot_strings, **buildargs):
-        """this method later defines the enclosing characters."""
-        if not isinstance(head_strings, str):
-            for head_string in head_strings:
-                self.append_head(self.line_from_text(head_string, **buildargs))
-        else:
-            self.append_head(self.line_from_text(head_strings, **buildargs))
-        if not isinstance(foot_strings, str):
-            for foot_string in foot_strings:
-                self.append_foot(self.line_from_text(foot_string, **buildargs))
-        else:
-            self.append_foot(self.line_from_text(foot_strings, **buildargs))
-        return self
-
-    def make_enclosings(self, **_):
-        """make the enclosings"""
-        return self
-
-    def build(self, **_):
-        self.make_enclosings()
-        return super().build()
-
-
-class LoopContainer(EnclosingContainer):
+class LoopContainer(EmbeddingContainer):
     """
     A LoopContainer provides basic loop control capabilities. It can derive into
     different versions depending on the architecture.
     """
+
+
+class ConditionalContainer(CodeContainer):
+    """Conditionals. If. You know what."""
+
+    def __init__(self, *, context, **params):
+        super().__init__(context=context, **params)
+        self._cases = {}
+
+    def add_case(self, condition, content):
+        """add a case to the conditional"""
+        self._cases[condition] = content
+        # maybe sth like (libroutinevar, operator, libroutinevar/value)?
+        # (would require a constant lrv)
 
 
 class CaptureContainer(CodeContainer):
@@ -639,26 +726,28 @@ class CaptureContainer(CodeContainer):
     """
 
     def __init__(self, *, context, **buildargs) -> None:
+        # print("capture init")
         super().__init__(context=context, **buildargs)
         # new namespace node in capture container
         self.context.new_namespace_node()
-        self._filter_func_customs: Set[Callable] = set()
-        self._filter_func_captures: Set[str] = set()
+        self._filter_func_customs: List[Tuple(Callable, Callable | None)] = []
+        self._filter_func_captures: List[Tuple(str, Callable | None)] = []
         self._captured: Set[LibRoutineVariable] = set()
-        self._callbacks: List[Callable] = []
 
-    def add_callback(self, callback: Callable) -> None:
-        """add a callback that is executed once a libroutinevariable is provided"""
-        self._callbacks.append(callback)
-
-    def add_capture_trigger(self, capture: str | Callable) -> None:
+    def add_capture_trigger(
+        self,
+        capture: str | Callable,
+        callback: Callable | None = None,
+    ) -> None:
         """add a type of requirement to capture"""
         if isinstance(capture, str):
-            self._filter_func_captures.add(capture)
+            self._filter_func_captures.append((capture, callback))
         elif callable(capture):
-            self._filter_func_customs.add(capture)
+            self._filter_func_customs.append((capture, callback))
         else:
-            raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+            raise ValueError(
+                f"Invalid filter arg {capture}. Must be str|callable."
+            )
 
     @property
     def captured(self):
@@ -667,11 +756,15 @@ class CaptureContainer(CodeContainer):
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
-        for func in self._filter_func_customs:
+        for func, callback in self._filter_func_customs:
             if func(requirement):
+                if callback is not None:
+                    callback(requirement)
                 return True
-        if requirement.vtype in self._filter_func_captures:
-            return True
+            if requirement.vtype in self._filter_func_captures:
+                if callback is not None:
+                    callback(requirement)
+                return True
         return False
 
     def provides(self, variable):
@@ -681,8 +774,6 @@ class CaptureContainer(CodeContainer):
         """
         self._captured.add(variable)
         self.namespace.add(variable)
-        for callback in self._callbacks:
-            callback(variable)
 
     def requires(self, variable):
         """send the required variables up the tree"""
@@ -692,41 +783,21 @@ class CaptureContainer(CodeContainer):
             super().requires(variable)
 
 
-class DefinitionContainer(CaptureContainer):
+class DefinitionContainer(CaptureContainer, PreambleContainer):
     """
     A code container that defines stuff and prevents them from getting passed
     on during requirement iterator. Supports a filtering function that decides
     on which type of requirements are implemented here or passed on.
     """
 
-    def build(self, **kwargs):
-        """build head and tail section of the definition container"""
-        # append all definition lines in head
+    def generate_preamble_containers(self, **_):
         for variable in self.captured:
-            self.append_head(DefinitionLines(variable, context=self.context, **kwargs))
-        # perform potential allocations in head
-        # perform potential deallocations in tail
-        return super().build(**kwargs)
+            yield DefinitionLines(variable, context=self.context, **kwargs)
 
 
-class NamedContainer(EnclosingContainer):
-    """A named region container"""
-
-    def __init__(self, name, *, context, **buildargs):
-        super().__init__(context=context, **buildargs)
-        self._name = name
-
-    @property
-    def name(self):
-        """access name"""
-        return self.create_name()
-
-    def create_name(self):
-        """create the name, especially when it is not straightforward"""
-        return self._name
-
-
-class RoutineContainer(NamedContainer, CaptureContainer):
+class RoutineContainer(
+    NamedContainer, EmbeddingContainer, PreambleContainer, CaptureContainer
+):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
@@ -741,23 +812,10 @@ class RoutineContainer(NamedContainer, CaptureContainer):
     DEFCONTAINER = DefinitionContainer
 
     def __init__(self, name, *, context, **buildargs):
+        # print("routine init")
         super().__init__(name, context=context, **buildargs)
-        self._container_defs = []
-        self._call_args = []
 
-    def reset(self, **_):
-        self._container_defs = []
-        self._call_args = []
-        return super().reset()
-
-    def append_defs(self, content):
-        """append to the definitions"""
-        self._container_defs.append(content)
-
-    def distribute_captured_variables(self, repeat_inout=True, **kwargs):
-        """
-        distribute the captured variables into the def line and the call
-        """
+    def get_call_arguments(self, **_):
         for variable in self.captured:
             if isinstance(
                 variable,
@@ -767,32 +825,20 @@ class RoutineContainer(NamedContainer, CaptureContainer):
                     LibRoutineInOutVariable,
                 ),
             ):
-                self._call_args.append(variable)
-            if not repeat_inout:
-                continue
-            self.append_defs(DefinitionLines(variable, context=self.context, **kwargs))
+                yield variable.as_argument()
 
-    def make_enclosings(self, **_):
-        """make the enclosings for this container"""
-        self.make_enclosings_from_text(
-            f"FUNCTION {self.name}",
-            f"END FUNCTION {self.name}",
-        )
+    def generate_preamble_containers(self, **kwargs):
+        """
+        distribute the captured variables into the def line and the call
+        """
+        for variable in self.captured:
+            yield DefinitionLines(variable, context=self.context, **kwargs)
 
-    def build(self, **buildargs):
-        """handle the I/O variable captures"""
-        self.distribute_captured_variables(**buildargs)
-        # self.make_enclosings(**buildargs)
-        return super().build(**buildargs)
+    def generate_head_containers(self, **_):
+        yield self.codeline_from_text(f"FUNCTION {self.name}")
 
-    def get_codelines_head(self, indent=0, **kwargs):
-        """get the def lines out"""
-        yield from super().get_codelines_head(indent=indent, **kwargs)
-        for def_container in self._container_defs:
-            yield from def_container.get_codelines(indent=indent + 1, **kwargs)
-
-    def get_args(self):
-        """get the call signature of the routine"""
+    def generate_foot_containers(self, **_):
+        yield self.codeline_from_text(f"END FUNCTION {self.name}")
 
     def get_call(self, **substitutions):
         """
@@ -823,7 +869,9 @@ class KernelContainer(RoutineContainer):
     """
 
 
-class LibraryContainer(NamedContainer, CaptureContainer):
+class LibraryContainer(
+    NamedContainer, EmbeddingContainer, PreambleContainer, CaptureContainer
+):
     """
     A Library contains routines, constants and more.
     The Library Container provides generalized routines to add
@@ -831,34 +879,15 @@ class LibraryContainer(NamedContainer, CaptureContainer):
     """
 
     def __init__(self, name, *, context, **buildargs):
+        # print("library init")
         super().__init__(name, context=context, **buildargs)
-        self._container_defs = []
 
-    def reset(self, **_):
-        self._container_defs = []
-        return super().reset()
-
-    def append_defs(self, content):
-        """append to the definitions"""
-        self._container_defs.append(content)
-
-    def make_enclosings(self, **_):
+    def generate_head_containers(self, **_):
         """make the enclosings for this container"""
-        self.append_head(f"LIBRARY {self.name}")
-        self.append_foot(f"END LIBRARY {self.name}")
+        yield self.codeline_from_text(f"LIBRARY {self.name}")
 
-    def build(self, **buildargs):
-        """handle the I/O variable captures"""
-        # self.make_enclosings()
-        for variable in self.captured:
-            self.append_defs(variable)
-        return super().build(**buildargs)
-
-    def get_codelines_head(self, indent=0, **kwargs):
-        """get the def lines out"""
-        yield from super().get_codelines_head(indent=indent, **kwargs)
-        for def_container in self._container_defs:
-            yield from def_container.get_codelines(indent=indent + 1, **kwargs)
+    def generate_foot_containers(self, **_):
+        yield self.codeline_from_text(f"END LIBRARY {self.name}")
 
     def capture_check(self, requirement):
         """perform a capture check for the requirement"""
@@ -868,20 +897,6 @@ class LibraryContainer(NamedContainer, CaptureContainer):
         raise ValueError(
             "only constants are allowed to traverse up to library definition level"
         )
-
-
-class ConditionalContainer(CodeContainer):
-    """Conditionals. If. You know what."""
-
-    def __init__(self, *, context, **params):
-        super().__init__(context=context, **params)
-        self._cases = {}
-
-    def add_case(self, condition, content):
-        """add a case to the conditional"""
-        self._cases[condition] = content
-        # maybe sth like (libroutinevar, operator, libroutinevar/value)?
-        # (would require a constant lrv)
 
 
 if __name__ == "__main__":

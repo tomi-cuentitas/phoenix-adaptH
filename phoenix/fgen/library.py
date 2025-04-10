@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 08/04/2025, 15:03
-# Version:     0.0.554
+# Last Update: 10/04/2025, 10:51
+# Version:     0.0.555
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -84,13 +84,6 @@ class Library:
         """access the context where to put new stuff"""
         return self._routines_container.context
 
-    def new_libroutine(self, identifier, container):
-        """create a new libroutine from a container and an identifier"""
-        libroutine = type(self).LIBROUTINE_CLS(
-            identifier=identifier, container=container, library=self
-        )
-        self.append(libroutine)
-
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""
         self._libroutines[libroutine.name] = libroutine
@@ -115,7 +108,9 @@ class Library:
         """append a routine to the library"""
         if libroutine.key in self._libroutines:
             if exception_existing:
-                raise KeyError(f"Routine '{libroutine.name}' already exists in library")
+                raise KeyError(
+                    f"Routine '{libroutine.name}' already exists in library"
+                )
             return
         self.register_libroutine(libroutine)
 
