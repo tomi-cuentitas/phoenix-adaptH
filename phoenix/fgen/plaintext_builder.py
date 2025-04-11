@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 10/04/2025, 11:42
-# Version:     0.0.448
+# Last Update: 10/04/2025, 17:36
+# Version:     0.0.477
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -104,23 +104,17 @@ class PTBracketContainer(NamedContainer, EmbeddingContainer):
 
 
 class PTLoopContainer(LoopContainer):
-    """Plain Text version of a DefinitionContainer"""
+    """Plain Text version of a LoopContainer"""
 
     INDENT_BODY = True
 
 
-# class PTRoutineDefinition(RoutineContainer):
-#     """Plain Text version of a RoutineDefinition"""
-
-#     # routine definition
-#     # variable initialization
-#     # body
+class PTRoutineContainer(RoutineContainer):
+    """Plain Text version of a RoutineContainer"""
 
 
-# class PTLibraryDefinition(RoutineContainer):
-#     """Plain Text version of a RoutineDefinition"""
-
-#     # collect all library routines
+class PTLibraryContainer(RoutineContainer):
+    """Plain Text version of a RoutineContainer"""
 
 
 ###############################################################################
@@ -147,7 +141,9 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
 
     def handle_group_instruction(self, instruction, context, buildargs):
         outer = PTBracketContainer(
-            name=f"GROUP {instruction.identifier}", context=context, **buildargs
+            name=f"GROUP {instruction.identifier}",
+            context=context,
+            **buildargs,
         )
         for inner_instruction in instruction.instructions:
             for inner_container in self.containers_from_instruction(
@@ -214,7 +210,10 @@ class PlainTextBuilder(Builder, identifier="PLAINTEXT"):
         )
 
 
-PlainTextBuilder.set_comment_generator(PTCommentLine)
+PTRoutineContainer.set_comment_class(PTCommentLine)
+PTLibraryContainer.set_comment_class(PTCommentLine)
+PlainTextBuilder.set_comment_class(PTCommentLine)
+PlainTextBuilder.set_routine_class(PTRoutineContainer)
 
 
 from phoenix.fgen.builder import Context

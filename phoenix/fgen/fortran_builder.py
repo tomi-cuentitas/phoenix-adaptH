@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 10/04/2025, 16:23
-# Version:     0.0.220
+# Last Update: 10/04/2025, 17:36
+# Version:     0.0.232
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -290,8 +290,9 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
 
 
 F90LibraryContainer.set_comment_class(F90CommentLine)
+F90RoutineContainer.set_comment_class(F90CommentLine)
 Fortran90Builder.set_comment_class(F90CommentLine)
-
+Fortran90Builder.set_routine_class(F90RoutineContainer)
 
 from phoenix.fgen.builder import Context
 import sys

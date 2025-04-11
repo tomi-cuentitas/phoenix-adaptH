@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 10/04/2025, 16:16
-# Version:     0.0.1884
+# Last Update: 10/04/2025, 17:36
+# Version:     0.0.1929
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -145,9 +145,7 @@ class CodeContainer:
     """
 
     INDENT_BODY = False
-    _default_classes = {
-        "comment": None,
-    }
+    COMMENT_CLASS = None
 
     def __init__(self, context, **_) -> None:
         # all content that may or may not be useful
@@ -250,22 +248,6 @@ class CodeContainer:
             context=self.context,
         )
 
-    @classmethod
-    @log.wrap_call
-    def set_comment_class(cls, comment_gen):
-        """set the comment generator"""
-        cls._default_classes["comment"] = comment_gen
-
-    @log.wrap_call
-    def comment_from_text(self, line, **buildargs):
-        """generate one or multiple comment lines"""
-        if type(self)._default_classes["comment"] is not None:
-            return type(self)._default_classes["comment"](
-                line,
-                context=self.context.inherit(),
-                **buildargs,
-            )
-
     def build(self, **_):
         """build the container"""
         return self
@@ -363,6 +345,20 @@ class CodeContainer:
             if container is None:
                 continue
             self._container_body.append(container)
+
+    @classmethod
+    def set_comment_class(cls, comment_gen):
+        """set the comment generator"""
+        cls.COMMENT_CLASS = comment_gen
+
+    def comment_from_text(self, line, **buildargs):
+        """generate one or multiple comment lines"""
+        if type(self).COMMENT_CLASS is not None:
+            return type(self).COMMENT_CLASS(
+                line,
+                context=self.context.inherit(),
+                **buildargs,
+            )
 
 
 class EmbeddingContainer(CodeContainer):
@@ -738,14 +734,17 @@ class CaptureContainer(CodeContainer):
         """add a type of requirement to capture"""
         if isinstance(capture, str):
             self._filter_func_vtypes.append((capture, callback))
-        elif issubclass(capture, LibRoutineVariable):
-            self._filter_func_types.append((capture, callback))
-        elif callable(capture):
+            return
+        if isinstance(capture, type):
+            if issubclass(capture, LibRoutineVariable):
+                self._filter_func_types.append((capture, callback))
+                return
+        if callable(capture):
             self._filter_func_customs.append((capture, callback))
-        else:
-            raise ValueError(
-                f"Invalid filter arg {capture}. Must be str|callable."
-            )
+            return
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -844,11 +843,11 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         """
         distribute the captured variables into the def line and the call
         """
-        yield self.codeline_from_text("")
         yield self.comment_from_text("IN/OUT/INOUT")
         for variable in self.get_argument_variables():
             yield DefinitionLines(variable, context=self.context, **kwargs)
         yield self.codeline_from_text("")
+        yield self.comment_from_text("LOCAL")
         for variable in self.get_inner_variables():
             yield DefinitionLines(variable, context=self.context, **kwargs)
         yield self.codeline_from_text("")

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 10/04/2025, 16:25
-# Version:     0.0.1205
+# Last Update: 10/04/2025, 17:28
+# Version:     0.0.1207
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -388,7 +388,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
     @classmethod
     @log.wrap_call
-    def set_routine_generator(cls, routine_gen):
+    def set_routine_class(cls, routine_gen):
         """set the routine generator"""
         cls._routine_cls = routine_gen
 
