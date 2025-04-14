@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 14/04/2025, 16:27
-# Version:     0.0.586
+# Last Update: 14/04/2025, 18:37
+# Version:     0.0.614
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -229,9 +229,18 @@ class LibRoutineVariable:
         self._size = size
         self._dtype = dtype
         self._status = status
+        self._dependencies = []
         # do not automatically add if explicit namespace is given!
         if namespace is None:
             self._namespace.add(self)
+            # add to namespace if it is not explicitely given, assuming
+            # adding to default class namespace.
+        self.handle_dependencies()
+
+    def handle_dependencies(self):
+        """handle the dependencies of the variable"""
+        # overwrite in subclass if required
+        pass
 
     def use_as_input(self):
         """use the variable as an input"""
@@ -239,14 +248,21 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(
-            self
-        ).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
 
-    @property
-    def status(self):
-        """access the status binary set as integer"""
-        return self._status
+    def release(self):
+        """release the variable, which means that is can be used somewhere else"""
+        self._free_name()
+
+    def _free_name(self):
+        """discard the name in the namespace"""
+        try:
+            self._namespace.remove(self)
+        except KeyError:
+            pass
+            # print("not found in namespace")
+        except AttributeError:
+            print("this should not have happened.")
 
     def __str__(self):
         if self.is_scalar:
@@ -255,6 +271,47 @@ class LibRoutineVariable:
 
     def __repr__(self):
         return str(self)
+
+    def __init_subclass__(cls, prefix=None):
+        if prefix is not None:
+            cls._CLASS_BASE = prefix
+
+    def __del__(self):
+        self.release()
+
+    @staticmethod
+    def process_offsets(
+        *offsets,
+        simplify=True,
+        allow_strings=False,
+    ):
+        offset_str_list = []
+        offset_int = 0
+        for offset in offsets:
+            if isinstance(offset, int):
+                if simplify:
+                    offset_int += offset
+                else:
+                    offset_str_list.append(str(offset))
+            elif isinstance(offset, LibRoutineVariable):
+                if offset.size is not None:
+                    raise ValueError(
+                        "only scalar offsets are allowed in this context"
+                    )
+                offset_str_list.append(str(offset))
+            else:
+                if allow_strings:
+                    offset_str_list.append(str(offset))
+                else:
+                    raise ValueError(
+                        f"offset {offset} is not an integer or LibRoutineVariable"
+                    )
+        if simplify:
+            if offset_int > 0:
+                offset_str_list.append(str(offset_int))
+        if not offset_str_list:
+            offset_str_list = ["0"]
+        return offset_str_list
 
     def get_definition_lines(self) -> str:
         """create the line that defines the variable"""
@@ -273,16 +330,6 @@ class LibRoutineVariable:
     def as_argument(self):
         """get the variable as an argument for a function"""
         return self.name
-
-    def free_name(self):
-        """discard the name in the namespace"""
-        try:
-            self._namespace.remove(self)
-        except KeyError:
-            pass
-            # print("not found in namespace")
-        except AttributeError:
-            print("this should not have happened.")
 
     def lookup_dtype(self, dtype):
         """lookup the dtype specifier"""
@@ -314,66 +361,32 @@ class LibRoutineVariable:
         return self.lookup_dtype(self._dtype)
 
     @property
+    def dependencies(self):
+        """access dependencies"""
+        yield from self._dependencies
+
+    @property
+    def status(self):
+        """access the status binary set as integer"""
+        return self._status
+
+    @property
     def vtype(self):
         """access variable type"""
         return self._VAR_IDENTIFIER
 
-    def __del__(self):
-        self.free_name()
-
-    def __init_subclass__(cls, prefix=None):
-        if prefix is not None:
-            cls._CLASS_BASE = prefix
-
-    def process_offsets(
-        self,
-        *offsets,
-        # callback=None,
-        simplify=True,
-        allow_strings=False,
-    ):
-        offset_str_list = []
-        offset_int = 0
-        for offset in offsets:
-            if isinstance(offset, int):
-                if simplify:
-                    offset_int += offset
-                else:
-                    offset_str_list.append(str(offset))
-            elif isinstance(offset, LibRoutineVariable):
-                if offset.size is not None:
-                    raise ValueError(
-                        "only scalar offsets are allowed in this context"
-                    )
-                # if callback is not None:
-                #     callback(offset)
-                offset_str_list.append(str(offset))
-            else:
-                if allow_strings:
-                    offset_str_list.append(str(offset))
-                else:
-                    raise ValueError(
-                        f"offset {offset} is not an integer or LibRoutineVariable"
-                    )
-        if simplify:
-            if offset_int > 0:
-                offset_str_list.append(str(offset_int))
-        if not offset_str_list:
-            offset_str_list = ["0"]
-        return offset_str_list
-
     def expr_at(
         self,
         *offsets,
-        # callback=None,
         simplify=True,
         allow_strings=False,
     ):
         """expression at offset"""
+        if self.is_scalar:
+            raise ValueError("Scalar does not provide index access")
 
         offset_str_list = self.process_offsets(
             *offsets,
-            # callback=callback,
             simplify=simplify,
             allow_strings=allow_strings,
         )
@@ -382,13 +395,8 @@ class LibRoutineVariable:
         return f"{self._name}[{offset_str}]"
 
     def expr(self):
-        """expression for the variable"""
+        """expression for the whole variable"""
         return f"{self._name}"
-
-    # def __format__(self, format_spec):
-    #     if format_spec:
-    #         print(format_spec)
-    #     return str(self)
 
 
 class ImportVariable(LibRoutineVariable):
@@ -669,7 +677,7 @@ if __name__ == "__main__":
         othernamespace,
     )
     gc.collect()
-    a.free_name()
+    a._free_name()
     a = None
     print("resetted a")
     print(
@@ -715,6 +723,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
+    print("check out other namespace now")
     y = LibRoutineLocalVariable(size=8, namespace=othernamespace)
     gc.collect()
     print(
@@ -733,7 +742,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    x.free_name()
+    x.release()
     del x
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),

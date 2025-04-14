@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 14/04/2025, 16:24
-# Version:     0.0.1931
+# Last Update: 14/04/2025, 18:37
+# Version:     0.0.1938
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -742,9 +742,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -786,6 +784,8 @@ class CaptureContainer(CodeContainer):
     def requires(self, variable):
         """send the required variables up the tree"""
         if self.capture_check(variable):
+            for dep in variable.dependencies:
+                self.requires(dep)
             self.provides(variable)
         else:
             super().requires(variable)
