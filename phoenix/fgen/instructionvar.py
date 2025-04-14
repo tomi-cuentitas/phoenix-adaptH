@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 03/04/2025, 16:18
-# Version:     0.0.1146
+# Last Update: 14/04/2025, 15:48
+# Version:     0.0.1160
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -121,7 +121,9 @@ class InstructionVariable(_Chainable):
         if input_config is None:
             input_config = type(self)._default_config
         output_config = input_config
-        super().__init__(input_config=input_config, output_config=output_config)
+        super().__init__(
+            input_config=input_config, output_config=output_config
+        )
         self._offsets = []
         if _pure_copy:
             self._offsets = list(offsets)
@@ -267,9 +269,11 @@ class InstructionVariableOffset(_Chainable):
     """
 
     def __init__(self, value, input_config=None, output_config=None):
-        super().__init__(input_config=input_config, output_config=output_config)
+        super().__init__(
+            input_config=input_config, output_config=output_config
+        )
         self._value = value
-        self._fixed_value = None
+        # self._fixed_value = None
 
     def __str__(self):
         return f"+{self._value}"
@@ -316,17 +320,21 @@ class InstructionVariableOffset(_Chainable):
         """compute the offset from the input value"""
         raise NotImplementedError("Subclass must implement this method.")
 
-    def fix(self, config=None):
-        """fix the value"""
-        self._fixed_value, output_config = self.compute(config=config)
-        if output_config is not None:
-            self.output_config = output_config
-        return self._fixed_value
+    # def fix(self, config=None):
+    #     """fix the value"""
+    #     self._fixed_value, output_config = self.compute(config=config)
+    #     if output_config is not None:
+    #         self.output_config = output_config
+    #     return self._fixed_value
 
-    def evaluate(self, config=None, fix=True):
+    def evaluate(
+        self,
+        config=None,
+        # fix=True,
+    ):
         """get the actual offset. This might trigger the computation"""
-        if fix:
-            return self.fix(config=config)
+        # if fix:
+        #     return self.fix(config=config)
         offset, _ = self.compute(config=config)
         return offset
 
@@ -361,26 +369,56 @@ class IntegerOffset(InstructionVariableOffset):
         return self._value, self.output_config
 
 
-class SymbolicOffset(InstructionVariableOffset):
+class StringOffset(InstructionVariableOffset):
     """
-    An offset that has a symbolic integer value until determined
+    An offset that has a string based value
     """
 
-    def __init__(self, variable=None, input_config=None, output_config=None):
+    def __init__(self, expression, input_config=None, output_config=None):
         super().__init__(
-            variable, input_config=input_config, output_config=output_config
+            expression, input_config=input_config, output_config=output_config
         )
 
-    def put_expression(self, variable):
+    def replace_expression(self, expression):
         """associate a new value"""
-        self._value = variable
+        self._value = expression
+
+    def compute(self, config=None):
+        """stringify whatever enters"""
+        # this might change once I have completely implemented RoutineVariables
+        return str(self._value), self.output_config
+
+
+class SymbolicOffset(InstructionVariableOffset):
+    """
+    An purely symbolical offset that has a value to be determined later.
+
+    Note: maybe SymbolicOffsets are not needed anyways, as it could be strings
+    with the proper expressions right away upon their definition. Let's see.
+
+    Note: Instead of symbolic environments I suggest symbolic offsets, so all
+    the internals of enviroments can work as expected, including the stacking,
+    dict-like access routines and more.
+    """
+
+    def __init__(self, origin, input_config=None, output_config=None):
+        super().__init__(
+            None, input_config=input_config, output_config=output_config
+        )
+        self._origin = origin
+
+    def substitute(self, value):
+        """substitute a value for the placeholder"""
+        if not isinstance(value, str):
+            value = str(value)
+        self._value = value
 
     def compute(self, config=None):
         """stringify whatever enters"""
         # this might change once I have completely implemented RoutineVariables
         if self._value is None:
             return "?", self.output_config
-        return str(self._value), self.output_config
+        return self._value, self.output_config
 
 
 class InstructionEnvironment:

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 08/04/2025, 12:39
-# Version:     0.0.3004
+# Last Update: 14/04/2025, 15:37
+# Version:     0.0.3008
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,6 +38,7 @@ from phoenix.keymap import Key, KeyMap
 from phoenix.fgen.instructionvar import (
     InstructionVariable,
     KeyOffset,
+    StringOffset,
     SymbolicOffset,
     InstructionEnvironment,
 )
@@ -1730,8 +1731,8 @@ if __name__ == "__main__":
         else:
             print("\t", level, el, env)
 
-    some_value_x = SymbolicOffset()
-    some_value_x.put_expression("x")
+    some_value_x = StringOffset("x")
+    # some_value_x.put_expression("x")
 
     print("unpack, True recursive, extra tests on variable variables")
     for el in printed_instructions.unpack():

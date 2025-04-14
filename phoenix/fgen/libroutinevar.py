@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 08/04/2025, 16:56
-# Version:     0.0.567
+# Last Update: 14/04/2025, 15:22
+# Version:     0.0.585
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -32,7 +32,7 @@ class Namespace:
         # have been set in another branch
         self._content = {}
         self._parent = parent
-        self._assigned: Dict[type, type] = {}
+        self._assigned: Dict[type, Dict[str, LibRoutineVariable]] = {}
 
     def __contains__(self, element: LibRoutineVariable) -> bool:
         if element in self._content:
@@ -43,7 +43,9 @@ class Namespace:
 
     def assign(self, ivariable_type, key, lvariable):
         """assign an instruction variable class to a libroutine variable"""
-        self._assigned[(ivariable_type, key)] = lvariable
+        if ivariable_type not in self._assigned:
+            self._assigned[ivariable_type] = {}
+        self._assigned[ivariable_type][key] = lvariable
 
     def add(self, variable: LibRoutineVariable):
         """add a variable to the namespace"""
@@ -103,15 +105,22 @@ class Namespace:
             return self._parent.find(name)
         raise KeyError(f"variable {name} not found")
 
-    def find_assignment(self, ivariable_type, key):
+    def find_assignment_dict(self, ivariable_type):
         """find a variable in the namespace"""
         if ivariable_type in self._assigned:
-            return self._assigned[(ivariable_type, key)]
+            return self._assigned[ivariable_type]
         if self._parent is not None:
-            return self._parent.find_assignment(ivariable_type, key)
-        raise KeyError(
-            f"instruction variable {ivariable_type}:{key} not assigned."
-        )
+            return self._parent.find_assignment_dict(ivariable_type)
+        raise KeyError(f"instruction variable {ivariable_type} not assigned.")
+
+    def find_assignment(self, ivariable_type, key):
+        """find a variable in the namespace"""
+        assignment_dict = self.find_assignment_dict(ivariable_type)
+        if key not in assignment_dict:
+            raise KeyError(
+                f"assignment of instruction variable {ivariable_type} does not provide key {key}."
+            )
+        return assignment_dict[key]
 
     def _get_fixed_name(self, name, origin):
         """generate a unique variable name from a standardized recipe"""
@@ -440,7 +449,42 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
                    index i"""
 
 
-class LibRoutineInputVariable(LibRoutineVariable):
+class LibRoutineIOVariable(LibRoutineVariable):
+    """
+    Anything that is IO and therefore considered to appear in a routines
+    argument list.
+
+    At this point I was uncertain whether an auxilliary variable can be an
+    argument to the routine. So far being an argument to a routine is a
+    privilege to IO variables, and as of now these are bound to instruciton
+    variables. I prefer that idea, so any routine is always defined based on
+    stuff that also exists on the abstract level of instructions.
+    A case where such an auxilliary buffer could be required is when
+    collecting data from parallel branches to avoid race conditions. If
+    something like that occurs, I might implement an IO buffer subclass here.
+    As such routines will exclusively be internal auxilliaries, I might
+    never need to request the instruction variable or the key from there,
+    so these buffer types can go with "None".
+    """
+
+    _VAR_IDENTIFIER = "IOARG"
+    _CLASS_BASE = "ioarg"
+
+    def __init__(
+        self,
+        # instruction_variable,
+        # key,
+        *args,
+        status=LibRoutineVariable.STATUS_INOUT,
+        **kwargs,
+    ):
+        super().__init__(*args, **kwargs, status=status)
+        # keep a reference to the thing that the variable is assigned to
+        # self._ivar = instruction_variable
+        # self._ivar_key = key
+
+
+class LibRoutineInputVariable(LibRoutineIOVariable):
     """Input Variable. Potentially includes Read-Only behaviour"""
 
     _VAR_IDENTIFIER = "INPUT"
@@ -449,13 +493,23 @@ class LibRoutineInputVariable(LibRoutineVariable):
     # in some languages, input variables are treated differently than output.
     # inputs are assumed constant
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        # instruction_variable,
+        # key,
+        *args,
+        **kwargs,
+    ):
         super().__init__(
-            *args, **kwargs, status=LibRoutineVariable.STATUS_INPUT
+            # instruction_variable,
+            # key,
+            *args,
+            **kwargs,
+            status=LibRoutineVariable.STATUS_INPUT,
         )
 
 
-class LibRoutineOutputVariable(LibRoutineVariable):
+class LibRoutineOutputVariable(LibRoutineIOVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "OUTPUT"
@@ -464,13 +518,23 @@ class LibRoutineOutputVariable(LibRoutineVariable):
     # in some languages, output variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        # instruction_variable,
+        # key,
+        *args,
+        **kwargs,
+    ):
         super().__init__(
-            *args, **kwargs, status=LibRoutineVariable.STATUS_OUTPUT
+            # instruction_variable,
+            # key,
+            *args,
+            **kwargs,
+            status=LibRoutineVariable.STATUS_OUTPUT,
         )
 
 
-class LibRoutineInOutVariable(LibRoutineVariable):
+class LibRoutineInOutVariable(LibRoutineIOVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "INOUT"
@@ -479,10 +543,31 @@ class LibRoutineInOutVariable(LibRoutineVariable):
     # in some languages, output variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
 
-    def __init__(self, *args, **kwargs):
+    def __init__(
+        self,
+        # instruction_variable,
+        # key,
+        *args,
+        **kwargs,
+    ):
         super().__init__(
-            *args, **kwargs, status=LibRoutineVariable.STATUS_INOUT
+            # instruction_variable,
+            # key,
+            *args,
+            **kwargs,
+            status=LibRoutineVariable.STATUS_INOUT,
         )
+
+
+class LibRoutineIOBuffer(LibRoutineInOutVariable):
+    """
+    A buffer for temp stuff, workspace, reduction container, ...
+
+    Might refer to an IO or some other meta data container, let's see.
+    """
+
+    _VAR_IDENTIFIER = "IOBUFFER"
+    _CLASS_BASE = "iobuffer"
 
 
 class LibRoutineConstant(LibRoutineVariable):
