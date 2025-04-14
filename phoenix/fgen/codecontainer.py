@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 10/04/2025, 17:36
-# Version:     0.0.1929
+# Last Update: 14/04/2025, 16:24
+# Version:     0.0.1931
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -798,7 +798,7 @@ class DefinitionContainer(CaptureContainer, PreambleContainer):
     on which type of requirements are implemented here or passed on.
     """
 
-    def generate_preamble_containers(self, **_):
+    def generate_preamble_containers(self, **kwargs):
         for variable in self.captured:
             yield DefinitionLines(variable, context=self.context, **kwargs)
 

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 14/04/2025, 15:22
-# Version:     0.0.585
+# Last Update: 14/04/2025, 16:27
+# Version:     0.0.586
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -468,7 +468,7 @@ class LibRoutineIOVariable(LibRoutineVariable):
     """
 
     _VAR_IDENTIFIER = "IOARG"
-    _CLASS_BASE = "ioarg"
+    _CLASS_BASE = "ioa"
 
     def __init__(
         self,
@@ -567,7 +567,7 @@ class LibRoutineIOBuffer(LibRoutineInOutVariable):
     """
 
     _VAR_IDENTIFIER = "IOBUFFER"
-    _CLASS_BASE = "iobuffer"
+    _CLASS_BASE = "iob"
 
 
 class LibRoutineConstant(LibRoutineVariable):
@@ -582,7 +582,7 @@ class LibRoutineConstant(LibRoutineVariable):
     # differnt places.
 
     _VAR_IDENTIFIER = "CONSTANT"
-    _CLASS_BASE = "const"
+    _CLASS_BASE = "cns"
 
     def __init__(self, name, value, size=None):
         if size is None:
