@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 14/04/2025, 16:27
-# Version:     0.0.586
+# Last Update: 15/04/2025, 18:08
+# Version:     0.0.612
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -97,29 +97,39 @@ class Namespace:
             out = f"{cname}{num}"
         return out
 
-    def find(self, name):
+    def find(self, name, exception_existing=True):
         """find a variable in the namespace"""
         if name in self._content:
             return self._content[name]
         if self._parent is not None:
             return self._parent.find(name)
-        raise KeyError(f"variable {name} not found")
+        if exception_existing:
+            raise KeyError(f"variable {name} not found")
+        return None
 
-    def find_assignment_dict(self, ivariable_type):
+    def find_assignment_dict(self, ivariable_type, exception_existing=True):
         """find a variable in the namespace"""
         if ivariable_type in self._assigned:
             return self._assigned[ivariable_type]
         if self._parent is not None:
             return self._parent.find_assignment_dict(ivariable_type)
-        raise KeyError(f"instruction variable {ivariable_type} not assigned.")
-
-    def find_assignment(self, ivariable_type, key):
-        """find a variable in the namespace"""
-        assignment_dict = self.find_assignment_dict(ivariable_type)
-        if key not in assignment_dict:
+        if exception_existing:
             raise KeyError(
-                f"assignment of instruction variable {ivariable_type} does not provide key {key}."
+                f"instruction variable {ivariable_type} not assigned."
             )
+        return None
+
+    def find_assignment(self, ivariable_type, key, exception_existing=True):
+        """find a variable in the namespace"""
+        assignment_dict = self.find_assignment_dict(
+            ivariable_type, exception_existing=exception_existing
+        )
+        if key not in assignment_dict:
+            if exception_existing:
+                raise KeyError(
+                    f"assignment of instruction variable {ivariable_type} does not provide key {key}."
+                )
+            return None
         return assignment_dict[key]
 
     def _get_fixed_name(self, name, origin):
@@ -160,16 +170,21 @@ class Namespace:
         generating,
         name,
         size,
-        dtype="f64",
-        enum_first=False,
+        dtype="f64",  # in genargs
         **genargs,
     ):
+        """
+        Request a general variable.
+        This is an auxilliary function that fills the namespace and som
+        defaults
+        """
         variable = generating(
             name,
             namespace=self,
             size=size,
             dtype=dtype,
-            enum_first=enum_first,
+            # enum_first=enum_first,  # in genargs if required
+            **genargs,
         )
         return variable
 
@@ -205,6 +220,7 @@ class LibRoutineVariable:
     def __init__(
         self,
         name=None,
+        *,
         size=None,
         namespace=None,
         prefix=None,
@@ -449,7 +465,7 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
                    index i"""
 
 
-class LibRoutineIOVariable(LibRoutineVariable):
+class LibRoutineAssignedVariable(LibRoutineVariable):
     """
     Anything that is IO and therefore considered to appear in a routines
     argument list.
@@ -467,24 +483,22 @@ class LibRoutineIOVariable(LibRoutineVariable):
     so these buffer types can go with "None".
     """
 
-    _VAR_IDENTIFIER = "IOARG"
-    _CLASS_BASE = "ioa"
+    _VAR_IDENTIFIER = "ASSIGNED"
+    _CLASS_BASE = "asd"
 
     def __init__(
         self,
-        # instruction_variable,
-        # key,
         *args,
+        assignment,
         status=LibRoutineVariable.STATUS_INOUT,
         **kwargs,
     ):
-        super().__init__(*args, **kwargs, status=status)
+        super().__init__(*args, status=status, **kwargs)
         # keep a reference to the thing that the variable is assigned to
-        # self._ivar = instruction_variable
-        # self._ivar_key = key
+        self._assignment = assignment
 
 
-class LibRoutineInputVariable(LibRoutineIOVariable):
+class LibRoutineInputVariable(LibRoutineAssignedVariable):
     """Input Variable. Potentially includes Read-Only behaviour"""
 
     _VAR_IDENTIFIER = "INPUT"
@@ -495,21 +509,20 @@ class LibRoutineInputVariable(LibRoutineIOVariable):
 
     def __init__(
         self,
-        # instruction_variable,
-        # key,
+        instruction_variable,
+        key,
         *args,
         **kwargs,
     ):
         super().__init__(
-            # instruction_variable,
-            # key,
             *args,
-            **kwargs,
+            assignment=(instruction_variable, key),
             status=LibRoutineVariable.STATUS_INPUT,
+            **kwargs,
         )
 
 
-class LibRoutineOutputVariable(LibRoutineIOVariable):
+class LibRoutineOutputVariable(LibRoutineAssignedVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "OUTPUT"
@@ -520,54 +533,52 @@ class LibRoutineOutputVariable(LibRoutineIOVariable):
 
     def __init__(
         self,
-        # instruction_variable,
-        # key,
+        instruction_variable,
+        key,
         *args,
         **kwargs,
     ):
         super().__init__(
-            # instruction_variable,
-            # key,
             *args,
-            **kwargs,
+            assignment=(instruction_variable, key),
             status=LibRoutineVariable.STATUS_OUTPUT,
+            **kwargs,
         )
 
 
-class LibRoutineInOutVariable(LibRoutineIOVariable):
+class LibRoutineInOutVariable(LibRoutineAssignedVariable):
     """Output Variable. Potentially includes Auto Initialization"""
 
     _VAR_IDENTIFIER = "INOUT"
     _CLASS_BASE = "ref"
 
-    # in some languages, output variables are treated differently than input.
+    # in some languages, in/out variables are treated differently than input.
     # outputs are assumed read-write, or inout and not constant
 
     def __init__(
         self,
-        # instruction_variable,
-        # key,
+        instruction_variable,
+        key,
         *args,
         **kwargs,
     ):
         super().__init__(
-            # instruction_variable,
-            # key,
             *args,
-            **kwargs,
+            assignment=(instruction_variable, key),
             status=LibRoutineVariable.STATUS_INOUT,
+            **kwargs,
         )
 
 
-class LibRoutineIOBuffer(LibRoutineInOutVariable):
-    """
-    A buffer for temp stuff, workspace, reduction container, ...
+# class LibRoutineIOBuffer(LibRoutineIOVariable):
+#     """
+#     A buffer for temp stuff, workspace, reduction container, ...
 
-    Might refer to an IO or some other meta data container, let's see.
-    """
+#     Might refer to an IO or some other meta data container, let's see.
+#     """
 
-    _VAR_IDENTIFIER = "IOBUFFER"
-    _CLASS_BASE = "iob"
+#     _VAR_IDENTIFIER = "IOBUFFER"
+#     _CLASS_BASE = "iob"
 
 
 class LibRoutineConstant(LibRoutineVariable):
@@ -652,7 +663,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    b = LibRoutineInputVariable(size=42)
+    b = LibRoutineInputVariable(None, None, name="foo", size=42)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",

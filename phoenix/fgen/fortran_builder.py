@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 14/04/2025, 15:27
-# Version:     0.0.233
+# Last Update: 15/04/2025, 18:05
+# Version:     0.0.236
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -240,7 +240,9 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
 ###############################################################################
 
 
-my_fancy_var = F90InOutVariable("my_fancy_var", dtype="f64", size=20)
+my_fancy_var = F90InOutVariable(
+    None, None, name="my_fancy_var", dtype="f64", size=20
+)
 
 
 class Fortran90Builder(Builder, identifier="FORTRAN90"):

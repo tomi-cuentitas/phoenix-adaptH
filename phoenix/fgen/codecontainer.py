@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 14/04/2025, 16:24
-# Version:     0.0.1931
+# Last Update: 15/04/2025, 17:58
+# Version:     0.0.1939
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -862,15 +862,6 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         """
         Get the string of how to call it. Plug the proper substitutions into
         the argument line"""
-
-    # def capture_check(self, requirement):
-    #     """perform a capture check for the requirement"""
-    #     # library level must capture all required variables!
-    #     if requirement.vtype not in ["IMPORT", "CONSTANT"]:
-    #         return True
-    #     raise ValueError(
-    #         "only constants are allowed to traverse up to library definition level"
-    #     )
 
 
 class KernelContainer(RoutineContainer):
