@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 15/04/2025, 17:58
-# Version:     0.0.1939
+# Last Update: 16/04/2025, 16:11
+# Version:     0.0.1951
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -225,6 +225,17 @@ class CodeContainer:
             dtype=dtype,
             **genargs,
         )
+        if autorequire:
+            self.requires(variable)
+        return variable
+
+    def request_assigned(self, ivariable_type, key, autorequire=True):
+        """find a variable in the attached namespace"""
+        variable = self.namespace.find_assignment(
+            ivariable_type, key, exception_existing=False
+        )
+        if variable is None:
+            return None
         if autorequire:
             self.requires(variable)
         return variable
@@ -556,9 +567,6 @@ class GroupContainer(EmbeddingContainer):
     delimiters and comments.
     """
 
-    def build(self, **_):
-        return super().build()
-
     def generate_head_containers(self, **_):
         yield ""
         yield from super().generate_head_containers()
@@ -609,7 +617,7 @@ class CodeLine(CodeContainer):
         self.set_line(line)
 
     def append_body(self, *_):
-        raise ValueError("Cannot append to head in StatementLine")
+        raise ValueError("Cannot append to head in CodeLine")
 
     def set_line(self, line):
         """set the line"""
@@ -650,9 +658,18 @@ class StatementLine(CodeLine):
             **params,
         )
         self._value_dict = value_dict
+        self.extend_value_dict()
 
-        def construct_code_lines(self):
-            yield type(self)._BLUEPRINT.format(**self._value_dict)
+    def set_value(self, key, value):
+        """set the value in the value dict"""
+        self._value_dict[key] = value
+
+    def extend_value_dict(self):
+        """extend the value dict by some parameters created from other parameters"""
+        return self
+
+    def construct_code_lines(self):
+        yield type(self)._BLUEPRINT.format(**self._value_dict)
 
 
 class CommentLine(CodeLine):

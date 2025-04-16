@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 15/04/2025, 18:08
-# Version:     0.0.612
+# Last Update: 16/04/2025, 15:28
+# Version:     0.0.613
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -235,7 +235,7 @@ class LibRoutineVariable:
         else:
             self._namespace = namespace
         aname = self._namespace.autoname(
-            name,
+            name=name,
             prefix=prefix,
             suffix=suffix,
         )

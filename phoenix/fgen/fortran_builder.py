@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 15/04/2025, 18:05
-# Version:     0.0.236
+# Last Update: 16/04/2025, 16:25
+# Version:     0.0.291
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,6 +20,7 @@ from typing import Any, Dict
 from phoenix.fgen.builder import Builder, BuildChain
 from phoenix.fgen.codecontainer import (
     CodeLine,
+    StatementLine,
     CommentLine,
     EmbeddingContainer,
     DefinitionContainer,
@@ -37,6 +38,8 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineLocalVariable,
     LibRoutineConstant,
 )
+
+from phoenix.fgen.instruction import AffineOperationInstruction
 
 from phoenix.toolbox.logger import GLOBAL_LOGGER
 
@@ -112,6 +115,25 @@ class F90RoutineContainer(RoutineContainer):
 
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f"END SUBROUTINE {self.name}")
+
+
+class F90AffineContainer(StatementLine):
+    INDENT_BODY = False
+    _BLUEPRINT = "{y_expression} = {y_expression} + {a_value} * {x_expression} + {b_value}"
+
+    def __init__(self, y, yo, a, x, xo, b, *, context, **params):
+        super().__init__(
+            {
+                "y_expression": y.expr_at(*yo),
+                "x_expression": x.expr_at(*xo),
+                "a_value": a,
+                "b_value": b,
+            },
+            context=context,
+            **params,
+        )
+        self.requires(x)
+        self.requires(y)
 
 
 class F90LibraryContainer(LibraryContainer):
@@ -271,8 +293,68 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             instruction, context, buildargs
         )
 
-    # def handle_linear_instruction(self, instruction, context, buildargs):
-    #     """"""
+    def handle_affine_instruction(self, instruction, context, buildargs):
+        instruction_dict = instruction.apply_environment(
+            context.environment
+        ).contribute_to_dict()
+
+        tgt0 = instruction_dict.get("tgt0")
+        src0 = instruction_dict.get("src0")
+        alpha = instruction_dict.get("alpha")
+        beta = instruction_dict.get("beta")
+        otgt = list(tgt0.offsets)
+        osrc = list(src0.offsets)
+        yield F90CommentLine(f"tgt0={tgt0.name} @ {otgt}", context=context)
+        yield F90CommentLine(f"src0={src0.name} @ {osrc}", context=context)
+        yield F90CommentLine(f"alpha = {alpha}", context=context)
+        yield F90CommentLine(f"beta  = {beta}", context=context)
+        x_var_real = context.namespace.find_assignment(type(src0), "real")
+        x_var_imag = context.namespace.find_assignment(type(src0), "imag")
+        y_var_real = context.namespace.find_assignment(type(tgt0), "real")
+        y_var_imag = context.namespace.find_assignment(type(tgt0), "imag")
+        x_var_offs = src0.offsets
+        y_var_offs = tgt0.offsets
+        a_real = alpha.real
+        a_imag = alpha.imag
+        b_real = beta.real
+        b_imag = beta.imag
+        yield F90AffineContainer(
+            y_var_real,
+            y_var_offs,
+            a_real,
+            x_var_real,
+            x_var_offs,
+            0,
+            context=context,
+        )
+        yield F90AffineContainer(
+            y_var_real,
+            y_var_offs,
+            -a_imag,
+            x_var_imag,
+            x_var_offs,
+            b_real,
+            context=context,
+        )
+        yield F90AffineContainer(
+            y_var_imag,
+            y_var_offs,
+            a_real,
+            x_var_imag,
+            x_var_offs,
+            0,
+            context=context,
+        )
+        yield F90AffineContainer(
+            y_var_imag,
+            y_var_offs,
+            a_imag,
+            x_var_real,
+            x_var_offs,
+            b_imag,
+            context=context,
+        )
+        yield CodeLine("", context=context)
 
     def handle_generic_instruction(self, instruction, context, buildargs):
         yield from super().handle_generic_instruction(
@@ -291,6 +373,10 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         yield foo
 
 
+Fortran90Builder.set_instruction_class_handler(
+    AffineOperationInstruction, Fortran90Builder.handle_affine_instruction
+)
+
 F90LibraryContainer.set_comment_class(F90CommentLine)
 F90RoutineContainer.set_comment_class(F90CommentLine)
 Fortran90Builder.set_comment_class(F90CommentLine)
@@ -305,7 +391,7 @@ my_builder = Fortran90Builder()
 
 test_chain = BuildChain(my_builder)
 
-test = InstructionGroup(
+"""test = InstructionGroup(
     [
         GenericInstruction(foo="bar1", answer=42.1),
         GenericInstruction(foo="bar2", answer=42.2),
@@ -317,10 +403,114 @@ test = InstructionGroup(
 
 largegroup = InstructionGroup([test, test, test])
 
+"""
+
+
+from phoenix.keymap import KeyMap
+from phoenix.fgen.instructionvar import InstructionVariable
+from phoenix.fgen.instruction import (
+    LinearOperationInstruction,
+    OffsetEnvironmentInstruction,
+)
+
+
+ltl_km = KeyMap(name="little")
+ltl_km.entry("key1")
+ltl_km.entry("key2")
+ltl_km.entry("key3")
+
+big_km = KeyMap(name="big")
+big_km.link("foo0", ltl_km)
+big_km.link("foo1", ltl_km)
+big_km.link("foo2", ltl_km)
+big_km.link("foo3", ltl_km)
+big_km.link("foo4", ltl_km)
+
+big_km.update()
+print(list(big_km.keys()))
+
+VarInp = InstructionVariable.new(name="input1", config=big_km)
+VarOut = InstructionVariable.new(name="output1", config=big_km)
+# VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
+# KeyMapInstructionVariable("input1", keymap=big_km)
+
+VarInpInner = InstructionVariable.new("inner_input1", config=None)
+VarOutInner = InstructionVariable.new("inner_output1", config=None)
+
+print(InstructionVariable().name)
+
+test_instructions_inner = InstructionGroup(
+    [
+        LinearOperationInstruction(
+            VarOutInner("key1"), VarInpInner("key3"), 1.0 + 2j
+        ),
+        LinearOperationInstruction(
+            VarOutInner("key2"), VarInpInner("key2"), 1.0 + 2j
+        ),
+        LinearOperationInstruction(
+            VarOutInner("key3"), VarInpInner("key1"), 1.0 + 2j
+        ),
+    ]
+)
+test_instructions1 = InstructionGroup(
+    [
+        OffsetEnvironmentInstruction(
+            test_instructions_inner,
+            offsets={
+                VarInpInner: VarInp(f"foo{val}"),
+                VarOutInner: VarOut(f"foo{val}"),
+            },
+        )
+        for val in range(5)
+    ]
+)
+
+test_instructions2 = InstructionGroup(
+    [
+        OffsetEnvironmentInstruction(
+            InstructionGroup(
+                [
+                    OffsetEnvironmentInstruction(
+                        test_instructions_inner,
+                        offsets={
+                            VarInpInner: VarInp(f"foo{val_inp}"),
+                        },
+                    )
+                    for val_inp in range(5)
+                ]
+            ),
+            offsets={
+                VarOutInner: VarOut(f"foo{val_out}"),
+            },
+        )
+        for val_out in range(5)
+    ]
+)
+
+largegroup = test_instructions1
 
 ctxt = Context()
+ctxt.namespace.assign(
+    VarInp,
+    "real",
+    F90InputVariable(VarInp, "real", "input_real", size=999),
+)
+ctxt.namespace.assign(
+    VarInp,
+    "imag",
+    F90InputVariable(VarInp, "imag", "input_imag", size=999),
+)
+ctxt.namespace.assign(
+    VarOut,
+    "real",
+    F90OutputVariable(VarOut, "real", "output_real", size=999),
+)
+ctxt.namespace.assign(
+    VarOut,
+    "imag",
+    F90OutputVariable(VarOut, "imag", "output_imag", size=999),
+)
 
-largegroup = InstructionGroup([test, test, test])
 
 outer_defarea = F90LibraryContainer("test_library", context=ctxt)
 # outer_defarea.add_capture_trigger(lambda x: True)
