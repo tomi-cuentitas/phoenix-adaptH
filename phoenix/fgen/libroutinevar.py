@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 16/04/2025, 15:28
-# Version:     0.0.613
+# Last Update: 28/04/2025, 18:31
+# Version:     0.0.630
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -245,12 +245,13 @@ class LibRoutineVariable:
         self._size = size
         self._dtype = dtype
         self._status = status
-        self._dependencies = []
+        self._dependencies = set()
         # do not automatically add if explicit namespace is given!
         if namespace is None:
             self._namespace.add(self)
             # add to namespace if it is not explicitely given, assuming
             # adding to default class namespace.
+
         self.handle_dependencies()
 
     def handle_dependencies(self):
@@ -381,6 +382,10 @@ class LibRoutineVariable:
         """access dependencies"""
         yield from self._dependencies
 
+    def depends_on(self, other):
+        """append a dependency"""
+        self._dependencies.add(other)
+
     @property
     def status(self):
         """access the status binary set as integer"""
@@ -415,7 +420,7 @@ class LibRoutineVariable:
         return f"{self._name}"
 
 
-class ImportVariable(LibRoutineVariable):
+class LibRoutineImport(LibRoutineVariable):
     """
     An import. Maybe part of the variable concept in a broader sense.
     When a routine, variable or macro is used that has to be imported,
@@ -456,21 +461,28 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
     # this is the counter object, not the lookup object. Each parallel environment will have
     # exactly one of these.
 
-    def __init__(self, origin=None, size=None, namespace=None, prefix=None):
-        super().__init__(
-            size=size, namespace=namespace, prefix=prefix, status=2
-        )
+    def __init__(
+        self, origin=None, multiplicity=1, namespace=None, prefix=None
+    ):
         if origin is None:
             raise ValueError("FrameSelector requires origin.")
+        super().__init__(
+            size=None,
+            namespace=origin.context.namespace,
+            prefix=prefix,
+            status=2,
+            dtype="i32",
+        )
+        self._multiplicity = multiplicity
         self._origin = (
             origin  # the container that the frame selector is attached to
         )
 
-    """-> Optionally, use a symbolic instruction variable in symbolic environment in map instruction.
-                   the symbolic instruction variables are attached to the map instruction and have a frame
-                   selector attached. Within the not unrolled map, the frame selector replaces the i in a loop
-                   and the offset value of the environment is looked up from an external constant array at
-                   index i"""
+    """ -> Optionally, use a symbolic instruction variable in symbolic environment in map instruction.
+           the symbolic instruction variables are attached to the map instruction and have a frame
+           selector attached. Within the not unrolled map, the frame selector replaces the i in a loop
+           and the offset value of the environment is looked up from an external constant array at
+           index i"""
 
 
 class LibRoutineAssignedVariable(LibRoutineVariable):
@@ -744,7 +756,17 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
+    othernamespace.add(y)
+    gc.collect()
+    print(
+        "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
+        "\t:\t",
+        LibRoutineLocalVariable._class_namespace,
+        len(LibRoutineLocalVariable._class_namespace),
+        othernamespace,
+    )
     x = LibRoutineLocalVariable(size=8, namespace=othernamespace)
+    othernamespace.add(x)
     gc.collect()
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),

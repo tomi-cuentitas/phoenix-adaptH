@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 16/04/2025, 16:11
-# Version:     0.0.1951
+# Last Update: 28/04/2025, 18:33
+# Version:     0.0.1974
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,6 +25,9 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineInputVariable,
     LibRoutineOutputVariable,
     LibRoutineInOutVariable,
+    LibRoutineFrameSelectVariable,
+    LibRoutineImport,
+    LibRoutineConstant,
 )
 
 from phoenix.aux import multiline_iterable, multiline_text
@@ -560,6 +563,47 @@ class NamedContainer(CodeContainer):
         yield from super().content
 
 
+# class FrameSelectContainer(EmbeddedContainer):
+#     """
+#     Manages frames. Introduces the frame selector.
+#     To make sure frame selectors are well defined, maybe this could be an
+#     exclusive way to get a frame selector in the first place.
+
+#     The MultiFrameContainer class is not intended to be a co parent of Kernel,
+#     Loop, etc. Instead it is supposed to be the embedding container
+#     """
+
+#     def __init__(self, *, context, **buildargs):
+#         super().__init__(context=context, **buildargs)
+#         self._fs_variable = None
+
+#     def create_frame_selector(self, fs_class, prefix=None):
+#         """create the frame selector from a class"""
+#         self._fs_variable = fs_class(origin=self, prefix=prefix)
+
+#     @property
+#     def frame_selector(self):
+#         if self._fs_variable is None:
+#             raise ValueError("FrameSelector not assigned")
+#         return self._fs_variable
+
+#     def introduce_frame_selector(self, **kwargs):
+#         """
+#         Create all containers required for the proper definition/first introduction
+#         of the frame selector (i = ...).
+#         This excludes the variable definition (integer :: i ...)!
+#         """
+#         return
+#         yield
+
+#     def generate_head_containers(self, **kwargs):
+#         """
+#         The preamble is made from all containers that define and introduce
+#         the associated frame selector.
+#         """
+#         yield from self.introduce_frame_selector(**kwargs)
+
+
 class GroupContainer(EmbeddingContainer):
     """
     A holds multiple containers inside. The grouping might only be symbolically.
@@ -709,12 +753,13 @@ class DefinitionLines(CodeLine):
 class LoopContainer(EmbeddingContainer):
     """
     A LoopContainer provides basic loop control capabilities. It can derive into
-    different versions depending on the architecture.
+    different versions depending on the architecture. In the loop, the frame selector
+    is defined.
     """
 
 
 class ConditionalContainer(CodeContainer):
-    """Conditionals. If. You know what."""
+    """Conditionals. If stuff then stuff. You know what."""
 
     def __init__(self, *, context, **params):
         super().__init__(context=context, **params)
@@ -888,10 +933,24 @@ class KernelContainer(RoutineContainer):
     might map to parametrized auxilliary functions or actual kernels on GPUs.
 
     An instruction block from a map instruction is preferably rendered into a
-    kernel. Kernels are treated as subtypes of functions. They provide frame selectors
+    kernel. Kernels are treated as subtypes of functions. They manage frame selectors
     and map them to external parallel ressources.
 
-    Kernel Containers provide some management for frame selectors
+    Kernel Containers provide some management for frame selectors.
+
+    Current idea:
+
+    The kernel is a routine that is designed for a parallel call
+
+
+    # Build strategy, maybe do not put all of that here!
+    Collect all frame_selectors that are handled inside the kernel group.
+    a new (most inner) layer gets assigned to the most inner selector and whatever
+    was assigned there before travels one layer up.
+    After the highest kernel-layer, the selectors need to map to loops outside of the call!
+    In my current strategy, I consider that part of the kernel call as well.
+    The kernel itself however is only the routine-like object with information on how it
+    is called (including the loops for consinstency)
     """
 
 
@@ -907,8 +966,8 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         self._imp_layer = DefinitionContainer(context=context)
         self._def_layer = DefinitionContainer(context=self._imp_layer.context)
         super().__init__(name, context=self._def_layer.context, **buildargs)
-        self._def_layer.add_capture_trigger("CONSTANT")
-        self._imp_layer.add_capture_trigger("IMPORT")
+        self._def_layer.add_capture_trigger(LibRoutineConstant)
+        self._imp_layer.add_capture_trigger(LibRoutineImport)
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""

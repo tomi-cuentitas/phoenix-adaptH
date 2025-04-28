@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   07/04/2025
-# Last Update: 07/04/2025, 17:22
-# Version:     0.0.37
+# Last Update: 28/04/2025, 16:49
+# Version:     0.0.46
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,6 +43,7 @@ class Context:
         namespace: Namespace | None = None,
         # assignments: dict | None = None,
         name: str | None = None,
+        # frame_selectors: Set[LibRoutineFrameSelectVariable] | None = None,
         _names: List[str] | None = None,
     ):
         if environment is None:
@@ -56,12 +57,16 @@ class Context:
         else:
             self._parent = ref(parent)
 
+        # if frame_selectors is None:
+        #     frame_selectors = set()
+
         self._container = None
         self._level = level
         self._namespace = namespace
         self._environment = environment
         # self._assignments = assignments
         self._names = []
+        # self._frame_selectors = frame_selectors
 
         if name is not None:
             self._names.append(name)
@@ -108,6 +113,11 @@ class Context:
         """access container"""
         return self._container
 
+    # @property
+    # def frame_selectors(self):
+    #     """access frame selectors"""
+    #     return self._frame_selectors
+
     def set_container(self, container):
         """set container"""
         if self._container is not None:
@@ -150,6 +160,7 @@ class Context:
         parent=None,
         environment=None,
         namespace=None,
+        # select_frame=None,
     ):
         """
         Inherit to a new context object.
@@ -175,9 +186,11 @@ class Context:
             if self.namespace is None:
                 namespace = Namespace()
             else:
-                namespace = (
-                    self.namespace
-                )  # .inherit()  use new_namespace_node
+                namespace = self.namespace  # .inherit()  use new_namespace_node
+
+        # frame_selectors = set(self.frame_selectors)
+        # if select_frame is not None:
+        #     frame_selectors.add(select_frame)
 
         return Context(
             parent=parent,
@@ -185,5 +198,6 @@ class Context:
             namespace=namespace,
             environment=environment,
             # assignments=None,
+            # frame_selectors=frame_selectors,
             _names=self._names,
         )
