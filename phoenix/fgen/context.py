@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   07/04/2025
-# Last Update: 28/04/2025, 16:49
-# Version:     0.0.46
+# Last Update: 29/04/2025, 19:29
+# Version:     0.0.47
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -15,6 +15,8 @@
 
 from __future__ import annotations
 
+
+from hashlib import sha256
 
 from typing import Dict, Set, List, Any, Generator
 
@@ -186,7 +188,9 @@ class Context:
             if self.namespace is None:
                 namespace = Namespace()
             else:
-                namespace = self.namespace  # .inherit()  use new_namespace_node
+                namespace = (
+                    self.namespace
+                )  # .inherit()  use new_namespace_node
 
         # frame_selectors = set(self.frame_selectors)
         # if select_frame is not None:

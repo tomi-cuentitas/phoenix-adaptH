@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 29/04/2025, 17:49
-# Version:     0.0.648
+# Last Update: 29/04/2025, 19:43
+# Version:     0.0.656
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -285,11 +285,11 @@ class LibRoutineVariable:
 
     def __str__(self):
         if self.is_scalar:
-            return f"{self._name}"
-        return f"{self._name}[{self._size}]"
+            return f"{self.name}"
+        return f"{self.name}[{self.size}]"
 
     def __repr__(self):
-        return str(self)
+        return self.name
 
     def __init_subclass__(cls, prefix=None):
         if prefix is not None:
@@ -317,7 +317,7 @@ class LibRoutineVariable:
                     raise ValueError(
                         "only scalar offsets are allowed in this context"
                     )
-                offset_str_list.append(str(offset))
+                offset_str_list.append(offset.expr)
             else:
                 if allow_strings:
                     offset_str_list.append(str(offset))
@@ -415,11 +415,11 @@ class LibRoutineVariable:
         )
 
         offset_str = " + ".join(offset_str_list)
-        return f"{self._name}[{offset_str}]"
+        return f"{self.name}[{offset_str}]"
 
     def expr(self):
         """expression for the whole variable"""
-        return f"{self._name}"
+        return f"{self.name}"
 
 
 class LibRoutineImport(LibRoutineVariable):
@@ -488,25 +488,29 @@ class LibRoutineMultiFrame:
 
     def expr(self):
         """expression for the whole variable"""
-        return f"{self._container.local.expr}"
+        return f"{self.local.expr}"
 
-    def create_local(
+    def create_representative(
         self,
         local_variable_class=None,
+        context=None,
         prefix=None,
         dtype="i32",
         size=None,
     ):
         """create the frame selector from a class"""
         if local_variable_class is None:
-            raise ValueError("FrameSelector class not provided")
-        self._local = local_variable_class(
-            namespace=self._container.context.namespace,
-            size=size,
-            prefix=prefix,
-            dtype=dtype,
-        )
-        self._container.requires(self.local)
+            raise ValueError("No class provided")
+        if context is None:
+            raise ValueError("No context provided")
+        if self._local is None:
+            self._local = local_variable_class(
+                namespace=context.namespace,
+                size=size,
+                prefix=prefix,
+                dtype=dtype,
+            )
+            context.container.requires(self.local)
         return self
 
     @property
@@ -521,19 +525,20 @@ class LibRoutineMultiFrame:
         """
         self._value = value
 
-    """IDEA
-    Multiframe can inherit into multiple multiframes such that they factor properly.
-    The variable type of the locals can be set individually to allow them to be passed
-    as arguments etc.
-    An outside loop is an input seen from within the kernel.
-    An outside loop can be split in two and composed from two inputs in the kernel as well.
-
-    The introduction of locals will require a container to be used so the requirements can
-    be sent. Maybe the locals are introduced from inside a kernalized container or a kernel,
-    then the container is not urgently needed. I can also consider the use of dependencies,
-    but these will most likely cause problems when they traverse through the kernel
-    boundaries.
-
+    """
+    IDEA
+    After the kernel's instructions are prepared, all multiframe objects should be known.
+    Therefore they can be mapped to inner iterators and outer iterators, i.e.
+    threadIdx, ... and loops outside the call.
+    The simplest way is to let KernelParameters rise and be captured in the kernelize
+    container, where then the call is managed. Even easier would be a get_kernel_params
+    routine, that could later involve shared memory and more. No more captures and simple
+    integers. I think I prefer that.
+    The kernelize container could have a box for loops that cover all kernelparameters
+    that are not handled by inner parameters such as threadIdx etc. The proper call can be
+    derived from kernel parameters and call parameters, where inner and outer parameters
+    could be separated and then remerged. In kernalize, local variables could be introduced
+    that are assigned to the loops and automatically put into the right place.
     """
 
 
