@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 28/04/2025, 18:31
-# Version:     0.0.630
+# Last Update: 29/04/2025, 17:49
+# Version:     0.0.648
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -265,7 +265,9 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -449,11 +451,14 @@ class LibRoutineLocalVariable(LibRoutineVariable):
         )
 
 
-class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
-    """An integer type variable made for iterating through an array"""
+class LibRoutineMultiFrame:
+    """
+    An integer type variable made for iterating through an array or instructions,
+    assuming order does not matter!
+    """
 
-    _VAR_IDENTIFIER = "FRAMESELECT"
-    _CLASS_BASE = "sel"
+    _VAR_IDENTIFIER = "MultiFrame"
+    _CLASS_BASE = "mfr"
 
     # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
     # maybe let it rise like other variables and introduce a "handled" flag that is true once the
@@ -462,27 +467,74 @@ class LibRoutineFrameSelectVariable(LibRoutineLocalVariable):
     # exactly one of these.
 
     def __init__(
-        self, origin=None, multiplicity=1, namespace=None, prefix=None
+        self, multiplicity, container=None, namespace=None, prefix=None
     ):
-        if origin is None:
-            raise ValueError("FrameSelector requires origin.")
+        if container is None:
+            raise ValueError("MultiFrame requires Kernelize container.")
         super().__init__(
             size=None,
-            namespace=origin.context.namespace,
+            namespace=container.context.namespace,
             prefix=prefix,
             status=2,
             dtype="i32",
         )
-        self._multiplicity = multiplicity
-        self._origin = (
-            origin  # the container that the frame selector is attached to
-        )
 
-    """ -> Optionally, use a symbolic instruction variable in symbolic environment in map instruction.
-           the symbolic instruction variables are attached to the map instruction and have a frame
-           selector attached. Within the not unrolled map, the frame selector replaces the i in a loop
-           and the offset value of the environment is looked up from an external constant array at
-           index i"""
+        # the container that the frame selector is attached to
+        self._container = container
+        self._multiplicity = multiplicity
+        self._value = None
+        self._local = None
+        # self._default_value = 0
+
+    def expr(self):
+        """expression for the whole variable"""
+        return f"{self._container.local.expr}"
+
+    def create_local(
+        self,
+        local_variable_class=None,
+        prefix=None,
+        dtype="i32",
+        size=None,
+    ):
+        """create the frame selector from a class"""
+        if local_variable_class is None:
+            raise ValueError("FrameSelector class not provided")
+        self._local = local_variable_class(
+            namespace=self._container.context.namespace,
+            size=size,
+            prefix=prefix,
+            dtype=dtype,
+        )
+        self._container.requires(self.local)
+        return self
+
+    @property
+    def local(self):
+        """access the local representation of the frame selector"""
+        return self._local
+
+    def set_value(self, value):
+        """
+        Set the source of the value of the frame selectors local representation.
+        Can be an expression, a constant, a parameter, ...
+        """
+        self._value = value
+
+    """IDEA
+    Multiframe can inherit into multiple multiframes such that they factor properly.
+    The variable type of the locals can be set individually to allow them to be passed
+    as arguments etc.
+    An outside loop is an input seen from within the kernel.
+    An outside loop can be split in two and composed from two inputs in the kernel as well.
+
+    The introduction of locals will require a container to be used so the requirements can
+    be sent. Maybe the locals are introduced from inside a kernalized container or a kernel,
+    then the container is not urgently needed. I can also consider the use of dependencies,
+    but these will most likely cause problems when they traverse through the kernel
+    boundaries.
+
+    """
 
 
 class LibRoutineAssignedVariable(LibRoutineVariable):

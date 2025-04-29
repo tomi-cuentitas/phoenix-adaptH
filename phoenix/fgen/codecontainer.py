@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 28/04/2025, 18:33
-# Version:     0.0.1974
+# Last Update: 29/04/2025, 17:21
+# Version:     0.0.2030
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,7 +25,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineInputVariable,
     LibRoutineOutputVariable,
     LibRoutineInOutVariable,
-    LibRoutineFrameSelectVariable,
+    LibRoutineMultiFrame,
     LibRoutineImport,
     LibRoutineConstant,
 )
@@ -563,47 +563,6 @@ class NamedContainer(CodeContainer):
         yield from super().content
 
 
-# class FrameSelectContainer(EmbeddedContainer):
-#     """
-#     Manages frames. Introduces the frame selector.
-#     To make sure frame selectors are well defined, maybe this could be an
-#     exclusive way to get a frame selector in the first place.
-
-#     The MultiFrameContainer class is not intended to be a co parent of Kernel,
-#     Loop, etc. Instead it is supposed to be the embedding container
-#     """
-
-#     def __init__(self, *, context, **buildargs):
-#         super().__init__(context=context, **buildargs)
-#         self._fs_variable = None
-
-#     def create_frame_selector(self, fs_class, prefix=None):
-#         """create the frame selector from a class"""
-#         self._fs_variable = fs_class(origin=self, prefix=prefix)
-
-#     @property
-#     def frame_selector(self):
-#         if self._fs_variable is None:
-#             raise ValueError("FrameSelector not assigned")
-#         return self._fs_variable
-
-#     def introduce_frame_selector(self, **kwargs):
-#         """
-#         Create all containers required for the proper definition/first introduction
-#         of the frame selector (i = ...).
-#         This excludes the variable definition (integer :: i ...)!
-#         """
-#         return
-#         yield
-
-#     def generate_head_containers(self, **kwargs):
-#         """
-#         The preamble is made from all containers that define and introduce
-#         the associated frame selector.
-#         """
-#         yield from self.introduce_frame_selector(**kwargs)
-
-
 class GroupContainer(EmbeddingContainer):
     """
     A holds multiple containers inside. The grouping might only be symbolically.
@@ -804,7 +763,9 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -926,7 +887,84 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         the argument line"""
 
 
-class KernelContainer(RoutineContainer):
+# class FrameSelectContainer(EmbeddingContainer):
+#     """
+#     Manages frames. Introduces the frame selector.
+#     To make sure frame selectors are well defined, maybe this could be an
+#     exclusive way to get a frame selector in the first place.
+
+#     The MultiFrameContainer class is not intended to be a co parent of Kernel,
+#     Loop, etc. Instead it is supposed to be the embedding container
+#     """
+
+#     def __init__(self, *, context, **buildargs):
+#         super().__init__(context=context, **buildargs)
+#         self._fs_variable = None
+#         self._value = None
+#         self._local = None
+
+#     # def create_frame_selector(self, multiplicity=1, prefix=None):
+#     #     """create the frame selector from a class"""
+#     #     self._fs_variable = LibRoutineFrameSelector(
+#     #         multiplicity, container=self, prefix=prefix
+#     #     )
+
+#     def create_local(
+#         self,
+#         local_variable_class=None,
+#         prefix=None,
+#         dtype="i32",
+#         size=None,
+#     ):
+#         """create the frame selector from a class"""
+#         if local_variable_class is None:
+#             raise ValueError("FrameSelector class not provided")
+#         self._local = local_variable_class(
+#             namespace=self.context.namespace,
+#             size=size,
+#             prefix=prefix,
+#             dtype=dtype,
+#         )
+#         self.requires(self.local)
+
+#     @property
+#     def frame_selector(self):
+#         """access associated frame selector"""
+#         if self._fs_variable is None:
+#             raise ValueError("FrameSelector not assigned")
+#         return self._fs_variable
+
+#     @property
+#     def local(self):
+#         """access the local representation of the frame selector"""
+#         return self._local
+
+#     def set_value(self, value):
+#         """
+#         Set the source of the value of the frame selectors local representation.
+#         Can be an expression, a constant, a parameter, ...
+#         """
+#         self._value = value
+
+#     def get_introduction_containers(self, **_kwargs):
+#         """
+#         Create all containers required for the proper definition/first introduction
+#         of the frame selector (i = ...).
+#         This excludes the variable definition (integer :: i ...)!
+#         """
+#         return
+#         yield
+
+#     def generate_head_containers(self, **kwargs):
+#         """
+#         The preamble is made from all containers that define and introduce
+#         the associated frame selector.
+#         """
+#         yield from self.get_introduction_containers(**kwargs)
+#         yield from super().generate_head_containers()
+
+
+class KernelContainer(RoutineContainer, CaptureContainer):
     """
     A KernelContainer represents a piece of code that is supposed to be called
     in various memory locations, potentially simultaneously. KernelContainers
@@ -951,6 +989,13 @@ class KernelContainer(RoutineContainer):
     In my current strategy, I consider that part of the kernel call as well.
     The kernel itself however is only the routine-like object with information on how it
     is called (including the loops for consinstency)
+    """
+
+
+class KernalizeContainer(CaptureContainer, EmbeddingContainer):
+    """
+    This is a container that contains the kernel call and corresponding loops around it.
+    It is designed as a capture container that reacts on FrameSelectors
     """
 
 
