@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 29/04/2025, 19:43
-# Version:     0.0.656
+# Last Update: 30/04/2025, 14:22
+# Version:     0.0.671
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -265,9 +265,7 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(
-            self
-        ).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -342,9 +340,9 @@ class LibRoutineVariable:
         if self.status & type(self).STATUS_INOUT:
             status = "RW"
         if self.size is None:
-            yield f":DEFINE {status} {self.datatype} {self.name}"
+            yield f":DEFINE: {status} {self.datatype} {self.name}"
         else:
-            yield f":DEFINE {status} {self.datatype} {self.name}[{self.size}]"
+            yield f":DEFINE: {status} {self.datatype} {self.name}[{self.size}]"
 
     def as_argument(self):
         """get the variable as an argument for a function"""
@@ -451,7 +449,7 @@ class LibRoutineLocalVariable(LibRoutineVariable):
         )
 
 
-class LibRoutineMultiFrame:
+class LibRoutineMultiFrame(LibRoutineVariable):
     """
     An integer type variable made for iterating through an array or instructions,
     assuming order does not matter!
@@ -467,28 +465,25 @@ class LibRoutineMultiFrame:
     # exactly one of these.
 
     def __init__(
-        self, multiplicity, container=None, namespace=None, prefix=None
+        self,
+        max_value,
+        min_value=0,
     ):
-        if container is None:
-            raise ValueError("MultiFrame requires Kernelize container.")
         super().__init__(
             size=None,
-            namespace=container.context.namespace,
-            prefix=prefix,
+            namespace=None,
+            prefix=None,
             status=2,
             dtype="i32",
         )
 
         # the container that the frame selector is attached to
-        self._container = container
-        self._multiplicity = multiplicity
-        self._value = None
+        self._max_value = max_value
+        self._min_value = min_value
         self._local = None
-        # self._default_value = 0
 
-    def expr(self):
-        """expression for the whole variable"""
-        return f"{self.local.expr}"
+        # default value when branching needs to be suppressed
+        self._default_value = min_value
 
     def create_representative(
         self,
@@ -513,17 +508,49 @@ class LibRoutineMultiFrame:
             context.container.requires(self.local)
         return self
 
+    def expr(self):
+        """expression for the whole variable"""
+        return f"{self.local.expr()}"
+
+    @property
+    def max_value(self):
+        """access max value"""
+        return self._max_value
+
+    @property
+    def min_value(self):
+        """access min value"""
+        return self._min_value
+
     @property
     def local(self):
         """access the local representation of the frame selector"""
         return self._local
 
-    def set_value(self, value):
-        """
-        Set the source of the value of the frame selectors local representation.
-        Can be an expression, a constant, a parameter, ...
-        """
-        self._value = value
+    @property
+    def is_scalar(self):
+        """return boolean deciding whether the variable is a scalar"""
+        return self._size is None
+
+    @property
+    def size(self):
+        """access size attribute"""
+        return self._size
+
+    @property
+    def dtype(self):
+        """access datatype attribute"""
+        return self.local.dtype
+
+    @property
+    def datatype(self):
+        """access datatype attribute"""
+        return self.local.lookup_dtype(self.dtype)
+
+    @property
+    def status(self):
+        """access the status binary set as integer"""
+        return self.local.status
 
     """
     IDEA

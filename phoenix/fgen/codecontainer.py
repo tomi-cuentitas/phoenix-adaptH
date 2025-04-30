@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 29/04/2025, 17:21
-# Version:     0.0.2030
+# Last Update: 30/04/2025, 14:22
+# Version:     0.0.2192
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -717,6 +717,51 @@ class LoopContainer(EmbeddingContainer):
     """
 
 
+class MultiFrameContainer(EmbeddingContainer):
+    """
+    A MultiFrameContainer is a special kind of loop container. It is considered to be
+    parallellizable and does not strictly has to be a loop.
+    """
+
+    LOOPVARIABLE = LibRoutineLocalVariable
+
+    def __init__(self, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self._multiframe_variable = None
+        self._max_value = None
+        self._min_value = None
+
+    def set_multiframe_variable(
+        self, variable, prefix="rep", local_variable_class=None
+    ):
+        """set the loop variable. This activates the loop"""
+        self._multiframe_variable = variable
+        self._max_value = variable.max_value
+        self._min_value = variable.min_value
+        if local_variable_class is None:
+            local_variable_class = type(self).LOOPVARIABLE
+        self._multiframe_variable.create_representative(
+            local_variable_class,
+            context=self.context,
+            prefix=prefix,
+            dtype="i32",
+            size=None,
+        )
+        return self
+
+    def generate_head_containers(self):
+        if self._multiframe_variable is not None:
+            yield self.codeline_from_text(
+                f":BEGIN REPEAT: {self._multiframe_variable.expr()} from {self._min_value} to {self._max_value}"
+            )
+
+    def generate_foot_containers(self):
+        if self._multiframe_variable is not None:
+            yield self.codeline_from_text(
+                f":END REPEAT: {self._multiframe_variable.expr()}"
+            )
+
+
 class ConditionalContainer(CodeContainer):
     """Conditionals. If stuff then stuff. You know what."""
 
@@ -745,7 +790,7 @@ class CaptureContainer(CodeContainer):
         self._filter_func_customs: List[Tuple(Callable, Callable | None)] = []
         self._filter_func_vtypes: List[Tuple(str, Callable | None)] = []
         self._filter_func_types: List[Tuple(type, Callable | None)] = []
-        self._captured: Set[LibRoutineVariable] = set()
+        self._captured: List[LibRoutineVariable] = []
 
     def add_capture_trigger(
         self,
@@ -763,9 +808,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -801,7 +844,8 @@ class CaptureContainer(CodeContainer):
         This CaptureContainer provides a variable.
         It is also added to the namespace and can be seen from all derived namespaces.
         """
-        self._captured.add(variable)
+        if variable not in self._captured:
+            self._captured.append(variable)
         self.namespace.add(variable)
 
     def requires(self, variable):
@@ -986,17 +1030,68 @@ class KernelContainer(RoutineContainer, CaptureContainer):
     a new (most inner) layer gets assigned to the most inner selector and whatever
     was assigned there before travels one layer up.
     After the highest kernel-layer, the selectors need to map to loops outside of the call!
-    In my current strategy, I consider that part of the kernel call as well.
-    The kernel itself however is only the routine-like object with information on how it
-    is called (including the loops for consinstency)
+    In my current strategy, I do not consider that part of the kernel call as well.
+    The kernel itself is only the routine-like object with information on how it
+    is called. The loops and other call attributes are invoked in a kernalize container
     """
 
 
-class KernalizeContainer(CaptureContainer, EmbeddingContainer):
+class KernalizeContainer(NamedContainer, CaptureContainer, EmbeddingContainer):
     """
     This is a container that contains the kernel call and corresponding loops around it.
-    It is designed as a capture container that reacts on FrameSelectors
+    It is designed as a capture container that reacts on MultiFrame Objects
     """
+
+
+class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
+    """A capture container that reacts on multi frame objects"""
+
+    INDENT_BODY = True
+    REPEATCONTAINER = MultiFrameContainer
+
+    def __init__(self, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self.add_capture_trigger(LibRoutineMultiFrame)
+        self._repeat_containers = []
+
+    def build(self, **kwargs):
+        for num, variable in enumerate(self._captured):
+            self._repeat_containers.append(
+                type(self)
+                .REPEATCONTAINER(context=self.context, **kwargs)
+                .set_multiframe_variable(
+                    variable,
+                    prefix=f"cnt_l{self.level}_n{num}",
+                )
+                .build_all()
+            )
+
+        return super().build()
+
+    def get_codelines_head(self, indent: int, **kwargs):
+        for num, container in enumerate(self._repeat_containers):
+            yield from container.get_codelines_head(
+                indent + num * int(self.INDENT_BODY), **kwargs
+            )
+
+    def get_codelines_foot(self, indent: int, **kwargs):
+        reversed_containers = list(enumerate(self._repeat_containers))[::-1]
+        for num, container in reversed_containers:
+            yield from container.get_codelines_foot(
+                indent + num * int(self.INDENT_BODY), **kwargs
+            )
+
+    def get_codelines(self, indent: int, **kwargs):
+        yield from self.get_codelines_head(indent, **kwargs)
+        yield from self.get_codelines_body(
+            indent + int(self.INDENT_BODY) * len(self._repeat_containers),
+            **kwargs,
+        )
+        yield from self.get_codelines_foot(indent, **kwargs)
+
+    def reset(self):
+        self._repeat_containers = []
+        return super().reset()
 
 
 class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
@@ -1141,3 +1236,23 @@ if __name__ == "__main__":
         "is compiled, which maps all the FrameVariables onto outer for loops and blocks/threads."
     )
     print()
+
+    context = Context()
+    deflayer = DefinitionContainer(context=context)
+    test_container = LoopCaptureContainer(context=deflayer.context)
+    another_block = CodeLine(context=test_container.context).set_line("fooobar")
+    deflayer.append(test_container)
+    deflayer.add_capture_trigger(LibRoutineLocalVariable)
+    test_container.append(another_block)
+
+    test_var1 = LibRoutineMultiFrame(20)
+    test_var2 = LibRoutineMultiFrame(21)
+    test_var3 = LibRoutineMultiFrame(22)
+
+    another_block.requires(test_var1)
+    another_block.requires(test_var2)
+    another_block.requires(test_var3)
+    deflayer.build_all()
+
+    for ind, line in deflayer.get_codelines(0):
+        print("  " * ind, line)
