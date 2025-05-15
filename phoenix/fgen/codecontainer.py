@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 30/04/2025, 14:22
-# Version:     0.0.2192
+# Last Update: 15/05/2025, 13:31
+# Version:     0.0.2214
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -865,6 +865,8 @@ class DefinitionContainer(CaptureContainer, PreambleContainer):
     on which type of requirements are implemented here or passed on.
     """
 
+    INDENT_BODY = False
+
     def generate_preamble_containers(self, **kwargs):
         for variable in self.captured:
             yield DefinitionLines(variable, context=self.context, **kwargs)
@@ -920,15 +922,18 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         yield self.codeline_from_text("")
 
     def generate_head_containers(self, **_):
-        yield self.codeline_from_text(f"FUNCTION {self.name}")
+        yield self.codeline_from_text(f":BEGIN: FUNCTION {self.name}")
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f"END FUNCTION {self.name}")
+        yield self.codeline_from_text(f":END: FUNCTION {self.name}")
 
     def get_call(self, **substitutions):
         """
         Get the string of how to call it. Plug the proper substitutions into
-        the argument line"""
+        the argument line.
+        Use get_call_arguments to get the arguments in the format designed for
+        a call.
+        """
 
 
 # class FrameSelectContainer(EmbeddingContainer):
@@ -1036,11 +1041,8 @@ class KernelContainer(RoutineContainer, CaptureContainer):
     """
 
 
-class KernalizeContainer(NamedContainer, CaptureContainer, EmbeddingContainer):
-    """
-    This is a container that contains the kernel call and corresponding loops around it.
-    It is designed as a capture container that reacts on MultiFrame Objects
-    """
+# KERNALIZE will be a suggestive instruction rather than a container.
+# A Kernal call in a loop container will have the same effect
 
 
 class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
@@ -1255,4 +1257,4 @@ if __name__ == "__main__":
     deflayer.build_all()
 
     for ind, line in deflayer.get_codelines(0):
-        print("  " * ind, line)
+        print("  " * ind + line)
