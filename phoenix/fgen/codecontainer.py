@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 15/05/2025, 14:27
-# Version:     0.0.2220
+# Last Update: 19/05/2025, 17:36
+# Version:     0.0.2228
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -808,7 +808,9 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -884,7 +886,6 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     # signatures are provided
 
     INDENT_BODY = True
-    DEFCONTAINER = DefinitionContainer
 
     def __init__(self, name, *, context, **buildargs):
         # print("routine init")
@@ -1013,7 +1014,7 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 #         yield from super().generate_head_containers()
 
 
-class KernelContainer(RoutineContainer, CaptureContainer):
+class KernelContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     """
     A KernelContainer represents a piece of code that is supposed to be called
     in various memory locations, potentially simultaneously. KernelContainers
@@ -1040,6 +1041,64 @@ class KernelContainer(RoutineContainer, CaptureContainer):
     is called. The loops and other call attributes are invoked in a kernalize container
     """
 
+    def __init__(self, name, *, context, **buildargs):
+        # print("routine init")
+        self._def_layer = CaptureContainer(context=context)
+        self._var_layer = CaptureContainer(context=self._def_layer.context)
+        self._ker_layer = CaptureContainer(context=self._var_layer.context)
+        super().__init__(name, context=self._ker_layer.context, **buildargs)
+        self._ker_layer.add_capture_trigger(LibRoutineMultiFrame)
+        self._var_layer.add_capture_trigger(LibRoutineInputVariable)
+        self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
+        self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
+        self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
+
+    def get_argument_variables(self, **_):
+        for variable in self._var_layer.captured:
+            yield variable
+
+    def get_call_arguments(self, **_):
+        for variable in self.get_argument_variables():
+            yield variable.as_argument()
+
+    def get_inner_variables(self, **_):
+        for variable in self._def_layer.captured:
+            yield variable
+
+    def get_kernel_argument_variables(self, **_):
+        for variable in self._ker_layer.captured:
+            yield variable
+
+    def get_call_arguments(self, **_):
+        for variable in self.get_kernel_argument_variables():
+            yield variable.as_argument()
+
+   def generate_preamble_containers(self, **kwargs):
+        """
+        distribute the captured variables into the def line and the call
+        """
+        yield self.comment_from_text("IN/OUT/INOUT")
+        for variable in self.get_argument_variables():
+            yield DefinitionLines(variable, context=self.context, **kwargs)
+        yield self.codeline_from_text("")
+        yield self.comment_from_text("LOCAL")
+        for variable in self.get_inner_variables():
+            yield DefinitionLines(variable, context=self.context, **kwargs)
+        yield self.codeline_from_text("")
+
+    def generate_head_containers(self, **_):
+        yield self.codeline_from_text(f":BEGIN: FUNCTION {self.name}")
+
+    def generate_foot_containers(self, **_):
+        yield self.codeline_from_text(f":END: FUNCTION {self.name}")
+
+    def get_call(self, **substitutions):
+        """
+        Get the string of how to call it. Plug the proper substitutions into
+        the argument line.
+        Use get_call_arguments to get the arguments in the format designed for
+        a call.
+        """
 
 # KERNALIZE will be a suggestive instruction rather than a container.
 # A Kernal call in a loop container will have the same effect
@@ -1242,7 +1301,9 @@ if __name__ == "__main__":
     context = Context()
     deflayer = DefinitionContainer(context=context)
     test_container = LoopCaptureContainer(context=deflayer.context)
-    another_block = CodeLine(context=test_container.context).set_line("fooobar")
+    another_block = CodeLine(context=test_container.context).set_line(
+        "fooobar"
+    )
     deflayer.append(test_container)
     deflayer.add_capture_trigger(LibRoutineLocalVariable)
     test_container.append(another_block)
@@ -1254,6 +1315,7 @@ if __name__ == "__main__":
     another_block.requires(test_var1)
     another_block.requires(test_var2)
     another_block.requires(test_var3)
+
     deflayer.build_all()
 
     for ind, line in deflayer.get_codelines(0):
