@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 15/05/2025, 13:31
-# Version:     0.0.2214
+# Last Update: 15/05/2025, 14:27
+# Version:     0.0.2220
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1247,9 +1247,9 @@ if __name__ == "__main__":
     deflayer.add_capture_trigger(LibRoutineLocalVariable)
     test_container.append(another_block)
 
-    test_var1 = LibRoutineMultiFrame(20)
-    test_var2 = LibRoutineMultiFrame(21)
-    test_var3 = LibRoutineMultiFrame(22)
+    test_var1 = LibRoutineMultiFrame(24)
+    test_var2 = LibRoutineMultiFrame(11)
+    test_var3 = LibRoutineMultiFrame(42)
 
     another_block.requires(test_var1)
     another_block.requires(test_var2)
