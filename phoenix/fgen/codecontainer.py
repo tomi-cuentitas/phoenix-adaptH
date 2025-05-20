@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 19/05/2025, 17:36
-# Version:     0.0.2228
+# Last Update: 20/05/2025, 13:45
+# Version:     0.0.2358
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -160,15 +160,21 @@ class CodeContainer:
         # content, divided in three sections, head, body, foot
         self._container_body: list[CodeContainer] = []
 
-        self._memory = {}
+        # self._memory = {}
 
         self._context = context.inherit().set_container(self)
+
+        self._attachment_point = self
 
         # # parent link
         # self._wr_parent: wrReferenceType[CodeContainer] | None = None
         # self._set_parent(
         #     context.parent
         # )  # manage parent reference, might be weak
+
+    def _set_attachment_point(self, point: CodeContainer) -> None:
+        """set the point where containers are effectively attached"""
+        self._attachment_point = point
 
     @Namespace.wrap_name_combine
     def request_temp(self, name, generating, autorequire=True, **genargs):
@@ -305,12 +311,12 @@ class CodeContainer:
 
     def append(self, content):
         """append to the container body"""
-        self.append_body(content)
+        self._attachment_point.append_body(content)
 
     @property
     def context(self):
         """access the context but prohibit setting it manually"""
-        return self._context
+        return self._attachment_point._context
 
     @property
     def level(self):
@@ -740,8 +746,7 @@ class MultiFrameContainer(EmbeddingContainer):
         self._min_value = variable.min_value
         if local_variable_class is None:
             local_variable_class = type(self).LOOPVARIABLE
-        self._multiframe_variable.create_representative(
-            local_variable_class,
+        self._multiframe_variable.create_local_representative(
             context=self.context,
             prefix=prefix,
             dtype="i32",
@@ -887,23 +892,46 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     INDENT_BODY = True
 
+    multiframe_container_class = MultiFrameContainer
+
     def __init__(self, name, *, context, **buildargs):
         # print("routine init")
-        self._def_layer = CaptureContainer(context=context)
-        self._var_layer = CaptureContainer(context=self._def_layer.context)
-        super().__init__(name, context=self._var_layer.context, **buildargs)
+        inner_context = self._prep_hidden_layers(context, **buildargs)
+        super().__init__(name=name, context=inner_context, **buildargs)
         self._var_layer.add_capture_trigger(LibRoutineInputVariable)
         self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
         self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
         self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
 
+        self._loop_container = LoopCaptureContainer(
+            type(self).multiframe_container_class,
+            context=self._var_layer.context,
+            **buildargs,
+        )
+        self.append_body(self._loop_container)
+        self._set_attachment_point(self._loop_container)
+
+    def _prep_hidden_layers(self, context, **buildargs):
+        self._def_layer = CaptureContainer(context=context, **buildargs)
+        self._var_layer = CaptureContainer(
+            context=self._def_layer.context, **buildargs
+        )
+        return self._var_layer.context
+        # self._rep_layer = LoopCaptureContainer(
+        #     type(self).multiframe_container_class,
+        #     context=self._var_layer.context,
+        #     **buildargs,
+        # )
+        # return self._rep_layer.context
+
+    def get_call_arguments(self, **substitutions):
+        """"""
+        for variable in self.get_argument_variables():
+            yield variable.as_argument()
+
     def get_argument_variables(self, **_):
         for variable in self._var_layer.captured:
             yield variable
-
-    def get_call_arguments(self, **_):
-        for variable in self.get_argument_variables():
-            yield variable.as_argument()
 
     def get_inner_variables(self, **_):
         for variable in self._def_layer.captured:
@@ -928,93 +956,16 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f":END: FUNCTION {self.name}")
 
-    def get_call(self, **substitutions):
-        """
-        Get the string of how to call it. Plug the proper substitutions into
-        the argument line.
-        Use get_call_arguments to get the arguments in the format designed for
-        a call.
-        """
+    # def get_call(self, **substitutions):
+    #     """
+    #     Get the string of how to call it. Plug the proper substitutions into
+    #     the argument line.
+    #     Use get_call_arguments to get the arguments in the format designed for
+    #     a call.
+    #     """
 
 
-# class FrameSelectContainer(EmbeddingContainer):
-#     """
-#     Manages frames. Introduces the frame selector.
-#     To make sure frame selectors are well defined, maybe this could be an
-#     exclusive way to get a frame selector in the first place.
-
-#     The MultiFrameContainer class is not intended to be a co parent of Kernel,
-#     Loop, etc. Instead it is supposed to be the embedding container
-#     """
-
-#     def __init__(self, *, context, **buildargs):
-#         super().__init__(context=context, **buildargs)
-#         self._fs_variable = None
-#         self._value = None
-#         self._local = None
-
-#     # def create_frame_selector(self, multiplicity=1, prefix=None):
-#     #     """create the frame selector from a class"""
-#     #     self._fs_variable = LibRoutineFrameSelector(
-#     #         multiplicity, container=self, prefix=prefix
-#     #     )
-
-#     def create_local(
-#         self,
-#         local_variable_class=None,
-#         prefix=None,
-#         dtype="i32",
-#         size=None,
-#     ):
-#         """create the frame selector from a class"""
-#         if local_variable_class is None:
-#             raise ValueError("FrameSelector class not provided")
-#         self._local = local_variable_class(
-#             namespace=self.context.namespace,
-#             size=size,
-#             prefix=prefix,
-#             dtype=dtype,
-#         )
-#         self.requires(self.local)
-
-#     @property
-#     def frame_selector(self):
-#         """access associated frame selector"""
-#         if self._fs_variable is None:
-#             raise ValueError("FrameSelector not assigned")
-#         return self._fs_variable
-
-#     @property
-#     def local(self):
-#         """access the local representation of the frame selector"""
-#         return self._local
-
-#     def set_value(self, value):
-#         """
-#         Set the source of the value of the frame selectors local representation.
-#         Can be an expression, a constant, a parameter, ...
-#         """
-#         self._value = value
-
-#     def get_introduction_containers(self, **_kwargs):
-#         """
-#         Create all containers required for the proper definition/first introduction
-#         of the frame selector (i = ...).
-#         This excludes the variable definition (integer :: i ...)!
-#         """
-#         return
-#         yield
-
-#     def generate_head_containers(self, **kwargs):
-#         """
-#         The preamble is made from all containers that define and introduce
-#         the associated frame selector.
-#         """
-#         yield from self.get_introduction_containers(**kwargs)
-#         yield from super().generate_head_containers()
-
-
-class KernelContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
+class KernelContainer(RoutineContainer):
     """
     A KernelContainer represents a piece of code that is supposed to be called
     in various memory locations, potentially simultaneously. KernelContainers
@@ -1042,55 +993,48 @@ class KernelContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     """
 
     def __init__(self, name, *, context, **buildargs):
-        # print("routine init")
-        self._def_layer = CaptureContainer(context=context)
-        self._var_layer = CaptureContainer(context=self._def_layer.context)
-        self._ker_layer = CaptureContainer(context=self._var_layer.context)
-        super().__init__(name, context=self._ker_layer.context, **buildargs)
+        super().__init__(name, context=context, **buildargs)
         self._ker_layer.add_capture_trigger(LibRoutineMultiFrame)
-        self._var_layer.add_capture_trigger(LibRoutineInputVariable)
-        self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
-        self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
-        self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
 
-    def get_argument_variables(self, **_):
-        for variable in self._var_layer.captured:
-            yield variable
+    def _prep_hidden_layers(self, context, **buildargs):
+        self._def_layer = CaptureContainer(context=context, **buildargs)
+        self._var_layer = CaptureContainer(
+            context=self._def_layer.context, **buildargs
+        )
+        self._ker_layer = CaptureContainer(
+            context=self._var_layer.context, **buildargs
+        )
+        return self._ker_layer.context
 
-    def get_call_arguments(self, **_):
+    def get_call_arguments(self, **substitutions):
+        """"""
         for variable in self.get_argument_variables():
             yield variable.as_argument()
 
-    def get_inner_variables(self, **_):
-        for variable in self._def_layer.captured:
-            yield variable
-
-    def get_kernel_argument_variables(self, **_):
+    def get_kernel_variables(self):
+        """get the kernel multiframe variables"""
         for variable in self._ker_layer.captured:
             yield variable
 
-    def get_call_arguments(self, **_):
-        for variable in self.get_kernel_argument_variables():
-            yield variable.as_argument()
+    def prepare_kernel_arguments(self):
+        """prepare the multiframe variables among the arguments"""
+        for variable in self.get_kernel_variables():
+            variable.create_input_representative(
+                context=self.context,
+                dtype="i32",
+                size=None,
+                prefix="krnl",
+            )
 
-   def generate_preamble_containers(self, **kwargs):
-        """
-        distribute the captured variables into the def line and the call
-        """
-        yield self.comment_from_text("IN/OUT/INOUT")
-        for variable in self.get_argument_variables():
-            yield DefinitionLines(variable, context=self.context, **kwargs)
-        yield self.codeline_from_text("")
-        yield self.comment_from_text("LOCAL")
-        for variable in self.get_inner_variables():
-            yield DefinitionLines(variable, context=self.context, **kwargs)
-        yield self.codeline_from_text("")
+    def build(self, **kwargs):
+        self.prepare_kernel_arguments()
+        return super().build()
 
     def generate_head_containers(self, **_):
-        yield self.codeline_from_text(f":BEGIN: FUNCTION {self.name}")
+        yield self.codeline_from_text(f":BEGIN: KERNEL FUNCTION {self.name}")
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f":END: FUNCTION {self.name}")
+        yield self.codeline_from_text(f":END: KERNEL FUNCTION {self.name}")
 
     def get_call(self, **substitutions):
         """
@@ -1100,6 +1044,7 @@ class KernelContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         a call.
         """
 
+
 # KERNALIZE will be a suggestive instruction rather than a container.
 # A Kernal call in a loop container will have the same effect
 
@@ -1108,18 +1053,17 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
     """A capture container that reacts on multi frame objects"""
 
     INDENT_BODY = True
-    REPEATCONTAINER = MultiFrameContainer
 
-    def __init__(self, *, context, **buildargs):
+    def __init__(self, mfcontainer_class, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
+        self._mfcontainer_class = mfcontainer_class
         self.add_capture_trigger(LibRoutineMultiFrame)
         self._repeat_containers = []
 
     def build(self, **kwargs):
         for num, variable in enumerate(self._captured):
             self._repeat_containers.append(
-                type(self)
-                .REPEATCONTAINER(context=self.context, **kwargs)
+                self._mfcontainer_class(context=self.context, **kwargs)
                 .set_multiframe_variable(
                     variable,
                     prefix=f"cnt_l{self.level}_n{num}",
@@ -1298,14 +1242,24 @@ if __name__ == "__main__":
     )
     print()
 
-    context = Context()
-    deflayer = DefinitionContainer(context=context)
-    test_container = LoopCaptureContainer(context=deflayer.context)
-    another_block = CodeLine(context=test_container.context).set_line(
-        "fooobar"
-    )
-    deflayer.append(test_container)
+    ctxt = Context()
+    deflayer = DefinitionContainer(context=ctxt)
     deflayer.add_capture_trigger(LibRoutineLocalVariable)
+
+    test_container = KernelContainer(name="fooname", context=deflayer.context)
+    test_container = LoopCaptureContainer(
+        MultiFrameContainer, context=deflayer.context
+    )
+    another_block = CodeLine(context=test_container.context).set_line(
+        "fooobar block thingy"
+    )
+
+    deflayer.append(test_container)
+    test_container.append(another_block)
+    test_container.append(another_block)
+    test_container.append(another_block)
+    test_container.append(another_block)
+    test_container.append(another_block)
     test_container.append(another_block)
 
     test_var1 = LibRoutineMultiFrame(24)

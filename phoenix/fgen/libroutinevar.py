@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 30/04/2025, 14:22
-# Version:     0.0.671
+# Last Update: 20/05/2025, 13:16
+# Version:     0.0.698
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -92,7 +92,7 @@ class Namespace:
             out = f"{cname}{num}"
         else:
             out = cname
-        while out in self._content:
+        while self.find(out, exception_existing=False) is not None:
             num += 1
             out = f"{cname}{num}"
         return out
@@ -102,7 +102,9 @@ class Namespace:
         if name in self._content:
             return self._content[name]
         if self._parent is not None:
-            return self._parent.find(name)
+            return self._parent.find(
+                name, exception_existing=exception_existing
+            )
         if exception_existing:
             raise KeyError(f"variable {name} not found")
         return None
@@ -238,6 +240,7 @@ class LibRoutineVariable:
             name=name,
             prefix=prefix,
             suffix=suffix,
+            enum_first=True,
         )
         assert aname not in self._namespace
         assert aname is not None
@@ -265,7 +268,9 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -335,9 +340,9 @@ class LibRoutineVariable:
         status = "??"
         if self.status & type(self).STATUS_INPUT:
             status = "RO"
-        if self.status & type(self).STATUS_OUTPUT:
+        elif self.status & type(self).STATUS_OUTPUT:
             status = "WO"
-        if self.status & type(self).STATUS_INOUT:
+        elif self.status & type(self).STATUS_INOUT:
             status = "RW"
         if self.size is None:
             yield f":DEFINE: {status} {self.datatype} {self.name}"
@@ -447,126 +452,6 @@ class LibRoutineLocalVariable(LibRoutineVariable):
         super().__init__(
             *args, **kwargs, status=LibRoutineVariable.STATUS_INOUT
         )
-
-
-class LibRoutineMultiFrame(LibRoutineVariable):
-    """
-    An integer type variable made for iterating through an array or instructions,
-    assuming order does not matter!
-    """
-
-    _VAR_IDENTIFIER = "MultiFrame"
-    _CLASS_BASE = "mfr"
-
-    # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
-    # maybe let it rise like other variables and introduce a "handled" flag that is true once the
-    # looping structure has been enabled, which may still require proper initialization.
-    # this is the counter object, not the lookup object. Each parallel environment will have
-    # exactly one of these.
-
-    def __init__(
-        self,
-        max_value,
-        min_value=0,
-    ):
-        super().__init__(
-            size=None,
-            namespace=None,
-            prefix=None,
-            status=2,
-            dtype="i32",
-        )
-
-        # the container that the frame selector is attached to
-        self._max_value = max_value
-        self._min_value = min_value
-        self._local = None
-
-        # default value when branching needs to be suppressed
-        self._default_value = min_value
-
-    def create_representative(
-        self,
-        local_variable_class=None,
-        context=None,
-        prefix=None,
-        dtype="i32",
-        size=None,
-    ):
-        """create the frame selector from a class"""
-        if local_variable_class is None:
-            raise ValueError("No class provided")
-        if context is None:
-            raise ValueError("No context provided")
-        if self._local is None:
-            self._local = local_variable_class(
-                namespace=context.namespace,
-                size=size,
-                prefix=prefix,
-                dtype=dtype,
-            )
-            context.container.requires(self.local)
-        return self
-
-    def expr(self):
-        """expression for the whole variable"""
-        return f"{self.local.expr()}"
-
-    @property
-    def max_value(self):
-        """access max value"""
-        return self._max_value
-
-    @property
-    def min_value(self):
-        """access min value"""
-        return self._min_value
-
-    @property
-    def local(self):
-        """access the local representation of the frame selector"""
-        return self._local
-
-    @property
-    def is_scalar(self):
-        """return boolean deciding whether the variable is a scalar"""
-        return self._size is None
-
-    @property
-    def size(self):
-        """access size attribute"""
-        return self._size
-
-    @property
-    def dtype(self):
-        """access datatype attribute"""
-        return self.local.dtype
-
-    @property
-    def datatype(self):
-        """access datatype attribute"""
-        return self.local.lookup_dtype(self.dtype)
-
-    @property
-    def status(self):
-        """access the status binary set as integer"""
-        return self.local.status
-
-    """
-    IDEA
-    After the kernel's instructions are prepared, all multiframe objects should be known.
-    Therefore they can be mapped to inner iterators and outer iterators, i.e.
-    threadIdx, ... and loops outside the call.
-    The simplest way is to let KernelParameters rise and be captured in the kernelize
-    container, where then the call is managed. Even easier would be a get_kernel_params
-    routine, that could later involve shared memory and more. No more captures and simple
-    integers. I think I prefer that.
-    The kernelize container could have a box for loops that cover all kernelparameters
-    that are not handled by inner parameters such as threadIdx etc. The proper call can be
-    derived from kernel parameters and call parameters, where inner and outer parameters
-    could be separated and then remerged. In kernalize, local variables could be introduced
-    that are assigned to the loops and automatically put into the right place.
-    """
 
 
 class LibRoutineAssignedVariable(LibRoutineVariable):
@@ -744,6 +629,151 @@ class LibRoutineConstant(LibRoutineVariable):
             raise ValueError("Cannot append to a scalar variable.")
         self._value.append(value)
         self._size = len(self._value)
+
+
+class LibRoutineMultiFrame(LibRoutineVariable):
+    """
+    An integer type variable made for iterating through an array or instructions,
+    assuming order does not matter!
+    """
+
+    _VAR_IDENTIFIER = "MultiFrame"
+    _CLASS_BASE = "mfr"
+
+    local_variable_class = LibRoutineLocalVariable
+    input_variable_class = LibRoutineInputVariable
+
+    # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
+    # maybe let it rise like other variables and introduce a "handled" flag that is true once the
+    # looping structure has been enabled, which may still require proper initialization.
+    # this is the counter object, not the lookup object. Each parallel environment will have
+    # exactly one of these.
+
+    def __init__(
+        self,
+        max_value,
+        min_value=0,
+    ):
+        super().__init__(
+            size=None,
+            namespace=None,
+            prefix=None,
+            status=2,
+            dtype="i32",
+        )
+
+        # the container that the frame selector is attached to
+        self._max_value = max_value
+        self._min_value = min_value
+        self._local = None
+
+        # default value when branching needs to be suppressed
+        self._default_value = min_value
+
+    def create_local_representative(
+        self,
+        context=None,
+        local_variable_class=None,
+        **kwargs,
+    ):
+        """create the frame selector representative from a class"""
+        if local_variable_class is None:
+            local_variable_class = type(self).local_variable_class
+        assert local_variable_class is not None
+        if context is None:
+            raise ValueError("No context provided")
+        self._local = local_variable_class(
+            namespace=context.namespace,
+            **kwargs,
+        )
+        context.container.requires(self.local)
+        return self
+
+    def create_input_representative(
+        self,
+        context=None,
+        input_variable_class=None,
+        **kwargs,
+    ):
+        """create the frame selector representative from a class"""
+        if input_variable_class is None:
+            input_variable_class = type(self).input_variable_class
+        assert input_variable_class is not None
+        if context is None:
+            raise ValueError("No context provided")
+        if self._local is None:
+            self._local = input_variable_class(
+                None,
+                None,
+                namespace=context.namespace,
+                **kwargs,
+            )
+        context.container.requires(self.local)
+        return self
+
+    def reset_representative(self):
+        """reset the representative"""
+        self._local = None
+
+    def expr(self):
+        """expression for the whole variable"""
+        return f"{self.local.expr()}"
+
+    @property
+    def max_value(self):
+        """access max value"""
+        return self._max_value
+
+    @property
+    def min_value(self):
+        """access min value"""
+        return self._min_value
+
+    @property
+    def local(self):
+        """access the local representation of the frame selector"""
+        return self._local
+
+    @property
+    def is_scalar(self):
+        """return boolean deciding whether the variable is a scalar"""
+        return self._size is None
+
+    @property
+    def size(self):
+        """access size attribute"""
+        return self._size
+
+    @property
+    def dtype(self):
+        """access datatype attribute"""
+        return self.local.dtype
+
+    @property
+    def datatype(self):
+        """access datatype attribute"""
+        return self.local.lookup_dtype(self.dtype)
+
+    @property
+    def status(self):
+        """access the status binary set as integer"""
+        return self.local.status
+
+    """
+    IDEA
+    After the kernel's instructions are prepared, all multiframe objects should be known.
+    Therefore they can be mapped to inner iterators and outer iterators, i.e.
+    threadIdx, ... and loops outside the call.
+    The simplest way is to let KernelParameters rise and be captured in the kernelize
+    container, where then the call is managed. Even easier would be a get_kernel_params
+    routine, that could later involve shared memory and more. No more captures and simple
+    integers. I think I prefer that.
+    The kernelize container could have a box for loops that cover all kernelparameters
+    that are not handled by inner parameters such as threadIdx etc. The proper call can be
+    derived from kernel parameters and call parameters, where inner and outer parameters
+    could be separated and then remerged. In kernalize, local variables could be introduced
+    that are assigned to the loops and automatically put into the right place.
+    """
 
 
 # class LibRoutineExternal(LibRoutineConstant):

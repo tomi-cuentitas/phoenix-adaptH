@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 16/04/2025, 16:25
-# Version:     0.0.291
+# Last Update: 20/05/2025, 13:46
+# Version:     0.0.326
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,6 +28,7 @@ from phoenix.fgen.codecontainer import (
     RoutineContainer,
     ConditionalContainer,
     NamedContainer,
+    KernelContainer,
     LibraryContainer,
 )
 from phoenix.fgen.libroutinevar import (
@@ -37,6 +38,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineInOutVariable,
     LibRoutineLocalVariable,
     LibRoutineConstant,
+    LibRoutineMultiFrame,
 )
 
 from phoenix.fgen.instruction import AffineOperationInstruction
@@ -109,6 +111,26 @@ class F90RoutineContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = list(self.get_call_arguments())
+        yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
+        yield self.codeline_from_text(
+            f"SUBROUTINE {self.name}({', '.join(call_args)})"
+        )
+
+    def generate_foot_containers(self, **_):
+        yield self.codeline_from_text(f"END SUBROUTINE {self.name}")
+
+
+class F90KernelContainer(KernelContainer):
+    """Plain Text version of a RoutineDefinition"""
+
+    # def __init__(self, name, *, context, **buildargs):
+    #     return RoutineContainer.__init__
+
+    INDENT_BODY = True
+
+    def generate_head_containers(self, **_):
+        call_args = list(self.get_call_arguments())
+        yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield self.codeline_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
         )
@@ -201,9 +223,7 @@ class F90LibRoutineVariable(LibRoutineVariable):
         raise ValueError(f"Unknown dtype: {dtype}")
 
 
-class F90LibRoutineLocalVariable(
-    F90LibRoutineVariable, LibRoutineLocalVariable
-):
+class F90LocalVariable(F90LibRoutineVariable, LibRoutineLocalVariable):
     """LibRoutineVariable F90 Base class"""
 
 
@@ -217,6 +237,11 @@ class F90OutputVariable(F90LibRoutineVariable, LibRoutineOutputVariable):
 
 class F90InOutVariable(F90LibRoutineVariable, LibRoutineInOutVariable):
     _intent = "RW"
+
+
+class F90MultiFrame(F90LibRoutineVariable, LibRoutineMultiFrame):
+    local_variable_class = F90LocalVariable
+    input_variable_class = F90InputVariable
 
 
 class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
@@ -270,26 +295,39 @@ my_fancy_var = F90InOutVariable(
 class Fortran90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
-    _routine_cls = F90RoutineContainer
-    _comment_cls = F90CommentLine
+    # _routine_cls = F90RoutineContainer
+    # _comment_cls = F90CommentLine
 
-    def handle_group_instruction(self, instruction, context, buildargs):
-        yield from super().handle_group_instruction(
-            instruction, context, buildargs
+    # def handle_group_instruction(self, instruction, context, buildargs):
+    #     yield from super().handle_group_instruction(
+    #         instruction, context, buildargs
+    #     )
+
+    # def handle_content_instruction(self, instruction, context, buildargs):
+    #     yield from super().handle_content_instruction(
+    #         instruction, context, buildargs
+    #     )
+
+    # def handle_routine_instruction(self, instruction, context, buildargs):
+    #     yield from super().handle_routine_instruction(
+    #         instruction, context, buildargs
+    #     )
+
+    # def handle_mapapply_instruction(self, instruction, context, buildargs):
+    #     yield from super().handle_mapapply_instruction(
+    #         instruction, context, buildargs
+    #     )
+
+    def handle_environment_instruction(self, instruction, context, buildargs):
+        print("ASDASD")
+        foo = F90CommentLine(context=context)
+        lvar = F90MultiFrame(14)
+        foo.requires(lvar)
+        foo.set_line(
+            f"I probably need a multiframe variable here. I will use {lvar.name}"
         )
-
-    def handle_content_instruction(self, instruction, context, buildargs):
-        yield from super().handle_content_instruction(
-            instruction, context, buildargs
-        )
-
-    def handle_routine_instruction(self, instruction, context, buildargs):
-        yield from super().handle_routine_instruction(
-            instruction, context, buildargs
-        )
-
-    def handle_mapapply_instruction(self, instruction, context, buildargs):
-        yield from super().handle_mapapply_instruction(
+        yield foo
+        yield from super().handle_environment_instruction(
             instruction, context, buildargs
         )
 
@@ -364,7 +402,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         temp1 = self.request_temp(
             foo,
             "test_temporary1",
-            F90LibRoutineLocalVariable,
+            F90LocalVariable,
             size=42,
             dtype="i64",
         )
@@ -513,6 +551,7 @@ ctxt.namespace.assign(
 
 
 outer_defarea = F90LibraryContainer("test_library", context=ctxt)
+
 # outer_defarea.add_capture_trigger(lambda x: True)
 
 # container_tree = a.create_routine_container(

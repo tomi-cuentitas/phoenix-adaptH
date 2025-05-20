@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 29/04/2025, 19:29
-# Version:     0.0.1208
+# Last Update: 20/05/2025, 12:05
+# Version:     0.0.1209
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -380,8 +380,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     def prepare_routine_container(self, name, context, **buildargs):
         """
         Create a routine body.
-        This method is only factored out that creating new builders
-        on other containers is more straight forward
+        This method is only here that creating new builders
+        on other containers is more straight forward, i.e. this routine
+        can be called from another builder, but in here.
         """
         return type(self)._routine_cls(name, context=context, **buildargs)
 
