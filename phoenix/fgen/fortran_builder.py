@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 21/05/2025, 14:35
-# Version:     0.0.346
+# Last Update: 21/05/2025, 17:38
+# Version:     0.0.360
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -109,7 +109,9 @@ class F90RoutineContainer(RoutineContainer):
     multiframe_container_class = F90LoopContainer
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield self.codeline_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -125,7 +127,9 @@ class F90KernelContainer(KernelContainer):
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield self.codeline_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -414,9 +418,10 @@ Fortran90Builder.set_instruction_class_handler(
 
 F90LibraryContainer.set_comment_class(F90CommentLine)
 F90RoutineContainer.set_comment_class(F90CommentLine)
+Fortran90Builder.set_comment_class(None)
 Fortran90Builder.set_comment_class(F90CommentLine)
 
-Fortran90Builder.set_routine_class(F90RoutineContainer)
+# Fortran90Builder.set_routine_class(F90RoutineContainer)
 # Fortran90Builder.set_routine_class(F90KernelContainer)
 
 from phoenix.fgen.builder import Context
@@ -524,7 +529,7 @@ test_instructions2 = InstructionGroup(
     ]
 )
 
-largegroup = test_instructions1
+largegroup = test_instructions1.flatten()
 
 ctxt = Context()
 ctxt.namespace.assign(
@@ -549,27 +554,29 @@ ctxt.namespace.assign(
 )
 
 
-outer_defarea = F90LibraryContainer("test_library", context=ctxt)
+lib_container = F90LibraryContainer("test_library", context=ctxt)
 
-# outer_defarea.add_capture_trigger(lambda x: True)
+# lib_container.add_capture_trigger(lambda x: True)
 
 # container_tree = a.create_routine_container(
-#     "foo", largegroup, context=outer_defarea.context
+#     "foo", largegroup, context=lib_container.context
 # )
 
 container_tree = my_builder.create_routine_container(
     # container_tree = my_builder.build(
     "foo",
     largegroup,
-    context=outer_defarea.context,
+    context=lib_container.context,
+    routine_container=F90KernelContainer,
+    # routine_container=F90RoutineContainer,
 )
 
 
-outer_defarea.build()
-outer_defarea.append(container_tree)
+lib_container.build()
+lib_container.append(container_tree)
 
 
-for indent, line in outer_defarea.get_codelines():
+for indent, line in lib_container.get_codelines():
     print(indent * "  " + line)
 
 

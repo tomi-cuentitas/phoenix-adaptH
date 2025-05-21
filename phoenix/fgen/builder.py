@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 20/05/2025, 12:05
-# Version:     0.0.1209
+# Last Update: 21/05/2025, 17:37
+# Version:     0.0.1218
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -177,7 +177,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _excl_instr_classes: Set[type] = set()
 
     _comment_cls = CommentLine
-    _routine_cls = RoutineContainer
+    # _routine_cls = RoutineContainer
 
     def __init_subclass__(cls, identifier=None):
         super().__init_subclass__(identifier=identifier)
@@ -345,6 +345,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         name,
         instructions,
         library,
+        routine_container=None,
         **buildargs,
     ):
         """generate a libroutine in a library from instructions"""
@@ -352,6 +353,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             name,
             instructions,
             context=library.context,
+            routine_container=routine_container,
             **buildargs,
         )
         libroutine = library.new_libroutine(
@@ -361,12 +363,17 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
     @log.wrap_call
     def create_routine_container(
-        self, name, instructions, context, **buildargs
+        self, name, instructions, context, routine_container=None, **buildargs
     ):
         """generate the container tree from instruction"""
-        routine_container = self.prepare_routine_container(
-            name, context, **buildargs
+        if routine_container is None:
+            raise ValueError("routine_container is required")
+        routine_container = routine_container(
+            name, context=context, **buildargs
         )
+        # self.prepare_routine_container(
+        #     name, context, routine_class=routine_class, **buildargs
+        # )
         for container in self.containers_from_instruction(
             instructions,
             context=routine_container.context,
@@ -376,21 +383,25 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         info("reached end of routine build")
         return routine_container.reset_all().build_all()
 
-    @log.wrap_call
-    def prepare_routine_container(self, name, context, **buildargs):
-        """
-        Create a routine body.
-        This method is only here that creating new builders
-        on other containers is more straight forward, i.e. this routine
-        can be called from another builder, but in here.
-        """
-        return type(self)._routine_cls(name, context=context, **buildargs)
+    # @log.wrap_call
+    # def prepare_routine_container(
+    #     self, name, context, routine_class=None, **buildargs
+    # ):
+    #     """
+    #     Create a routine body.
+    #     This method is only here that creating new builders
+    #     on other containers is more straight forward, i.e. this routine
+    #     can be called from another builder, but in here.
+    #     """
+    #     if routine_class is None:
+    #         return type(self)._routine_cls(name, context=context, **buildargs)
+    #     return routine_class(name, context=context, **buildargs)
 
-    @classmethod
-    @log.wrap_call
-    def set_routine_class(cls, routine_gen):
-        """set the routine generator"""
-        cls._routine_cls = routine_gen
+    # @classmethod
+    # @log.wrap_call
+    # def set_routine_class(cls, routine_gen):
+    #     """set the routine generator"""
+    #     cls._routine_cls = routine_gen
 
     @log.wrap_call_gen
     def handle_basic_instruction(self, instruction, context, buildargs):
