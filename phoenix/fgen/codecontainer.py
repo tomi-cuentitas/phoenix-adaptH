@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 20/05/2025, 13:45
-# Version:     0.0.2358
+# Last Update: 21/05/2025, 13:46
+# Version:     0.1.3
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -813,9 +813,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -896,36 +894,40 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def __init__(self, name, *, context, **buildargs):
         # print("routine init")
-        inner_context = self._prep_hidden_layers(context, **buildargs)
+        inner_context = self._prep_hidden_layers_pre(context, **buildargs)
         super().__init__(name=name, context=inner_context, **buildargs)
         self._var_layer.add_capture_trigger(LibRoutineInputVariable)
         self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
         self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
         self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
 
-        self._loop_container = LoopCaptureContainer(
-            type(self).multiframe_container_class,
-            context=self._var_layer.context,
-            **buildargs,
-        )
-        self.append_body(self._loop_container)
-        self._set_attachment_point(self._loop_container)
+        # self._loop_container = LoopCaptureContainer(
+        #     type(self).multiframe_container_class,
+        #     context=self._var_layer.context,
+        #     **buildargs,
+        # )
+        # self.append_body(self._loop_container)
+        # self._set_attachment_point(self._loop_container)
+        self._prep_hidden_layers_post(**buildargs)
 
-    def _prep_hidden_layers(self, context, **buildargs):
+    def _prep_hidden_layers_pre(self, context, **buildargs):
         self._def_layer = CaptureContainer(context=context, **buildargs)
         self._var_layer = CaptureContainer(
             context=self._def_layer.context, **buildargs
         )
         return self._var_layer.context
-        # self._rep_layer = LoopCaptureContainer(
-        #     type(self).multiframe_container_class,
-        #     context=self._var_layer.context,
-        #     **buildargs,
-        # )
-        # return self._rep_layer.context
+
+    def _prep_hidden_layers_post(self, **buildargs):
+        self._rep_layer = LoopCaptureContainer(
+            type(self).multiframe_container_class,
+            context=self._var_layer.context,
+            **buildargs,
+        )
+        self.append_body(self._rep_layer)
+        self._set_attachment_point(self._rep_layer)
 
     def get_call_arguments(self, **substitutions):
-        """"""
+        """list the arguments needed for a call"""
         for variable in self.get_argument_variables():
             yield variable.as_argument()
 
@@ -996,7 +998,7 @@ class KernelContainer(RoutineContainer):
         super().__init__(name, context=context, **buildargs)
         self._ker_layer.add_capture_trigger(LibRoutineMultiFrame)
 
-    def _prep_hidden_layers(self, context, **buildargs):
+    def _prep_hidden_layers_pre(self, context, **buildargs):
         self._def_layer = CaptureContainer(context=context, **buildargs)
         self._var_layer = CaptureContainer(
             context=self._def_layer.context, **buildargs
@@ -1006,8 +1008,10 @@ class KernelContainer(RoutineContainer):
         )
         return self._ker_layer.context
 
+    def _prep_hidden_layers_post(self, **buildargs):
+        self._rep_layer = None
+
     def get_call_arguments(self, **substitutions):
-        """"""
         for variable in self.get_argument_variables():
             yield variable.as_argument()
 
@@ -1138,9 +1142,9 @@ if __name__ == "__main__":
     )
     from phoenix.fgen.builder import Context
 
-    context = Context()
+    ctxt = Context()
 
-    foo = DefinitionContainer(context=context)
+    foo = DefinitionContainer(context=ctxt)
     print(foo.capture_check(LibRoutineConstant(name="foo", value=1337)))
     # False
 
@@ -1247,9 +1251,9 @@ if __name__ == "__main__":
     deflayer.add_capture_trigger(LibRoutineLocalVariable)
 
     test_container = KernelContainer(name="fooname", context=deflayer.context)
-    test_container = LoopCaptureContainer(
-        MultiFrameContainer, context=deflayer.context
-    )
+    # test_container = LoopCaptureContainer(
+    #     MultiFrameContainer, context=deflayer.context
+    # )
     another_block = CodeLine(context=test_container.context).set_line(
         "fooobar block thingy"
     )

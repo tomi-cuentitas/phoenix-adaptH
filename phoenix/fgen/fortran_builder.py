@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 20/05/2025, 13:46
-# Version:     0.0.326
+# Last Update: 21/05/2025, 13:49
+# Version:     0.0.335
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -104,13 +104,10 @@ class F90DefinitionContainer(DefinitionContainer):
 class F90RoutineContainer(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
-    # def __init__(self, name, *, context, **buildargs):
-    #     return RoutineContainer.__init__
-
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = list(self.get_call_arguments())
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield self.codeline_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -123,13 +120,10 @@ class F90RoutineContainer(RoutineContainer):
 class F90KernelContainer(KernelContainer):
     """Plain Text version of a RoutineDefinition"""
 
-    # def __init__(self, name, *, context, **buildargs):
-    #     return RoutineContainer.__init__
-
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = list(self.get_call_arguments())
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield self.codeline_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -418,7 +412,9 @@ Fortran90Builder.set_instruction_class_handler(
 F90LibraryContainer.set_comment_class(F90CommentLine)
 F90RoutineContainer.set_comment_class(F90CommentLine)
 Fortran90Builder.set_comment_class(F90CommentLine)
+
 Fortran90Builder.set_routine_class(F90RoutineContainer)
+# Fortran90Builder.set_routine_class(F90KernelContainer)
 
 from phoenix.fgen.builder import Context
 import sys
