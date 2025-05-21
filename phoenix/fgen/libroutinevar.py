@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 20/05/2025, 13:16
-# Version:     0.0.698
+# Last Update: 21/05/2025, 19:03
+# Version:     0.0.703
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -498,14 +498,14 @@ class LibRoutineInputVariable(LibRoutineAssignedVariable):
 
     def __init__(
         self,
-        instruction_variable,
+        assigned_variable,
         key,
         *args,
         **kwargs,
     ):
         super().__init__(
             *args,
-            assignment=(instruction_variable, key),
+            assignment=(assigned_variable, key),
             status=LibRoutineVariable.STATUS_INPUT,
             **kwargs,
         )
@@ -522,14 +522,14 @@ class LibRoutineOutputVariable(LibRoutineAssignedVariable):
 
     def __init__(
         self,
-        instruction_variable,
+        assigned_variable,
         key,
         *args,
         **kwargs,
     ):
         super().__init__(
             *args,
-            assignment=(instruction_variable, key),
+            assignment=(assigned_variable, key),
             status=LibRoutineVariable.STATUS_OUTPUT,
             **kwargs,
         )
@@ -546,14 +546,14 @@ class LibRoutineInOutVariable(LibRoutineAssignedVariable):
 
     def __init__(
         self,
-        instruction_variable,
+        assigned_variable,
         key,
         *args,
         **kwargs,
     ):
         super().__init__(
             *args,
-            assignment=(instruction_variable, key),
+            assignment=(assigned_variable, key),
             status=LibRoutineVariable.STATUS_INOUT,
             **kwargs,
         )
@@ -703,8 +703,8 @@ class LibRoutineMultiFrame(LibRoutineVariable):
             raise ValueError("No context provided")
         if self._local is None:
             self._local = input_variable_class(
-                None,
-                None,
+                assigned_variable=self,
+                key=None,
                 namespace=context.namespace,
                 **kwargs,
             )

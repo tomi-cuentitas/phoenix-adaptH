@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 21/05/2025, 17:38
-# Version:     0.0.360
+# Last Update: 21/05/2025, 19:04
+# Version:     0.0.363
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -529,7 +529,8 @@ test_instructions2 = InstructionGroup(
     ]
 )
 
-largegroup = test_instructions1.flatten()
+# largegroup = test_instructions1.flatten()
+largegroup = test_instructions1
 
 ctxt = Context()
 ctxt.namespace.assign(

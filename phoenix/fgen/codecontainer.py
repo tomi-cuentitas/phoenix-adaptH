@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 21/05/2025, 14:23
-# Version:     0.1.10
+# Last Update: 21/05/2025, 18:59
+# Version:     0.1.26
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -813,7 +813,9 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -932,10 +934,12 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     #         yield variable.as_argument()
 
     def get_argument_variables(self, **_):
+        """list the variables that show up in the argument list"""
         for variable in self._var_layer.captured:
             yield variable
 
     def get_inner_variables(self, **_):
+        """list the inner variables"""
         for variable in self._def_layer.captured:
             yield variable
 
@@ -954,7 +958,8 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
         yield self.codeline_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1041,8 +1046,10 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
+
         yield self.codeline_from_text(
             f":BEGIN: KERNEL FUNCTION {self.name} ({', '.join(call_args)})"
         )
@@ -1289,3 +1296,16 @@ if __name__ == "__main__":
 
     for ind, line in deflayer.get_codelines(0):
         print("  " * ind + line)
+
+    for var in test_container.get_kernel_variables():
+        print(var, var.local)
+
+    for var in test_container.get_argument_variables():
+        print(var)
+
+
+# TODO:
+# at call, reraise the variables
+# maybe yield codelines as a call from the routine container.
+# Or maybe even better, the libroutine object, so it does not depend so much on the container.
+# Required metadata for the call has to be stored in the container, which we want anyways.
