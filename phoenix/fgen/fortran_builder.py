@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 21/05/2025, 13:49
-# Version:     0.0.335
+# Last Update: 21/05/2025, 14:35
+# Version:     0.0.346
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -30,6 +30,7 @@ from phoenix.fgen.codecontainer import (
     NamedContainer,
     KernelContainer,
     LibraryContainer,
+    MultiFrameContainer,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -89,7 +90,7 @@ class F90CommentLine(CommentLine):
     # some_aux_variable = LibRoutineLocalVariable("testvar")
 
 
-class F90LoopContainer(LoopContainer):
+class F90LoopContainer(MultiFrameContainer):
     """Plain Text version of a DefinitionContainer"""
 
     INDENT_BODY = True
@@ -105,6 +106,7 @@ class F90RoutineContainer(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
     INDENT_BODY = True
+    multiframe_container_class = F90LoopContainer
 
     def generate_head_containers(self, **_):
         call_args = (var.as_argument() for var in self.get_argument_variables())
@@ -314,6 +316,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
 
     def handle_environment_instruction(self, instruction, context, buildargs):
         print("ASDASD")
+
         foo = F90CommentLine(context=context)
         lvar = F90MultiFrame(14)
         foo.requires(lvar)

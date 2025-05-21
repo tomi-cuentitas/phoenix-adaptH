@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 21/05/2025, 13:46
-# Version:     0.1.3
+# Last Update: 21/05/2025, 14:23
+# Version:     0.1.10
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -926,10 +926,10 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         self.append_body(self._rep_layer)
         self._set_attachment_point(self._rep_layer)
 
-    def get_call_arguments(self, **substitutions):
-        """list the arguments needed for a call"""
-        for variable in self.get_argument_variables():
-            yield variable.as_argument()
+    # def get_call_arguments(self, **substitutions):
+    #     """list the arguments needed for a call"""
+    #     for variable in self.get_argument_variables():
+    #         yield variable.as_argument()
 
     def get_argument_variables(self, **_):
         for variable in self._var_layer.captured:
@@ -953,7 +953,12 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         yield self.codeline_from_text("")
 
     def generate_head_containers(self, **_):
-        yield self.codeline_from_text(f":BEGIN: FUNCTION {self.name}")
+        call_args = (
+            variable.as_argument() for variable in self.get_argument_variables()
+        )
+        yield self.codeline_from_text(
+            f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
+        )
 
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f":END: FUNCTION {self.name}")
@@ -1011,9 +1016,9 @@ class KernelContainer(RoutineContainer):
     def _prep_hidden_layers_post(self, **buildargs):
         self._rep_layer = None
 
-    def get_call_arguments(self, **substitutions):
-        for variable in self.get_argument_variables():
-            yield variable.as_argument()
+    # def get_call_arguments(self, **substitutions):
+    #     for variable in self.get_argument_variables():
+    #         yield variable.as_argument()
 
     def get_kernel_variables(self):
         """get the kernel multiframe variables"""
@@ -1035,7 +1040,12 @@ class KernelContainer(RoutineContainer):
         return super().build()
 
     def generate_head_containers(self, **_):
-        yield self.codeline_from_text(f":BEGIN: KERNEL FUNCTION {self.name}")
+        call_args = (
+            variable.as_argument() for variable in self.get_argument_variables()
+        )
+        yield self.codeline_from_text(
+            f":BEGIN: KERNEL FUNCTION {self.name} ({', '.join(call_args)})"
+        )
 
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f":END: KERNEL FUNCTION {self.name}")
@@ -1254,6 +1264,7 @@ if __name__ == "__main__":
     # test_container = LoopCaptureContainer(
     #     MultiFrameContainer, context=deflayer.context
     # )
+    # test_container = RoutineContainer(name="fooname", context=deflayer.context)
     another_block = CodeLine(context=test_container.context).set_line(
         "fooobar block thingy"
     )
