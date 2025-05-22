@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 21/05/2025, 19:03
-# Version:     0.0.703
+# Last Update: 22/05/2025, 13:12
+# Version:     0.0.705
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -441,6 +441,26 @@ class LibRoutineImport(LibRoutineVariable):
         )
         self._libroutine = libroutine
 
+    @property
+    def libroutine(self):
+        """read-only access for libroutine"""
+        return self._libroutine
+
+    @property
+    def name(self):
+        """read-only access for name"""
+        return self._libroutine.name
+
+    @property
+    def library(self):
+        """read-only access for library"""
+        return self._libroutine.library
+
+    @property
+    def container(self):
+        """read-only access for container"""
+        return self._libroutine.container
+
 
 class LibRoutineLocalVariable(LibRoutineVariable):
     """Any kind of variable used in the library"""
@@ -774,12 +794,6 @@ class LibRoutineMultiFrame(LibRoutineVariable):
     could be separated and then remerged. In kernalize, local variables could be introduced
     that are assigned to the loops and automatically put into the right place.
     """
-
-
-# class LibRoutineExternal(LibRoutineConstant):
-#     """An external function or library"""
-
-#     _VAR_IDENTIFIER = "EXTERNAL"
 
 
 if __name__ == "__main__":

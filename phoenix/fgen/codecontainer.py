@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 21/05/2025, 18:59
-# Version:     0.1.26
+# Last Update: 22/05/2025, 13:17
+# Version:     0.1.52
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -261,11 +261,13 @@ class CodeContainer:
             )
         self.parent.requires(variable)
 
-    def codeline_from_text(self, text: str) -> CodeContainer:
+    def codeline_from_text(self, text: str, context=None) -> CodeContainer:
         """generate a plain codeline from text"""
+        if context is None:
+            context = self.context
         return CodeLine(
             line=text,
-            context=self.context,
+            context=context,
         )
 
     def build(self, **_):
@@ -281,6 +283,7 @@ class CodeContainer:
 
     def reset(self, **_):
         """perform a reset on this container"""
+        self.reset_captured()
         return self
 
     def reset_all(self, **kwargs):
@@ -864,6 +867,11 @@ class CaptureContainer(CodeContainer):
         else:
             super().requires(variable)
 
+    def reset_captured(self) -> None:
+        """reset the provided requirements"""
+        self._captured = []
+        return super().reset_captured()
+
 
 class DefinitionContainer(CaptureContainer, PreambleContainer):
     """
@@ -968,7 +976,7 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f":END: FUNCTION {self.name}")
 
-    # def get_call(self, **substitutions):
+    # def get_call_codelines(self, **substitutions):
     #     """
     #     Get the string of how to call it. Plug the proper substitutions into
     #     the argument line.
@@ -1042,7 +1050,7 @@ class KernelContainer(RoutineContainer):
 
     def build(self, **kwargs):
         self.prepare_kernel_arguments()
-        return super().build()
+        return super().build(**kwargs)
 
     def generate_head_containers(self, **_):
         call_args = (
@@ -1057,17 +1065,63 @@ class KernelContainer(RoutineContainer):
     def generate_foot_containers(self, **_):
         yield self.codeline_from_text(f":END: KERNEL FUNCTION {self.name}")
 
-    def get_call(self, **substitutions):
-        """
-        Get the string of how to call it. Plug the proper substitutions into
-        the argument line.
-        Use get_call_arguments to get the arguments in the format designed for
-        a call.
-        """
+    # def get_call_codelines(self, context, **substitutions):
+    #     """
+    #     Get the string of how to call it. Plug the proper substitutions into
+    #     the argument line.
+    #     Use get_call_arguments to get the arguments in the format designed for
+    #     a call.
+    #     """
 
 
-# KERNALIZE will be a suggestive instruction rather than a container.
-# A Kernal call in a loop container will have the same effect
+class RoutineCallContainer(CodeLine):
+    """Call a routine or routine-like object"""
+
+    def __init__(self, libroutine, *, context, **buildargs):
+        super().__init__(None, context=context, **buildargs)
+        self._libroutine = libroutine
+
+    def prepare_call(self):
+        import_request = LibRoutineImport(self._libroutine)
+        self.requires(import_request)
+
+    def build(self, **kwargs):
+        self.prepare_call()
+        return super().build(**kwargs)
+
+
+class ImportSectionContainer(CaptureContainer):
+    """Capture all imports"""
+
+    def __init__(self, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self.add_capture_trigger(LibRoutineImport)
+
+    def build(self, **kwargs):
+        for to_be_imported in self._captured:
+            if self.context.library is not None:
+                if to_be_imported.library == self.context.library:
+                    continue
+            if not self.compatibility_check(to_be_imported.libroutine):
+                raise ValueError(
+                    f"Library {to_be_imported.library} does not match current library"
+                )
+            for line in self.create_import_codelines(
+                to_be_imported.libroutine
+            ):
+                self.append(line)
+        return super().build(**kwargs)
+
+    def compatibility_check(self, libroutine):
+        """check if libroutine is compatible"""
+        print(f"... check import of {libroutine.name}")
+        return True
+
+    def create_import_codelines(self, libroutine):
+        """create the codelines required for the import"""
+        yield self.codeline_from_text(
+            f":IMPORT: {libroutine} from {libroutine.library}"
+        )
 
 
 class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):

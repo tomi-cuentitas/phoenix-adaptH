@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   07/04/2025
-# Last Update: 29/04/2025, 19:29
-# Version:     0.0.47
+# Last Update: 22/05/2025, 13:17
+# Version:     0.0.51
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -47,6 +47,7 @@ class Context:
         name: str | None = None,
         # frame_selectors: Set[LibRoutineFrameSelectVariable] | None = None,
         _names: List[str] | None = None,
+        _library=None,
     ):
         if environment is None:
             environment = InstructionEnvironment()
@@ -72,6 +73,8 @@ class Context:
 
         if name is not None:
             self._names.append(name)
+
+        self._library = _library
 
     # there is only one assignments instance being passed down a routine.
 
@@ -114,6 +117,11 @@ class Context:
     def container(self):
         """access container"""
         return self._container
+
+    @property
+    def library(self):
+        """access container"""
+        return self._library
 
     # @property
     # def frame_selectors(self):
@@ -204,4 +212,5 @@ class Context:
             # assignments=None,
             # frame_selectors=frame_selectors,
             _names=self._names,
+            _library=self.library,
         )

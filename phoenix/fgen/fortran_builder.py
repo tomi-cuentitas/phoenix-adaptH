@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 21/05/2025, 19:04
-# Version:     0.0.363
+# Last Update: 22/05/2025, 12:39
+# Version:     0.0.364
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -319,8 +319,6 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
     #     )
 
     def handle_environment_instruction(self, instruction, context, buildargs):
-        print("ASDASD")
-
         foo = F90CommentLine(context=context)
         lvar = F90MultiFrame(14)
         foo.requires(lvar)
