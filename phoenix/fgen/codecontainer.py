@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 22/05/2025, 13:17
-# Version:     0.1.52
+# Last Update: 22/05/2025, 19:58
+# Version:     0.1.66
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -26,7 +26,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineOutputVariable,
     LibRoutineInOutVariable,
     LibRoutineMultiFrame,
-    LibRoutineImport,
+    ExternalRoutine,
     LibRoutineConstant,
 )
 
@@ -1074,20 +1074,21 @@ class KernelContainer(RoutineContainer):
     #     """
 
 
+class RoutineImportContainer(CodeLine):
+    """Import a routine or routine-like object"""
+
+    def __init__(self, libroutine, *, context, **buildargs):
+        super().__init__(None, context=context, **buildargs)
+        self._libroutine = libroutine
+
+
 class RoutineCallContainer(CodeLine):
     """Call a routine or routine-like object"""
 
     def __init__(self, libroutine, *, context, **buildargs):
         super().__init__(None, context=context, **buildargs)
         self._libroutine = libroutine
-
-    def prepare_call(self):
-        import_request = LibRoutineImport(self._libroutine)
-        self.requires(import_request)
-
-    def build(self, **kwargs):
-        self.prepare_call()
-        return super().build(**kwargs)
+        self._external_routine = ExternalRoutine(self._libroutine)
 
 
 class ImportSectionContainer(CaptureContainer):
@@ -1095,21 +1096,24 @@ class ImportSectionContainer(CaptureContainer):
 
     def __init__(self, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
-        self.add_capture_trigger(LibRoutineImport)
+        self.add_capture_trigger(ExternalRoutine)
 
     def build(self, **kwargs):
         for to_be_imported in self._captured:
-            if self.context.library is not None:
-                if to_be_imported.library == self.context.library:
+            if (
+                self.context.library is not None
+                and to_be_imported.library is not None
+            ):
+                if to_be_imported.library != self.context.library:
                     continue
             if not self.compatibility_check(to_be_imported.libroutine):
                 raise ValueError(
                     f"Library {to_be_imported.library} does not match current library"
                 )
-            for line in self.create_import_codelines(
+            for import_line in self.create_import_codelines(
                 to_be_imported.libroutine
             ):
-                self.append(line)
+                self.append(import_line)
         return super().build(**kwargs)
 
     def compatibility_check(self, libroutine):
@@ -1122,6 +1126,8 @@ class ImportSectionContainer(CaptureContainer):
         yield self.codeline_from_text(
             f":IMPORT: {libroutine} from {libroutine.library}"
         )
+
+        # TODO: Tidy this mess!
 
 
 class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
@@ -1187,7 +1193,7 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         self._def_layer = DefinitionContainer(context=self._imp_layer.context)
         super().__init__(name, context=self._def_layer.context, **buildargs)
         self._def_layer.add_capture_trigger(LibRoutineConstant)
-        self._imp_layer.add_capture_trigger(LibRoutineImport)
+        self._imp_layer.add_capture_trigger(ExternalRoutine)
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""
