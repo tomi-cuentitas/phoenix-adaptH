@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 22/05/2025, 19:55
-# Version:     0.0.706
+# Last Update: 22/05/2025, 20:01
+# Version:     0.0.707
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -425,7 +425,7 @@ class LibRoutineVariable:
         return f"{self.name}"
 
 
-class ExternalRoutine(LibRoutineVariable):
+class ImportRequest(LibRoutineVariable):
     """
     An import. Maybe part of the variable concept in a broader sense.
     When a routine, variable or macro is used that has to be imported,
