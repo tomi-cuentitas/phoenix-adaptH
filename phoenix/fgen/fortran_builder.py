@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 22/05/2025, 12:39
-# Version:     0.0.364
+# Last Update: 23/05/2025, 13:55
+# Version:     0.0.367
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -94,6 +94,10 @@ class F90LoopContainer(MultiFrameContainer):
     """Plain Text version of a DefinitionContainer"""
 
     INDENT_BODY = True
+
+    def __init__(self, *args, **kwargs):
+        print("request loop")
+        super().__init__(*args, **kwargs)
 
 
 class F90DefinitionContainer(DefinitionContainer):

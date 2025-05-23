@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 22/05/2025, 20:01
-# Version:     0.1.68
+# Last Update: 23/05/2025, 13:54
+# Version:     0.1.158
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -26,7 +26,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineOutputVariable,
     LibRoutineInOutVariable,
     LibRoutineMultiFrame,
-    ImportRequest,
+    ExternalRoutine,
     LibRoutineConstant,
 )
 
@@ -283,7 +283,8 @@ class CodeContainer:
 
     def reset(self, **_):
         """perform a reset on this container"""
-        self.reset_captured()
+        # if you reset captures, they cannot be recovered if they are required outside build!
+        # self.reset_captured()
         return self
 
     def reset_all(self, **kwargs):
@@ -485,7 +486,6 @@ class PreambleContainer(CodeContainer):
     """A container allowing for a preamble"""
 
     def __init__(self, *, context, **buildargs):
-        # print("preamble init")
         super().__init__(context=context, **buildargs)
         self._container_prmb: list[CodeContainer] = []
 
@@ -537,10 +537,7 @@ class PreambleContainer(CodeContainer):
     @property
     def content(self):
         """iterate through foot content only"""
-        # print("content yield @ preamble")
-        # print("content yield: preamble")
         yield from self.preamble
-        # print("content yield: super.content")
         yield from super().content
 
 
@@ -548,7 +545,6 @@ class NamedContainer(CodeContainer):
     """A named region container. Simply provides the name attribute"""
 
     def __init__(self, name, *, context, **buildargs):
-        # print("named init")
         super().__init__(context=context, **buildargs)
         self._name = name
 
@@ -799,6 +795,14 @@ class CaptureContainer(CodeContainer):
         self._filter_func_vtypes: List[Tuple(str, Callable | None)] = []
         self._filter_func_types: List[Tuple(type, Callable | None)] = []
         self._captured: List[LibRoutineVariable] = []
+
+    def manage_captured(self, **kwargs):
+        """manage the captured variables. Automatically executed in build"""
+
+    def build(self, **kwargs):
+        super().build(**kwargs)
+        self.manage_captured(**kwargs)
+        return self
 
     def add_capture_trigger(
         self,
@@ -1077,9 +1081,17 @@ class KernelContainer(RoutineContainer):
 class ImportContainer(CodeLine):
     """Import a routine or routine-like object"""
 
-    def __init__(self, libroutine, *, context, **buildargs):
+    def __init__(self, library, routines, *, context, **buildargs):
         super().__init__(None, context=context, **buildargs)
-        self._libroutine = libroutine
+        self._library = library
+        self._routines = routines
+
+    def create_import_codelines(self):
+        """create the codelines required for the import"""
+        for routine in self._routines:
+            yield self.codeline_from_text(
+                f":IMPORT: {routine} from {self._library}"
+            )
 
 
 class RoutineCallContainer(CodeLine):
@@ -1087,48 +1099,52 @@ class RoutineCallContainer(CodeLine):
 
     def __init__(self, libroutine, *, context, **buildargs):
         super().__init__(None, context=context, **buildargs)
-        self._libroutine = libroutine
-        self._external_routine = ImportRequest(self._libroutine)
+        self._external_routine = ExternalRoutine(libroutine)
+
+    def build(self, **kwargs):
+        self.requires(self._external_routine)
+        return super().build(**kwargs)
+
+    # generate the call using info from the ExternalRoutine variable
 
 
 class ImportSectionContainer(CaptureContainer):
     """Capture all imports"""
 
+    import_line_class = ImportContainer
+
     def __init__(self, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
-        self.add_capture_trigger(ImportRequest)
+        self.add_capture_trigger(ExternalRoutine)
 
-    def build(self, **kwargs):
+    def manage_captured(self, **kwargs):
+        # called in build. Preselect and check the imports
+        captured_imports = []
         for to_be_imported in self._captured:
-            if (
-                self.context.library is not None
-                and to_be_imported.library is not None
-            ):
-                if to_be_imported.library != self.context.library:
-                    continue
+            # check for compatibility
             if not self.compatibility_check(to_be_imported.libroutine):
                 raise ValueError(
                     f"Library {to_be_imported.library} does not match current library"
                 )
-            for import_line in self.create_import_codelines(
-                to_be_imported.libroutine
-            ):
-                self.append(import_line)
-        return super().build(**kwargs)
+            captured_imports.append(to_be_imported)
+
+        # add the import codelines to the body. tidy_imports does the grouping
+        for library, routines in self.tidy_imports(captured_imports):
+            self.append(
+                type(self).import_line_class(
+                    library, routines, context=self.context, **kwargs
+                )
+            )
+
+    def tidy_imports(self, list_of_imports):
+        """tidy the imports, i.e. handle groups, repeats, ..."""
+        for this_import in list_of_imports:
+            yield this_import.library, [this_import.name]
 
     def compatibility_check(self, libroutine):
         """check if libroutine is compatible"""
         print(f"... check import of {libroutine.name}")
         return True
-
-    def create_import_codelines(self, libroutine):
-        """create the codelines required for the import"""
-        yield self.codeline_from_text(
-            f":IMPORT: {libroutine} from {libroutine.library}"
-        )
-
-    # TODO: Tidy this mess!
-    # import section is good to cluster imports and perform the checks!
 
 
 class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
@@ -1142,8 +1158,8 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
         self.add_capture_trigger(LibRoutineMultiFrame)
         self._repeat_containers = []
 
-    def build(self, **kwargs):
-        for num, variable in enumerate(self._captured):
+    def manage_captured(self, **kwargs):
+        for num, variable in enumerate(self.captured):
             self._repeat_containers.append(
                 self._mfcontainer_class(context=self.context, **kwargs)
                 .set_multiframe_variable(
@@ -1153,7 +1169,9 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
                 .build_all()
             )
 
-        return super().build()
+    # def build(self, **kwargs):
+    #     self.manage_captured()
+    #     return super().build()
 
     def get_codelines_head(self, indent: int, **kwargs):
         for num, container in enumerate(self._repeat_containers):
@@ -1194,7 +1212,7 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         self._def_layer = DefinitionContainer(context=self._imp_layer.context)
         super().__init__(name, context=self._def_layer.context, **buildargs)
         self._def_layer.add_capture_trigger(LibRoutineConstant)
-        self._imp_layer.add_capture_trigger(ImportRequest)
+        self._imp_layer.add_capture_trigger(ExternalRoutine)
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""

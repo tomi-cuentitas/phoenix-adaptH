@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 22/05/2025, 20:01
-# Version:     0.0.707
+# Last Update: 23/05/2025, 13:13
+# Version:     0.0.708
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -425,7 +425,7 @@ class LibRoutineVariable:
         return f"{self.name}"
 
 
-class ImportRequest(LibRoutineVariable):
+class ExternalRoutine(LibRoutineVariable):
     """
     An import. Maybe part of the variable concept in a broader sense.
     When a routine, variable or macro is used that has to be imported,
@@ -440,6 +440,8 @@ class ImportRequest(LibRoutineVariable):
             *args, **kwargs, status=LibRoutineVariable.STATUS_INPUT
         )
         self._libroutine = libroutine
+        self._call_name = None
+        self._args = []
 
     @property
     def libroutine(self):
