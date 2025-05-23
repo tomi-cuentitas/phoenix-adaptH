@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 23/05/2025, 13:55
-# Version:     0.0.367
+# Last Update: 23/05/2025, 14:21
+# Version:     0.0.378
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -24,7 +24,7 @@ from phoenix.fgen.codecontainer import (
     CommentLine,
     EmbeddingContainer,
     DefinitionContainer,
-    LoopContainer,
+    # LoopContainer,
     RoutineContainer,
     ConditionalContainer,
     NamedContainer,
@@ -95,9 +95,17 @@ class F90LoopContainer(MultiFrameContainer):
 
     INDENT_BODY = True
 
-    def __init__(self, *args, **kwargs):
-        print("request loop")
-        super().__init__(*args, **kwargs)
+    def generate_head_containers(self):
+        if self._multiframe_variable is not None:
+            yield self.codeline_from_text(
+                f"DO {self._multiframe_variable.expr()} = {self._min_value}, {self._max_value}"
+            )
+
+    def generate_foot_containers(self):
+        if self._multiframe_variable is not None:
+            yield self.codeline_from_text(
+                f"END DO  ! {self._multiframe_variable.expr()}"
+            )
 
 
 class F90DefinitionContainer(DefinitionContainer):
@@ -225,6 +233,10 @@ class F90LibRoutineVariable(LibRoutineVariable):
             case "i32":
                 return "integer"
         raise ValueError(f"Unknown dtype: {dtype}")
+
+    def expr_at(self, *offsets, **kwargs):
+        """Fortran variables start at 1, not 0"""
+        return super().expr_at(1, *offsets, **kwargs)
 
 
 class F90LocalVariable(F90LibRoutineVariable, LibRoutineLocalVariable):
@@ -471,7 +483,7 @@ big_km.link("foo3", ltl_km)
 big_km.link("foo4", ltl_km)
 
 big_km.update()
-print(list(big_km.keys()))
+# print(list(big_km.keys()))
 
 VarInp = InstructionVariable.new(name="input1", config=big_km)
 VarOut = InstructionVariable.new(name="output1", config=big_km)
@@ -481,7 +493,7 @@ VarOut = InstructionVariable.new(name="output1", config=big_km)
 VarInpInner = InstructionVariable.new("inner_input1", config=None)
 VarOutInner = InstructionVariable.new("inner_output1", config=None)
 
-print(InstructionVariable().name)
+# print(InstructionVariable().name)
 
 test_instructions_inner = InstructionGroup(
     [
@@ -505,7 +517,7 @@ test_instructions1 = InstructionGroup(
                 VarOutInner: VarOut(f"foo{val}"),
             },
         )
-        for val in range(5)
+        for val in range(1)
     ]
 )
 
@@ -520,14 +532,14 @@ test_instructions2 = InstructionGroup(
                             VarInpInner: VarInp(f"foo{val_inp}"),
                         },
                     )
-                    for val_inp in range(5)
+                    for val_inp in range(2)
                 ]
             ),
             offsets={
                 VarOutInner: VarOut(f"foo{val_out}"),
             },
         )
-        for val_out in range(5)
+        for val_out in range(1)
     ]
 )
 
@@ -570,8 +582,8 @@ container_tree = my_builder.create_routine_container(
     "foo",
     largegroup,
     context=lib_container.context,
-    routine_container=F90KernelContainer,
-    # routine_container=F90RoutineContainer,
+    # routine_container=F90KernelContainer,
+    routine_container=F90RoutineContainer,
 )
 
 

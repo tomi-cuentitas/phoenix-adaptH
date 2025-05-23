@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 23/05/2025, 13:54
-# Version:     0.1.158
+# Last Update: 23/05/2025, 14:20
+# Version:     0.1.196
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -548,9 +548,6 @@ class NamedContainer(CodeContainer):
         super().__init__(context=context, **buildargs)
         self._name = name
 
-    def build(self, **_):
-        return super().build()
-
     @property
     def name(self):
         """access name"""
@@ -714,12 +711,18 @@ class DefinitionLines(CodeLine):
         return self
 
 
-class LoopContainer(EmbeddingContainer):
-    """
-    A LoopContainer provides basic loop control capabilities. It can derive into
-    different versions depending on the architecture. In the loop, the frame selector
-    is defined.
-    """
+# class LoopContainer(EmbeddingContainer):
+#     """
+#     A LoopContainer provides basic loop control capabilities. It can derive into
+#     different versions depending on the architecture. In the loop, the frame selector
+#     is defined.
+#     """
+
+#     def __init__(self, variable, start, end, *, context, **buildargs):
+#         super().__init__(context=context, **buildargs)
+#         self._variable = variable
+#         self._start = start
+#         self._end = end
 
 
 class MultiFrameContainer(EmbeddingContainer):
@@ -800,9 +803,8 @@ class CaptureContainer(CodeContainer):
         """manage the captured variables. Automatically executed in build"""
 
     def build(self, **kwargs):
-        super().build(**kwargs)
         self.manage_captured(**kwargs)
-        return self
+        return super().build(**kwargs)
 
     def add_capture_trigger(
         self,
@@ -1053,6 +1055,8 @@ class KernelContainer(RoutineContainer):
             )
 
     def build(self, **kwargs):
+        # first handle kernel args (requested during creation)
+        # then build the rest, knowing the local representation
         self.prepare_kernel_arguments()
         return super().build(**kwargs)
 
@@ -1168,10 +1172,6 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
                 )
                 .build_all()
             )
-
-    # def build(self, **kwargs):
-    #     self.manage_captured()
-    #     return super().build()
 
     def get_codelines_head(self, indent: int, **kwargs):
         for num, container in enumerate(self._repeat_containers):
