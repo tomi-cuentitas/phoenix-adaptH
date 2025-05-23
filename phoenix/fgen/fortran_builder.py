@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 23/05/2025, 14:24
-# Version:     0.0.380
+# Last Update: 23/05/2025, 15:51
+# Version:     0.0.382
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -97,13 +97,13 @@ class F90MultiFrameContainer(MultiFrameContainer):
 
     def generate_head_containers(self):
         if self._multiframe_variable is not None:
-            yield self.codeline_from_text(
+            yield from self.codelines_from_text(
                 f"DO {self._multiframe_variable.expr()} = {self._min_value}, {self._max_value-1}"
             )
 
     def generate_foot_containers(self):
         if self._multiframe_variable is not None:
-            yield self.codeline_from_text(
+            yield from self.codelines_from_text(
                 f"END DO  ! {self._multiframe_variable.expr()}"
             )
 
@@ -125,12 +125,12 @@ class F90RoutineContainer(RoutineContainer):
             var.as_argument() for var in self.get_argument_variables()
         )
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
-        yield self.codeline_from_text(
+        yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
         )
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f"END SUBROUTINE {self.name}")
+        yield from self.codelines_from_text(f"END SUBROUTINE {self.name}")
 
 
 class F90KernelContainer(KernelContainer):
@@ -143,12 +143,12 @@ class F90KernelContainer(KernelContainer):
             var.as_argument() for var in self.get_argument_variables()
         )
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
-        yield self.codeline_from_text(
+        yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
         )
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f"END SUBROUTINE {self.name}")
+        yield from self.codelines_from_text(f"END SUBROUTINE {self.name}")
 
 
 class F90AffineContainer(StatementLine):
@@ -180,19 +180,19 @@ class F90LibraryContainer(LibraryContainer):
         super().__init__(name, context=context, **buildargs)
 
     def generate_head_containers(self, **_):
-        yield self.codeline_from_text(f"MODULE {self.name}")
+        yield from self.codelines_from_text(f"MODULE {self.name}")
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f"END MODULE {self.name}")
+        yield from self.codelines_from_text(f"END MODULE {self.name}")
 
     def generate_preamble_containers(self, **_):
-        yield self.codeline_from_text("")
-        yield self.codeline_from_text("IMPLICIT NONE")
-        yield self.codeline_from_text("")
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("IMPLICIT NONE")
+        yield from self.codelines_from_text("")
         yield from super().generate_preamble_containers()
-        yield self.codeline_from_text("")
-        yield self.codeline_from_text("CONTAINS")
-        yield self.codeline_from_text("")
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("CONTAINS")
+        yield from self.codelines_from_text("")
 
 
 class F90LibRoutineVariable(LibRoutineVariable):

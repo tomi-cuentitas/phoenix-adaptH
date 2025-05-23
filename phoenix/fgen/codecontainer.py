@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 23/05/2025, 14:20
-# Version:     0.1.196
+# Last Update: 23/05/2025, 15:53
+# Version:     0.1.234
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -148,7 +148,7 @@ class CodeContainer:
     """
 
     INDENT_BODY = False
-    COMMENT_CLASS = None
+    comment_class = None
 
     def __init__(self, context, **_) -> None:
         # all content that may or may not be useful
@@ -261,14 +261,15 @@ class CodeContainer:
             )
         self.parent.requires(variable)
 
-    def codeline_from_text(self, text: str, context=None) -> CodeContainer:
+    def codelines_from_text(self, text: str, context=None) -> CodeContainer:
         """generate a plain codeline from text"""
         if context is None:
             context = self.context
-        return CodeLine(
-            line=text,
-            context=context,
-        )
+        for line in text.split("\n"):
+            yield CodeLine(
+                line=text,
+                context=context,
+            )
 
     def build(self, **_):
         """build the container"""
@@ -373,16 +374,18 @@ class CodeContainer:
     @classmethod
     def set_comment_class(cls, comment_gen):
         """set the comment generator"""
-        cls.COMMENT_CLASS = comment_gen
+        cls.comment_class = comment_gen
 
-    def comment_from_text(self, line, **buildargs):
+    def comment_from_text(self, text, **buildargs):
         """generate one or multiple comment lines"""
-        if type(self).COMMENT_CLASS is not None:
-            return type(self).COMMENT_CLASS(
-                line,
-                context=self.context.inherit(),
-                **buildargs,
-            )
+        if type(self).comment_class is not None:
+            for cline in text.split("\n"):
+                assert callable(type(self).comment_class)
+                yield type(self).comment_class(
+                    cline,
+                    context=self.context.inherit(),
+                    **buildargs,
+                )
 
 
 class EmbeddingContainer(CodeContainer):
@@ -731,13 +734,16 @@ class MultiFrameContainer(EmbeddingContainer):
     parallellizable and does not strictly has to be a loop.
     """
 
-    LOOPVARIABLE = LibRoutineLocalVariable
+    loop_variable = LibRoutineLocalVariable
 
-    def __init__(self, *, context, **buildargs):
+    def __init__(self, *, context, loop_variable=None, **buildargs):
         super().__init__(context=context, **buildargs)
         self._multiframe_variable = None
         self._max_value = None
         self._min_value = None
+        if loop_variable is None:
+            loop_variable = type(self).loop_variable
+        self._loop_variable = loop_variable
 
     def set_multiframe_variable(
         self, variable, prefix="rep", local_variable_class=None
@@ -747,7 +753,7 @@ class MultiFrameContainer(EmbeddingContainer):
         self._max_value = variable.max_value
         self._min_value = variable.min_value
         if local_variable_class is None:
-            local_variable_class = type(self).LOOPVARIABLE
+            local_variable_class = self._loop_variable
         self._multiframe_variable.create_local_representative(
             context=self.context,
             prefix=prefix,
@@ -758,13 +764,13 @@ class MultiFrameContainer(EmbeddingContainer):
 
     def generate_head_containers(self):
         if self._multiframe_variable is not None:
-            yield self.codeline_from_text(
+            yield from self.codelines_from_text(
                 f":BEGIN REPEAT: {self._multiframe_variable.expr()} from {self._min_value} to {self._max_value}"
             )
 
     def generate_foot_containers(self):
         if self._multiframe_variable is not None:
-            yield self.codeline_from_text(
+            yield from self.codelines_from_text(
                 f":END REPEAT: {self._multiframe_variable.expr()}"
             )
 
@@ -908,10 +914,16 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     multiframe_container_class = MultiFrameContainer
 
-    def __init__(self, name, *, context, **buildargs):
+    def __init__(
+        self, name, *, context, multiframe_container_class=None, **buildargs
+    ):
         # print("routine init")
         inner_context = self._prep_hidden_layers_pre(context, **buildargs)
         super().__init__(name=name, context=inner_context, **buildargs)
+        if multiframe_container_class is None:
+            multiframe_container_class = type(self).multiframe_container_class
+        self._mfcontainer_class = multiframe_container_class
+
         self._var_layer.add_capture_trigger(LibRoutineInputVariable)
         self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
         self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
@@ -935,7 +947,7 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def _prep_hidden_layers_post(self, **buildargs):
         self._rep_layer = LoopCaptureContainer(
-            type(self).multiframe_container_class,
+            self._mfcontainer_class,
             context=self._var_layer.context,
             **buildargs,
         )
@@ -961,26 +973,26 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         """
         distribute the captured variables into the def line and the call
         """
-        yield self.comment_from_text("IN/OUT/INOUT")
+        yield from self.comment_from_text("IN/OUT/INOUT")
         for variable in self.get_argument_variables():
             yield DefinitionLines(variable, context=self.context, **kwargs)
-        yield self.codeline_from_text("")
-        yield self.comment_from_text("LOCAL")
+        yield from self.codelines_from_text("")
+        yield from self.comment_from_text("LOCAL")
         for variable in self.get_inner_variables():
             yield DefinitionLines(variable, context=self.context, **kwargs)
-        yield self.codeline_from_text("")
+        yield from self.codelines_from_text("")
 
     def generate_head_containers(self, **_):
         call_args = (
             variable.as_argument()
             for variable in self.get_argument_variables()
         )
-        yield self.codeline_from_text(
+        yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
         )
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f":END: FUNCTION {self.name}")
+        yield from self.codelines_from_text(f":END: FUNCTION {self.name}")
 
     # def get_call_codelines(self, **substitutions):
     #     """
@@ -1066,12 +1078,14 @@ class KernelContainer(RoutineContainer):
             for variable in self.get_argument_variables()
         )
 
-        yield self.codeline_from_text(
+        yield from self.codelines_from_text(
             f":BEGIN: KERNEL FUNCTION {self.name} ({', '.join(call_args)})"
         )
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f":END: KERNEL FUNCTION {self.name}")
+        yield from self.codelines_from_text(
+            f":END: KERNEL FUNCTION {self.name}"
+        )
 
     # def get_call_codelines(self, context, **substitutions):
     #     """
@@ -1093,7 +1107,7 @@ class ImportContainer(CodeLine):
     def create_import_codelines(self):
         """create the codelines required for the import"""
         for routine in self._routines:
-            yield self.codeline_from_text(
+            yield from self.codelines_from_text(
                 f":IMPORT: {routine} from {self._library}"
             )
 
@@ -1117,8 +1131,11 @@ class ImportSectionContainer(CaptureContainer):
 
     import_line_class = ImportContainer
 
-    def __init__(self, *, context, **buildargs):
+    def __init__(self, *, context, import_line_class=None, **buildargs):
         super().__init__(context=context, **buildargs)
+        if import_line_class is None:
+            import_line_class = type(self).import_line_class
+        self._import_line_class = import_line_class
         self.add_capture_trigger(ExternalRoutine)
 
     def manage_captured(self, **kwargs):
@@ -1135,7 +1152,7 @@ class ImportSectionContainer(CaptureContainer):
         # add the import codelines to the body. tidy_imports does the grouping
         for library, routines in self.tidy_imports(captured_imports):
             self.append(
-                type(self).import_line_class(
+                self._import_line_class(
                     library, routines, context=self.context, **kwargs
                 )
             )
@@ -1216,10 +1233,10 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""
-        yield self.codeline_from_text(f"LIBRARY {self.name}")
+        yield from self.codelines_from_text(f"LIBRARY {self.name}")
 
     def generate_foot_containers(self, **_):
-        yield self.codeline_from_text(f"END LIBRARY {self.name}")
+        yield from self.codelines_from_text(f"END LIBRARY {self.name}")
 
     # def capture_check(self, requirement):
     #     """perform a capture check for the requirement"""
