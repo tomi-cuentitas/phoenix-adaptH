@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 23/05/2025, 14:21
-# Version:     0.0.378
+# Last Update: 23/05/2025, 14:24
+# Version:     0.0.380
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -90,7 +90,7 @@ class F90CommentLine(CommentLine):
     # some_aux_variable = LibRoutineLocalVariable("testvar")
 
 
-class F90LoopContainer(MultiFrameContainer):
+class F90MultiFrameContainer(MultiFrameContainer):
     """Plain Text version of a DefinitionContainer"""
 
     INDENT_BODY = True
@@ -98,7 +98,7 @@ class F90LoopContainer(MultiFrameContainer):
     def generate_head_containers(self):
         if self._multiframe_variable is not None:
             yield self.codeline_from_text(
-                f"DO {self._multiframe_variable.expr()} = {self._min_value}, {self._max_value}"
+                f"DO {self._multiframe_variable.expr()} = {self._min_value}, {self._max_value-1}"
             )
 
     def generate_foot_containers(self):
@@ -118,7 +118,7 @@ class F90RoutineContainer(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
     INDENT_BODY = True
-    multiframe_container_class = F90LoopContainer
+    multiframe_container_class = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
         call_args = (
