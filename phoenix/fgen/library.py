@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 10/04/2025, 10:51
-# Version:     0.0.555
+# Last Update: 26/05/2025, 16:10
+# Version:     0.0.567
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -22,7 +22,7 @@ Library module description
 from phoenix.fgen.codecontainer import (
     LibraryContainer,
     GroupContainer,
-    RoutineContainer,
+    # RoutineContainer,
 )
 from phoenix.fgen.context import Context
 from phoenix.fgen.libroutine import LibRoutine
@@ -39,7 +39,6 @@ class Library:
     INDENTSTR = "  "
 
     LIBRARY_CONTAINER = LibraryContainer
-    LIBROUTINE_CLS = LibRoutine
 
     def __init__(self, libname):
         self._libname = libname
@@ -74,20 +73,33 @@ class Library:
         )
         self._library_container.append(self._routines_container)
 
+    def build_all(self):
+        """build the library container"""
+        self._library_container.build_all()
+
+    def get_codelines(self, indent=0):
+        """get the codelines from the inner container object"""
+        yield from self._library_container.get_codelines(indent=indent)
+
     @property
-    def container(self):
+    def routine_section(self):
         """access the container where to put new stuff"""
         return self._routines_container
 
     @property
     def context(self):
         """access the context where to put new stuff"""
-        return self._routines_container.context
+        return self.routine_section.context
+
+    def new_libroutine(self, name, container):
+        """add a new libroutine from a container"""
+        libroutine = LibRoutine(name, container=container, library=self)
+        self.routine_section.append(container)
+        self.register_libroutine(libroutine)
 
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""
         self._libroutines[libroutine.name] = libroutine
-        self.container.append(libroutine.container)
 
     @property
     def fileending(self):
@@ -104,15 +116,15 @@ class Library:
         """generator-access to libroutines"""
         yield from self._libroutines.items()
 
-    def append(self, libroutine, exception_existing=False):
-        """append a routine to the library"""
-        if libroutine.key in self._libroutines:
-            if exception_existing:
-                raise KeyError(
-                    f"Routine '{libroutine.name}' already exists in library"
-                )
-            return
-        self.register_libroutine(libroutine)
+    # def append(self, libroutine, exception_existing=False):
+    #     """append a routine to the library"""
+    #     if libroutine.key in self._libroutines:
+    #         if exception_existing:
+    #             raise KeyError(
+    #                 f"Routine '{libroutine.name}' already exists in library"
+    #             )
+    #         return
+    #     self.register_libroutine(libroutine)
 
     def __getitem__(self, key):
         return self._libroutines.get(key)

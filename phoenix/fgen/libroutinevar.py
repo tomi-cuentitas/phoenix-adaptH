@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 26/05/2025, 11:14
-# Version:     0.0.713
+# Last Update: 26/05/2025, 15:12
+# Version:     0.0.719
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -204,6 +204,11 @@ class Namespace:
         """inherit into a new namespace that is contained in self"""
         return type(self)(parent=self)
 
+    @property
+    def assigned(self):
+        """access the assigned variables"""
+        yield from self._assigned.items()
+
 
 class LibRoutineVariable:
     """Any kind of variable used in the library"""
@@ -268,9 +273,7 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(
-            self
-        ).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -441,11 +444,13 @@ class ExternalRoutine(LibRoutineVariable):
         )
         self._libroutine = libroutine
         self._call_name = None
-        self._args = []
 
     def set_call_name(self, name):
         """Set the call name. Might include alias and library names. Set at import"""
         self._call_name = name
+
+    def get_call_requirements(self):
+        """yields the requirements used in the call"""
 
     @property
     def libroutine(self):
@@ -462,14 +467,22 @@ class ExternalRoutine(LibRoutineVariable):
         """read-only access for library"""
         return self._libroutine.library
 
-    @property
-    def container(self):
-        """read-only access for container"""
-        return self._libroutine.container
+    # @property
+    # def container(self):
+    #     """read-only access for container"""
+    #     return self._libroutine.container
 
     @property
     def call_name(self):
+        """access the call name"""
+        if self._call_name is None:
+            raise ValueError("Call name not set!")
         return self._call_name
+
+    def get_argument_assignments(self):
+        """get the arguments and their assignments"""
+        for variable in self.libroutine.container.get_argument_variables():
+            yield variable, variable.assignment
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):
@@ -699,6 +712,10 @@ class LibRoutineMultiFrame(LibRoutineVariable):
 
         # default value when branching needs to be suppressed
         self._default_value = min_value
+
+    def recreate(self):
+        """recreate the multi frame object to rerise it"""
+        return type(self)(self.max_value, min_value=self.min_value)
 
     def create_local_representative(
         self,

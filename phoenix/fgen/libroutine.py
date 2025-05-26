@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/02/2025
-# Last Update: 08/04/2025, 12:00
-# Version:     0.0.293
+# Last Update: 26/05/2025, 14:59
+# Version:     0.0.294
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -37,6 +37,7 @@ class LibRoutine:
         if library is None:
             raise ValueError("LibRoutine must be associated with a library")
         self._library = library
+        self._input_variables = []
 
     @property
     def library(self):
@@ -78,13 +79,13 @@ class LibRoutine:
             "library": self.library,
         }
 
-    def get_call(self, **substitutions):
-        """get the container of calling the routine"""
-        self._container.get_call(self, **substitutions)
+    # def get_call(self, **substitutions):
+    #     """get the container of calling the routine"""
+    #     self._container.get_call(self, **substitutions)
 
-    def get_signature(self):
-        """get the call signature of the routine"""
-        return self._container.get_signature()
+    # def get_signature(self):
+    #     """get the call signature of the routine"""
+    #     return self._container.get_signature()
 
     def get_import(self):
         """get the import statement for this libroutine"""

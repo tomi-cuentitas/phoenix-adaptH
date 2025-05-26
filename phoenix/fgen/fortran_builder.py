@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 23/05/2025, 15:51
-# Version:     0.0.382
+# Last Update: 26/05/2025, 16:11
+# Version:     0.0.418
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -41,6 +41,9 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineConstant,
     LibRoutineMultiFrame,
 )
+
+from phoenix.fgen.libroutine import LibRoutine
+from phoenix.fgen.library import Library
 
 from phoenix.fgen.instruction import AffineOperationInstruction
 
@@ -121,9 +124,7 @@ class F90RoutineContainer(RoutineContainer):
     multiframe_container_class = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -139,9 +140,7 @@ class F90KernelContainer(KernelContainer):
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -287,6 +286,14 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
             prefix_suffix_lines=True,
         ):
             yield line
+
+
+class F90Library(Library):
+    """F90 Version of a Library"""
+
+    FILEENDING = "f90"
+    INDENTSTR = "  "
+    LIBRARY_CONTAINER = F90LibraryContainer
 
 
 ###############################################################################
@@ -582,19 +589,51 @@ container_tree = my_builder.create_routine_container(
     "foo",
     largegroup,
     context=lib_container.context,
-    # routine_container=F90KernelContainer,
-    routine_container=F90RoutineContainer,
+    routine_container=F90KernelContainer,
+    # routine_container=F90RoutineContainer,
 )
 
 
-lib_container.build()
 lib_container.append(container_tree)
+lib_container.build()
 
 
-for indent, line in lib_container.get_codelines():
+# for indent, line in lib_container.get_codelines():
+#     print(indent * "  " + line)
+
+
+my_library = F90Library("testlibrary")
+
+assignments = {
+    (VarInp, "real"): F90InputVariable(VarInp, "real", "inp_real", size=99),
+    (VarInp, "imag"): F90InputVariable(VarInp, "imag", "inp_imag", size=99),
+    (VarOut, "real"): F90OutputVariable(VarOut, "real", "out_real", size=99),
+    (VarOut, "imag"): F90OutputVariable(VarOut, "imag", "out_imag", size=99),
+}
+
+my_builder.instructions_to_libroutine(
+    "foofoo",
+    largegroup,
+    my_library,
+    assignments,
+    routine_container=F90RoutineContainer,
+)
+
+print(my_library._library_container)
+
+my_library.build_all()
+
+for indent, line in my_library.get_codelines():
     print(indent * "  " + line)
 
 
+print("####")
+
+print(
+    my_library["foofoo"],
+    my_library["foofoo"].library,
+    my_library["foofoo"].name,
+)
 sys.exit()
 
 

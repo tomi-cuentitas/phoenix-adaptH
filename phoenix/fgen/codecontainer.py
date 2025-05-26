@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 26/05/2025, 11:21
-# Version:     0.1.244
+# Last Update: 26/05/2025, 16:10
+# Version:     0.1.341
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -172,7 +172,7 @@ class CodeContainer:
         #     context.parent
         # )  # manage parent reference, might be weak
 
-    def _set_attachment_point(self, point: CodeContainer) -> None:
+    def set_attachment_point(self, point: CodeContainer) -> None:
         """set the point where containers are effectively attached"""
         self._attachment_point = point
 
@@ -388,6 +388,18 @@ class CodeContainer:
                 )
 
 
+class EmptyLines(CodeContainer):
+    """An Empty Line (or multiple)"""
+
+    def __init__(self, num=1, *, context, **buildargs):
+        super().__init__(context=context, **buildargs)
+        self._num_empty_lines = num
+
+    def get_codelines_body(self, indent=0, **kwargs):
+        for _ in range(self._num_empty_lines):
+            yield indent, ""
+
+
 class EmbeddingContainer(CodeContainer):
     """
     A container that is embedded in head and foot lines.
@@ -575,9 +587,11 @@ class GroupContainer(EmbeddingContainer):
     delimiters and comments.
     """
 
-    def generate_head_containers(self, **_):
-        yield ""
-        yield from super().generate_head_containers()
+    def append(self, content):
+        """group containers provide empty lines for clarity and proper separation"""
+        if len(self._container_body) > 0:
+            self._container_body.append(EmptyLines(1, context=self.context))
+        super().append(content)
 
 
 class CodeBlock(CodeContainer):
@@ -828,9 +842,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -899,7 +911,29 @@ class DefinitionContainer(CaptureContainer, PreambleContainer):
             yield DefinitionLines(variable, context=self.context, **kwargs)
 
 
-class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
+class HiddenLayersContainer(CodeContainer):
+    """Provide Hidden Layer Functionality"""
+
+    def __init__(self, *args, context, **buildargs):
+        inner_context = self._prep_hidden_layers_pre(context, **buildargs)
+        super().__init__(*args, context=inner_context, **buildargs)
+        last_container = self._prep_hidden_layers_post(
+            inner_context, self, **buildargs
+        )
+        self.set_attachment_point(last_container)
+
+    def _prep_hidden_layers_pre(self, context, **_):
+        return context
+
+    def _prep_hidden_layers_post(self, context, container=None, **_):
+        if container is None:
+            container = self
+        return container
+
+
+class RoutineContainer(
+    NamedContainer, HiddenLayersContainer, EmbeddingContainer, PreambleContainer
+):
     """
     How a routine is defined, especially handles the section where the arguments
     are passed and opening/enclosing statements.
@@ -917,42 +951,37 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     def __init__(
         self, name, *, context, multiframe_container_class=None, **buildargs
     ):
-        # print("routine init")
-        inner_context = self._prep_hidden_layers_pre(context, **buildargs)
-        super().__init__(name=name, context=inner_context, **buildargs)
         if multiframe_container_class is None:
             multiframe_container_class = type(self).multiframe_container_class
         self._mfcontainer_class = multiframe_container_class
 
+        super().__init__(name=name, context=context, **buildargs)
+
+        # added in hidden - pre
         self._var_layer.add_capture_trigger(LibRoutineInputVariable)
         self._var_layer.add_capture_trigger(LibRoutineOutputVariable)
         self._var_layer.add_capture_trigger(LibRoutineInOutVariable)
         self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
-
-        # self._loop_container = LoopCaptureContainer(
-        #     type(self).multiframe_container_class,
-        #     context=self._var_layer.context,
-        #     **buildargs,
-        # )
-        # self.append_body(self._loop_container)
-        # self._set_attachment_point(self._loop_container)
-        self._prep_hidden_layers_post(**buildargs)
 
     def _prep_hidden_layers_pre(self, context, **buildargs):
         self._def_layer = CaptureContainer(context=context, **buildargs)
         self._var_layer = CaptureContainer(
             context=self._def_layer.context, **buildargs
         )
-        return self._var_layer.context
+        return super()._prep_hidden_layers_pre(
+            self._var_layer.context, **buildargs
+        )
 
-    def _prep_hidden_layers_post(self, **buildargs):
+    def _prep_hidden_layers_post(self, context, container, **buildargs):
         self._rep_layer = LoopCaptureContainer(
             self._mfcontainer_class,
-            context=self._var_layer.context,
+            context=context,
             **buildargs,
         )
         self.append_body(self._rep_layer)
-        self._set_attachment_point(self._rep_layer)
+        return super()._prep_hidden_layers_post(
+            self._rep_layer.context, self._rep_layer, **buildargs
+        )
 
     # def get_call_arguments(self, **substitutions):
     #     """list the arguments needed for a call"""
@@ -984,8 +1013,7 @@ class RoutineContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1033,6 +1061,7 @@ class KernelContainer(RoutineContainer):
     def __init__(self, name, *, context, **buildargs):
         super().__init__(name, context=context, **buildargs)
         self._ker_layer.add_capture_trigger(LibRoutineMultiFrame)
+        self._rep_layer = None
 
     def _prep_hidden_layers_pre(self, context, **buildargs):
         self._def_layer = CaptureContainer(context=context, **buildargs)
@@ -1044,8 +1073,9 @@ class KernelContainer(RoutineContainer):
         )
         return self._ker_layer.context
 
-    def _prep_hidden_layers_post(self, **buildargs):
-        self._rep_layer = None
+    def _prep_hidden_layers_post(self, context, container=None, **buildargs):
+        # directly return self, because super()._.._post includes the LoopContainer
+        return self
 
     # def get_call_arguments(self, **substitutions):
     #     for variable in self.get_argument_variables():
@@ -1074,8 +1104,7 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1115,14 +1144,23 @@ class ImportContainer(CodeLine):
 class RoutineCallContainer(CodeLine):
     """Call a routine or routine-like object"""
 
-    def __init__(self, external_routine, args, *, context, **buildargs):
-        self._ext_routine = external_routine
-        self._args = args
+    def __init__(self, external_routine, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
+        self._ext_routine = external_routine
+        self._call_args = []
+        for _, assignment in external_routine.get_argument_assignments():
+            source, key = assignment
+            local = self.request_assigned(source, key, autorequire=True)
+            self._call_args.append(local)
 
-    def construct_code_lines(self):
+    def construct_code_lines(self, **_):
         # call name depends on import section
-        call_string = f"{self._ext_routine.call_name}({', '.join(self._args)})"
+        call_arg_names = [
+            call_arg.as_argument() for call_arg in self._call_args
+        ]
+        call_string = (
+            f"{self._ext_routine.call_name}({', '.join(call_arg_names)})"
+        )
         yield call_string
 
     # generate the call using info from the ExternalRoutine variable

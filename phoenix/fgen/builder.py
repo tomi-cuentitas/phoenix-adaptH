@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 23/05/2025, 13:53
-# Version:     0.0.1221
+# Last Update: 26/05/2025, 15:53
+# Version:     0.0.1225
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -345,19 +345,26 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         name,
         instructions,
         library,
+        assignments,
         routine_container=None,
         **buildargs,
     ):
         """generate a libroutine in a library from instructions"""
+        routine_context = library.context.inherit()
+
+        for (source, key), assignment in assignments.items():
+            routine_context.namespace.assign(source, key, assignment)
+
         routine_container = self.create_routine_container(
             name,
             instructions,
-            context=library.context,
+            context=routine_context,
             routine_container=routine_container,
             **buildargs,
         )
+
         libroutine = library.new_libroutine(
-            identifier=name, container=routine_container
+            name=name, container=routine_container
         )
         return libroutine
 
@@ -381,7 +388,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         ):
             routine_container.append(container)
         info("reached end of routine build")
-        return routine_container.reset_all().build_all()
+        return routine_container  # .reset_all().build_all()
 
     # @log.wrap_call
     # def prepare_routine_container(
