@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 23/05/2025, 13:13
-# Version:     0.0.708
+# Last Update: 26/05/2025, 11:14
+# Version:     0.0.713
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -110,7 +110,7 @@ class Namespace:
         return None
 
     def find_assignment_dict(self, ivariable_type, exception_existing=True):
-        """find a variable in the namespace"""
+        """find a variable dict in the namespace"""
         if ivariable_type in self._assigned:
             return self._assigned[ivariable_type]
         if self._parent is not None:
@@ -443,6 +443,10 @@ class ExternalRoutine(LibRoutineVariable):
         self._call_name = None
         self._args = []
 
+    def set_call_name(self, name):
+        """Set the call name. Might include alias and library names. Set at import"""
+        self._call_name = name
+
     @property
     def libroutine(self):
         """read-only access for libroutine"""
@@ -462,6 +466,10 @@ class ExternalRoutine(LibRoutineVariable):
     def container(self):
         """read-only access for container"""
         return self._libroutine.container
+
+    @property
+    def call_name(self):
+        return self._call_name
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 23/05/2025, 15:53
-# Version:     0.1.234
+# Last Update: 26/05/2025, 11:21
+# Version:     0.1.244
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1115,13 +1115,15 @@ class ImportContainer(CodeLine):
 class RoutineCallContainer(CodeLine):
     """Call a routine or routine-like object"""
 
-    def __init__(self, libroutine, *, context, **buildargs):
-        super().__init__(None, context=context, **buildargs)
-        self._external_routine = ExternalRoutine(libroutine)
+    def __init__(self, external_routine, args, *, context, **buildargs):
+        self._ext_routine = external_routine
+        self._args = args
+        super().__init__(context=context, **buildargs)
 
-    def build(self, **kwargs):
-        self.requires(self._external_routine)
-        return super().build(**kwargs)
+    def construct_code_lines(self):
+        # call name depends on import section
+        call_string = f"{self._ext_routine.call_name}({', '.join(self._args)})"
+        yield call_string
 
     # generate the call using info from the ExternalRoutine variable
 
@@ -1143,7 +1145,7 @@ class ImportSectionContainer(CaptureContainer):
         captured_imports = []
         for to_be_imported in self._captured:
             # check for compatibility
-            if not self.compatibility_check(to_be_imported.libroutine):
+            if not self.compatibility_check(to_be_imported):
                 raise ValueError(
                     f"Library {to_be_imported.library} does not match current library"
                 )
@@ -1156,15 +1158,21 @@ class ImportSectionContainer(CaptureContainer):
                     library, routines, context=self.context, **kwargs
                 )
             )
+            for routine in routines:
+                routine.set_call_name(self.compose_call_name(routine, library))
+
+    def compose_call_name(self, routine, library):
+        """compose the name of the call"""
+        return f"{library.name}.{routine.name}"
 
     def tidy_imports(self, list_of_imports):
         """tidy the imports, i.e. handle groups, repeats, ..."""
         for this_import in list_of_imports:
-            yield this_import.library, [this_import.name]
+            yield this_import.library, [this_import]
 
-    def compatibility_check(self, libroutine):
+    def compatibility_check(self, to_be_imported):
         """check if libroutine is compatible"""
-        print(f"... check import of {libroutine.name}")
+        print(f"... check import of {to_be_imported} ({to_be_imported.name})")
         return True
 
 
