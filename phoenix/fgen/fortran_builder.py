@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 26/05/2025, 16:11
-# Version:     0.0.418
+# Last Update: 26/05/2025, 17:03
+# Version:     0.0.427
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -40,6 +40,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineLocalVariable,
     LibRoutineConstant,
     LibRoutineMultiFrame,
+    ExternalRoutine,
 )
 
 from phoenix.fgen.libroutine import LibRoutine
@@ -611,13 +612,24 @@ assignments = {
     (VarOut, "imag"): F90OutputVariable(VarOut, "imag", "out_imag", size=99),
 }
 
-my_builder.instructions_to_libroutine(
+libroutine1 = my_builder.instructions_to_libroutine(
     "foofoo",
     largegroup,
     my_library,
     assignments,
     routine_container=F90RoutineContainer,
 )
+
+libroutine2 = my_builder.instructions_to_libroutine(
+    "foofoo",
+    largegroup,
+    my_library,
+    assignments,
+    routine_container=F90RoutineContainer,
+)
+
+print(libroutine1.name)
+print(libroutine2.name)
 
 print(my_library._library_container)
 
@@ -634,6 +646,10 @@ print(
     my_library["foofoo"].library,
     my_library["foofoo"].name,
 )
+
+ext_routine = ExternalRoutine(my_library["foofoo"])
+print(ext_routine)
+
 sys.exit()
 
 

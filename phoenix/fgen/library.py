@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 26/05/2025, 16:10
-# Version:     0.0.567
+# Last Update: 26/05/2025, 17:03
+# Version:     0.0.568
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -96,6 +96,7 @@ class Library:
         libroutine = LibRoutine(name, container=container, library=self)
         self.routine_section.append(container)
         self.register_libroutine(libroutine)
+        return libroutine
 
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""

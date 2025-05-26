@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 26/05/2025, 16:10
-# Version:     0.1.341
+# Last Update: 26/05/2025, 17:01
+# Version:     0.1.361
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,6 +28,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineMultiFrame,
     ExternalRoutine,
     LibRoutineConstant,
+    UniqueString,
 )
 
 from phoenix.aux import multiline_iterable, multiline_text
@@ -955,7 +956,10 @@ class RoutineContainer(
             multiframe_container_class = type(self).multiframe_container_class
         self._mfcontainer_class = multiframe_container_class
 
-        super().__init__(name=name, context=context, **buildargs)
+        unique_name = UniqueString(name, namespace=context.namespace)
+        context.namespace.add(unique_name)
+
+        super().__init__(name=unique_name.name, context=context, **buildargs)
 
         # added in hidden - pre
         self._var_layer.add_capture_trigger(LibRoutineInputVariable)

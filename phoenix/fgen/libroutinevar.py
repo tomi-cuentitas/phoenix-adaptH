@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 26/05/2025, 15:12
-# Version:     0.0.719
+# Last Update: 26/05/2025, 16:56
+# Version:     0.0.725
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -234,6 +234,7 @@ class LibRoutineVariable:
         suffix=None,
         dtype="f64",
         status=0,
+        enum_first=True,
     ):
         if name is None:
             name = type(self)._CLASS_BASE
@@ -245,7 +246,7 @@ class LibRoutineVariable:
             name=name,
             prefix=prefix,
             suffix=suffix,
-            enum_first=True,
+            enum_first=enum_first,
         )
         assert aname not in self._namespace
         assert aname is not None
@@ -428,6 +429,21 @@ class LibRoutineVariable:
         return f"{self.name}"
 
 
+class UniqueString(LibRoutineVariable):
+    """Look at the namespace when you name a routine"""
+
+    _VAR_IDENTIFIER = "UNIQUE"
+    _CLASS_BASE = "unq"
+
+    def __init__(self, name, *args, **kwargs):
+        super().__init__(
+            *args,
+            name=name,
+            **kwargs,
+            enum_first=False,
+        )
+
+
 class ExternalRoutine(LibRoutineVariable):
     """
     An import. Maybe part of the variable concept in a broader sense.
@@ -440,7 +456,11 @@ class ExternalRoutine(LibRoutineVariable):
 
     def __init__(self, libroutine, *args, **kwargs):
         super().__init__(
-            *args, **kwargs, status=LibRoutineVariable.STATUS_INPUT
+            *args,
+            name=libroutine.name,
+            **kwargs,
+            status=LibRoutineVariable.STATUS_INPUT,
+            enum_first=False,
         )
         self._libroutine = libroutine
         self._call_name = None
@@ -460,7 +480,7 @@ class ExternalRoutine(LibRoutineVariable):
     @property
     def name(self):
         """read-only access for name"""
-        return self._libroutine.name
+        return self._name
 
     @property
     def library(self):

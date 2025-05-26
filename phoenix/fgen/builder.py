@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 26/05/2025, 15:53
-# Version:     0.0.1225
+# Last Update: 26/05/2025, 17:02
+# Version:     0.0.1226
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -364,7 +364,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         )
 
         libroutine = library.new_libroutine(
-            name=name, container=routine_container
+            name=routine_container.name, container=routine_container
         )
         return libroutine
 
