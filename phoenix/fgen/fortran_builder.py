@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 26/05/2025, 17:03
-# Version:     0.0.427
+# Last Update: 27/05/2025, 13:41
+# Version:     0.0.480
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,12 +25,15 @@ from phoenix.fgen.codecontainer import (
     EmbeddingContainer,
     DefinitionContainer,
     # LoopContainer,
+    CaptureContainer,
     RoutineContainer,
     ConditionalContainer,
     NamedContainer,
     KernelContainer,
     LibraryContainer,
     MultiFrameContainer,
+    RoutineCallContainer,
+    ImportSectionContainer,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -122,10 +125,12 @@ class F90RoutineContainer(RoutineContainer):
     """Plain Text version of a RoutineDefinition"""
 
     INDENT_BODY = True
-    multiframe_container_class = F90MultiFrameContainer
+    DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -141,7 +146,9 @@ class F90KernelContainer(KernelContainer):
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -153,7 +160,7 @@ class F90KernelContainer(KernelContainer):
 
 class F90AffineContainer(StatementLine):
     INDENT_BODY = False
-    _BLUEPRINT = "{y_expression} = {y_expression} + {a_value} * {x_expression} + {b_value}"
+    BLUEPRINT = "{y_expression} = {y_expression} + {a_value} * {x_expression} + {b_value}"
 
     def __init__(self, y, yo, a, x, xo, b, *, context, **params):
         super().__init__(
@@ -187,9 +194,11 @@ class F90LibraryContainer(LibraryContainer):
 
     def generate_preamble_containers(self, **_):
         yield from self.codelines_from_text("")
+        yield self._imp_layer
+        yield from self.codelines_from_text("")
         yield from self.codelines_from_text("IMPLICIT NONE")
         yield from self.codelines_from_text("")
-        yield from super().generate_preamble_containers()
+        yield self._def_layer
         yield from self.codelines_from_text("")
         yield from self.codelines_from_text("CONTAINS")
         yield from self.codelines_from_text("")
@@ -385,7 +394,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             a_real,
             x_var_real,
             x_var_offs,
-            0,
+            0.0,
             context=context,
         )
         yield F90AffineContainer(
@@ -403,7 +412,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             a_real,
             x_var_imag,
             x_var_offs,
-            0,
+            0.0,
             context=context,
         )
         yield F90AffineContainer(
@@ -525,7 +534,7 @@ test_instructions1 = InstructionGroup(
                 VarOutInner: VarOut(f"foo{val}"),
             },
         )
-        for val in range(1)
+        for val in range(3)
     ]
 )
 
@@ -599,8 +608,8 @@ lib_container.append(container_tree)
 lib_container.build()
 
 
-# for indent, line in lib_container.get_codelines():
-#     print(indent * "  " + line)
+for indent, line in lib_container.get_codelines():
+    print(indent * "  " + line)
 
 
 my_library = F90Library("testlibrary")
@@ -628,6 +637,16 @@ libroutine2 = my_builder.instructions_to_libroutine(
     routine_container=F90RoutineContainer,
 )
 
+
+libroutine3 = my_builder.instructions_to_libroutine(
+    "foofoo_kernel",
+    largegroup,
+    my_library,
+    assignments,
+    routine_container=F90KernelContainer,
+    # routine_container=F90RoutineContainer,
+)
+
 print(libroutine1.name)
 print(libroutine2.name)
 
@@ -639,16 +658,66 @@ for indent, line in my_library.get_codelines():
     print(indent * "  " + line)
 
 
-print("####")
-
 print(
     my_library["foofoo"],
     my_library["foofoo"].library,
     my_library["foofoo"].name,
 )
 
-ext_routine = ExternalRoutine(my_library["foofoo"])
-print(ext_routine)
+print()
+print("####")
+print("####")
+print("####")
+print()
+print("artificial call scenario:")
+print("-------------------------")
+print()
+
+ext_routine = ExternalRoutine(my_library["foofoo_kernel"])
+
+test_context = Context()
+test_lib_container = LibraryContainer("example", context=test_context)
+test_def_container = RoutineContainer(
+    "blubber", context=test_lib_container.context
+)
+
+
+test_context.namespace.assign(
+    VarInp,
+    "real",
+    LibRoutineInputVariable(VarInp, "real", "inp_r", size=999),
+)
+test_context.namespace.assign(
+    VarInp,
+    "imag",
+    LibRoutineInputVariable(VarInp, "imag", "inp_i", size=999),
+)
+test_context.namespace.assign(
+    VarOut,
+    "real",
+    LibRoutineOutputVariable(VarOut, "real", "out_l", size=999),
+)
+test_context.namespace.assign(
+    VarOut,
+    "imag",
+    LibRoutineOutputVariable(VarOut, "imag", "out_g", size=999),
+)
+
+
+test_routine_container = RoutineCallContainer(
+    ext_routine, context=test_def_container.context
+)
+
+test_lib_container.append(test_def_container)
+test_def_container.append(test_routine_container)
+test_def_container.append(test_routine_container)
+test_def_container.append(test_routine_container)
+test_def_container.append(test_routine_container)
+
+test_lib_container.build_all()
+for indent, line in test_lib_container.get_codelines():
+    print(indent * "  " + line)
+
 
 sys.exit()
 

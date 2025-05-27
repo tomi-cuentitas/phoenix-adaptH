@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 26/05/2025, 16:56
-# Version:     0.0.725
+# Last Update: 27/05/2025, 13:01
+# Version:     0.0.734
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -274,7 +274,9 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -502,7 +504,10 @@ class ExternalRoutine(LibRoutineVariable):
     def get_argument_assignments(self):
         """get the arguments and their assignments"""
         for variable in self.libroutine.container.get_argument_variables():
-            yield variable, variable.assignment
+            if isinstance(variable.assignment, LibRoutineMultiFrame):
+                yield variable.assignment  # .recreate()
+            else:
+                yield variable.assignment
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):
@@ -549,6 +554,11 @@ class LibRoutineAssignedVariable(LibRoutineVariable):
         # keep a reference to the thing that the variable is assigned to
         self._assignment = assignment
 
+    @property
+    def assignment(self):
+        """read-only access to assignment"""
+        return self._assignment
+
 
 class LibRoutineInputVariable(LibRoutineAssignedVariable):
     """Input Variable. Potentially includes Read-Only behaviour"""
@@ -570,6 +580,7 @@ class LibRoutineInputVariable(LibRoutineAssignedVariable):
             *args,
             assignment=(assigned_variable, key),
             status=LibRoutineVariable.STATUS_INPUT,
+            enum_first=False,
             **kwargs,
         )
 
@@ -594,6 +605,7 @@ class LibRoutineOutputVariable(LibRoutineAssignedVariable):
             *args,
             assignment=(assigned_variable, key),
             status=LibRoutineVariable.STATUS_OUTPUT,
+            enum_first=False,
             **kwargs,
         )
 
@@ -618,6 +630,7 @@ class LibRoutineInOutVariable(LibRoutineAssignedVariable):
             *args,
             assignment=(assigned_variable, key),
             status=LibRoutineVariable.STATUS_INOUT,
+            enum_first=False,
             **kwargs,
         )
 
@@ -754,7 +767,7 @@ class LibRoutineMultiFrame(LibRoutineVariable):
             **kwargs,
         )
         context.container.requires(self.local)
-        return self
+        return self._local
 
     def create_input_representative(
         self,
@@ -776,7 +789,7 @@ class LibRoutineMultiFrame(LibRoutineVariable):
                 **kwargs,
             )
         context.container.requires(self.local)
-        return self
+        return self._local
 
     def reset_representative(self):
         """reset the representative"""
