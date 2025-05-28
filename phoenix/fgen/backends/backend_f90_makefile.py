@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 31/01/2025, 11:11
-# Version:     0.0.399
+# Last Update: 28/05/2025, 14:00
+# Version:     0.0.406
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -21,7 +21,6 @@ from phoenix.fgen.makefile import (
 )
 
 from phoenix.fgen.makefile import (
-    MFGID_DFAULT,
     MFGID_SOURCE,
     MFGID_GLBLIB,
     MFGID_PATTRN,
@@ -306,29 +305,31 @@ test3 = MFTF90SharedLibrary("myname3", dependencies=[test31, test32, test33])
 
 test123 = MFTF90SharedLibrary("myname", dependencies=[test1, test2, test3])
 
-for tline in test123.target_get_makefile_lines():
-    print(tline)
-
-print()
-
-for tline in test3.target_get_makefile_lines():
-    print(tline)
-
-print()
-
 test123f2py = MFTF2Py("mynamef2py", dependencies=[test1, test2, test3])
-for tline in test123f2py.target_get_makefile_lines():
-    print(tline)
-
-print()
 
 testpp = MFTF90PreProcessor("testname", dependencies=[cf1, cf2])
-for tline in testpp.target_get_makefile_lines():
-    print(tline)
+
+# for tline in test123.target_get_makefile_lines():
+#     print(tline)
+
+# print()
+
+# for tline in test3.target_get_makefile_lines():
+#     print(tline)
+
+# print()
+
+# for tline in test123f2py.target_get_makefile_lines():
+#     print(tline)
+
+# print()
+
+# for tline in testpp.target_get_makefile_lines():
+#     print(tline)
 
 foo = MakeFileManager("foo")
-foo.append(test123)
-foo.append(testpp)
+foo.append(test123f2py)
+# foo.append(testpp)
 
 print()
 

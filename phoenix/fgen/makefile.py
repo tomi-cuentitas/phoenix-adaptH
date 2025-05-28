@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 09/01/2025, 15:39
-# Version:     0.0.453
+# Last Update: 28/05/2025, 13:21
+# Version:     0.0.466
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -100,10 +100,17 @@ class _MFIdentifier:
     _known_identifiers = {}
 
     @classmethod
-    def get(cls, identifier, order=None):
-        """ensure monadic structure"""
+    def get(cls, identifier):
+        """get identifier"""
         if identifier in cls._known_identifiers:
             return cls._known_identifiers[identifier]
+        raise KeyError("unknown identifier")
+
+    @classmethod
+    def create(cls, identifier, order=None):
+        """create a new identifier, but make sure its unique"""
+        if identifier in cls._known_identifiers:
+            raise KeyError("duplicated identifier")
         if order is None:
             order = len(cls._known_identifiers)
         new_ident = _MFIdentifier(identifier, order)
@@ -130,21 +137,21 @@ class _MFIdentifier:
         return str(self)
 
 
-MFGID_DFAULT = _MFIdentifier.get("DFAULT", order=999)
-MFGID_SOURCE = _MFIdentifier.get("SOURCE", order=3)
-MFGID_GLBLIB = _MFIdentifier.get("GLBLIB", order=2)
-MFGID_PATTRN = _MFIdentifier.get("PATTRN", order=0)
-MFGID_SHDLIB = _MFIdentifier.get("SHDLIB", order=7)
-MFGID_STCLIB = _MFIdentifier.get("STCLIB", order=9)
-MFGID_OBJECT = _MFIdentifier.get("OBJECT", order=5)
-MFGID_GENERL = _MFIdentifier.get("GENERL", order=20)
+MFGID_GENERC = _MFIdentifier.create("GENERC", order=999)
+MFGID_SOURCE = _MFIdentifier.create("SOURCE", order=3)
+MFGID_GLBLIB = _MFIdentifier.create("GLBLIB", order=2)
+MFGID_PATTRN = _MFIdentifier.create("PATTRN", order=0)
+MFGID_SHDLIB = _MFIdentifier.create("SHDLIB", order=7)
+MFGID_STCLIB = _MFIdentifier.create("STCLIB", order=9)
+MFGID_OBJECT = _MFIdentifier.create("OBJECT", order=5)
+MFGID_GENERL = _MFIdentifier.create("GENERL", order=20)
 
 
 class MakeFileTarget:
     """manages a target in a makefile"""
 
     TAB = "\t"
-    GROUP_IDENTIFIER = _MFIdentifier.get("DEFAULT", order=5)
+    GROUP_IDENTIFIER = _MFIdentifier.get("GENERC")
 
     def __init__(self, name, dependencies=None):
         self.name = name
