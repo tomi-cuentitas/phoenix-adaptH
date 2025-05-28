@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 26/05/2025, 17:02
-# Version:     0.0.1226
+# Last Update: 28/05/2025, 14:47
+# Version:     0.0.1243
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -39,6 +39,8 @@ from phoenix.fgen.instruction import (
     OffsetEnvironmentInstruction,
 )
 
+from phoenix.fgen.makefile import MakeFileManager
+
 
 from phoenix.fgen.codecontainer import (
     CommentLine,
@@ -65,6 +67,7 @@ class BuilderSegment:
 
     def __init__(self, **params):
         self._params: Dict[str, Any] = params
+        self._welcome_log()
 
     def _welcome_log(self):
         info(*self._welcome_log_lines())
@@ -179,25 +182,38 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _comment_cls = CommentLine
     # _routine_cls = RoutineContainer
 
-    def __init_subclass__(cls, identifier=None):
-        super().__init_subclass__(identifier=identifier)
+    def __init_subclass__(cls, **kwargs):
+        super().__init_subclass__(**kwargs)
         cls.set_default_handlers()
 
     def __init__(
         self,
+        name,
+        makefile=None,
         extra_instr_handler=None,
         avoid_instr_classes=None,
         **params,
     ):
+        self._name = name
+        # if makefile is None:
+        #     makefile = self.initialize_makefile(self._name)
+        self._makefile = makefile
+
         if extra_instr_handler is None:
             extra_instr_handler = {}
         if avoid_instr_classes is None:
             avoid_instr_classes = set()
         self._extra_instr_handler: Dict[type, Generator] = extra_instr_handler
         self._avoid_instr_classes: Set[type] = avoid_instr_classes
+
         super().__init__(**params)
 
+    # def initialize_makefile(self, name, **kwargs):
+    #     """initialize a new makefile"""
+    #     return MakeFileManager(name, **kwargs)
+
     def _detail_log_lines(self):
+        yield f"Builder name: {self._name}"
         yield from BuilderSegment._detail_log_lines(self)
         supported = list(type(self)._supp_instr_handler.keys())
         if supported:
@@ -209,6 +225,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             yield f"excluded ({len(excluded)}):"
             for instruction_type in excluded:
                 yield f"  - {instruction_type}"
+
         additional = list(self._extra_instr_handler.keys())
         if additional:
             yield f"additional ({len(additional)}):"
@@ -251,7 +268,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         for elder in instruction.__class__.__mro__:
             # note: mro contains type(self) and then all parents
 
-            # check local classes
+            # # check local classes
             if elder in self._avoid_instr_classes:
                 return None
             if elder in self._extra_instr_handler:
@@ -281,7 +298,6 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         self,
         instruction,
         name,
-        context,
         library=None,
         buildargs=None,
         **genargs,
@@ -673,11 +689,11 @@ if __name__ == "__main__":
     class TestOptimizer(Optimizer, identifier="TESTAGAIN"):
         pass
 
-    log.set_loglevel(2)
+    log.set_loglevel(5)
     log.set_logfile("testlog.txt")
 
     info("run some tests")
-    mybuilder = TestBuilder(foo="bar")
+    mybuilder = TestBuilder("testbuilder", foo="bar")
     mybuilder.test_the_log(1)
     mybuilder.test_the_log(2)
     mybuilder.test_the_log(3)
@@ -696,28 +712,4 @@ if __name__ == "__main__":
     myoptimizer = TestOptimizer(foo="bazzz")
 
     success()
-    info()
-
-    # build:
-    # - look for a proper codecontainer by looking up the instructions
-    #   MRO.
-    # - input and output args are assigned to ADAAs at the highest
-    #   level. This assignment is carried along in the known_variables
-    #   dictionary. Any instruction variable known to an instruction
-    #   can be mapped to the proper set of routine variables. The
-    #   mapping goes through all environments.
-    # - check if the signature is supported. If not, try to find the
-    #   next match in MRO
-    #   alternatively, the lookup can directly include the MRO and the
-    #   structure, depending on the complexity. Control structures most
-    #   likely don't care for any signature, so I thought two individual
-    #   checks can safe us some effort.
-    # - generate the code container with the current information known,
-    #   implementing the proper libroutine variables and handle all
-    #   dependencies, calls, ...
-
-
-# required optimizers
-# - GPU: resolve parallel environments that contain multiple other parallel environments
-# - translate the most inner group into a parallel group
-#   -> group.unpack() to MapOffset
+    info("moin")

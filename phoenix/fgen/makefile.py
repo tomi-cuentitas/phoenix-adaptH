@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 28/05/2025, 13:21
-# Version:     0.0.466
+# Last Update: 28/05/2025, 14:39
+# Version:     0.0.468
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,11 +28,13 @@ def no_duplicates(listlike):
 class MakeFileManager:
     """manages creation, execution and design of makefiles"""
 
-    def __init__(self, name):
+    def __init__(self, name, **_):
         self.name = name
         self._filename = f"Makefile_{name}"
         self._is_created = False
         self._targets = {}
+        self._cleanable = []
+        self._make_all = []
 
     def set_filename(self, filename):
         """set the makefile's filename"""
