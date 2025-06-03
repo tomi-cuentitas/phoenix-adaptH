@@ -5,13 +5,30 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 28/05/2025, 14:39
-# Version:     0.0.468
+# Last Update: 03/06/2025, 16:14
+# Version:     0.0.472
 #
 #################################################end#of#autoheader#do#not#modify
 
 
+NOTES
+=====
+
+In MakeFileManager, the associated Targets are extracted from the LibRoutines
+that a library depends on.
+
+A Library is added to known targets when it has been loaded the first time. If it is
+required as a target again, no duplicates shall be created.
+
+To stay within the makefile ecosystem, a makefile target can only depend on another 
+makefile target. The lookup system is generalized to a key based system and I will start
+with names.
+
+Therefore, a makefile can be automatically created.
+
 """
+
+
 import warnings
 
 

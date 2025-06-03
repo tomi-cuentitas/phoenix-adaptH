@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 28/05/2025, 14:47
-# Version:     0.0.1243
+# Last Update: 03/06/2025, 17:11
+# Version:     0.0.1263
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -46,6 +46,7 @@ from phoenix.fgen.codecontainer import (
     CommentLine,
     DefinitionContainer,
     RoutineContainer,
+    # ObserveCaptureContainer,
 )
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
@@ -195,8 +196,6 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         **params,
     ):
         self._name = name
-        # if makefile is None:
-        #     makefile = self.initialize_makefile(self._name)
         self._makefile = makefile
 
         if extra_instr_handler is None:
@@ -211,6 +210,11 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     # def initialize_makefile(self, name, **kwargs):
     #     """initialize a new makefile"""
     #     return MakeFileManager(name, **kwargs)
+
+    @property
+    def makefile(self):
+        """access the read-only attribute makefile"""
+        return self._makefile
 
     def _detail_log_lines(self):
         yield f"Builder name: {self._name}"
@@ -293,24 +297,24 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             container.requires(variable)
         return variable
 
-    @log.wrap_call
-    def as_external(
-        self,
-        instruction,
-        name,
-        library=None,
-        buildargs=None,
-        **genargs,
-    ):
-        """treat the instruction tree as an external auxilliary routine"""
-        # generate a new libroutine object in library
-        libroutine = self.instructions_to_libroutine(
-            name,
-            instruction,
-            library,
-            buildargs,
-        )
-        return libroutine
+    # @log.wrap_call
+    # def as_external(
+    #     self,
+    #     instruction,
+    #     name,
+    #     library=None,
+    #     buildargs=None,
+    #     **genargs,
+    # ):
+    #     """treat the instruction tree as an external auxilliary routine"""
+    #     # generate a new libroutine object in library
+    #     libroutine = self.instructions_to_libroutine(
+    #         name,
+    #         instruction,
+    #         library,
+    #         buildargs,
+    #     )
+    #     return libroutine
 
     @log.wrap_call_gen
     def containers_from_instruction(
@@ -382,6 +386,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         libroutine = library.new_libroutine(
             name=routine_container.name, container=routine_container
         )
+
         return libroutine
 
     @log.wrap_call

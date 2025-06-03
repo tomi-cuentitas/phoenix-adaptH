@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 27/05/2025, 13:01
-# Version:     0.0.734
+# Last Update: 03/06/2025, 17:02
+# Version:     0.0.752
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -146,17 +146,20 @@ class Namespace:
         myhash = f"{caps.lower()}"
         return f"{name}_{myhash}L{origin.level}"
 
-    def request_fixed(self, generating, name, origin, **genargs):
+    def request_unique(self, generating, name, *args, origin, **genargs):
         """
         Get a fixed name variable. Look it up or generate.
         """
         name = self._get_fixed_name(name, origin)
         if name in self:
             return self.find(name)
-        temp = generating(name=name, namespace=self, **genargs)
+        temp = generating(
+            name=name, *args, namespace=self, **genargs, enum_first=False
+        )
+        self.add(temp)
         return temp
 
-    def request_temp(self, generating, name, origin, **genargs):
+    def request_temp(self, generating, name, *args, origin, **genargs):
         """
         Get a temporary variable. Look it up or generate.
         Has a fixed name with an additional level specifier.
@@ -164,15 +167,18 @@ class Namespace:
         name = self._get_temp_name(name, origin)
         if name in self:
             return self.find(name)
-        temp = generating(name=name, namespace=self, **genargs)
+        temp = generating(
+            name=name, *args, namespace=self, **genargs, enum_first=False
+        )
         return temp
 
     def request_variable(
         self,
         generating,
         name,
-        size,
-        dtype="f64",  # in genargs
+        *args,
+        # size=None,
+        # dtype="f64",  # in genargs
         **genargs,
     ):
         """
@@ -182,9 +188,10 @@ class Namespace:
         """
         variable = generating(
             name,
+            *args,
             namespace=self,
-            size=size,
-            dtype=dtype,
+            # size=size,
+            # dtype=dtype,
             # enum_first=enum_first,  # in genargs if required
             **genargs,
         )
@@ -660,7 +667,7 @@ class LibRoutineConstant(LibRoutineVariable):
     _VAR_IDENTIFIER = "CONSTANT"
     _CLASS_BASE = "cns"
 
-    def __init__(self, name, value, size=None):
+    def __init__(self, name, value, size=None, **kwargs):
         if size is None:
             if hasattr(value, "__iter__"):
                 self._value = value
@@ -674,14 +681,7 @@ class LibRoutineConstant(LibRoutineVariable):
                 raise ValueError("value size does not match the given size.")
             self._value = value
 
-        super().__init__(
-            name=name,
-            size=None,
-            namespace=None,
-            prefix=None,
-            suffix=None,
-            status=1,
-        )
+        super().__init__(name=name, size=None, **kwargs)
 
     @property
     def value(self):

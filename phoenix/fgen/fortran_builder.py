@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 27/05/2025, 13:41
-# Version:     0.0.480
+# Last Update: 03/06/2025, 17:16
+# Version:     0.0.520
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -424,6 +424,31 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             b_imag,
             context=context,
         )
+
+        foo1 = CodeLine("! this is a test expression", context=context)
+        temp1 = foo1.request_unique(
+            "test_some_constant",
+            F90Constant,
+            value=[32, 31, 30],
+            # size=None,
+            dtype="i64",
+        )
+        foo1.format(foo=f"{temp1} + 2")
+        foo1.requires(temp1)
+        yield foo1
+
+        foo2 = CodeLine("! this is another test expression", context=context)
+        temp2 = self.request_temp(
+            foo2,
+            "test_temporary1",
+            F90LocalVariable,
+            size=42,
+            dtype="i64",
+        )
+        foo2.format(foo=f"{temp2.expr_at(5)} + 2")
+        foo2.requires(temp2)
+        yield foo2
+
         yield CodeLine("", context=context)
 
     def handle_generic_instruction(self, instruction, context, buildargs):
@@ -460,7 +485,7 @@ import sys
 from phoenix.fgen.instruction import GenericInstruction, InstructionGroup
 
 
-my_builder = Fortran90Builder()
+my_builder = Fortran90Builder("foobian")
 
 test_chain = BuildChain(my_builder)
 
@@ -586,7 +611,7 @@ ctxt.namespace.assign(
 )
 
 
-lib_container = F90LibraryContainer("test_library", context=ctxt)
+lib_container = F90LibraryContainer("test_library23", context=ctxt)
 
 # lib_container.add_capture_trigger(lambda x: True)
 
@@ -596,16 +621,15 @@ lib_container = F90LibraryContainer("test_library", context=ctxt)
 
 container_tree = my_builder.create_routine_container(
     # container_tree = my_builder.build(
-    "foo",
+    "foohoo",
     largegroup,
     context=lib_container.context,
-    routine_container=F90KernelContainer,
-    # routine_container=F90RoutineContainer,
+    # routine_container=F90KernelContainer,
+    routine_container=F90RoutineContainer,
 )
 
-
 lib_container.append(container_tree)
-lib_container.build()
+lib_container.build_all()
 
 
 for indent, line in lib_container.get_codelines():

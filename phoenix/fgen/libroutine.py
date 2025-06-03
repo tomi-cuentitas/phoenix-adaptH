@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/02/2025
-# Last Update: 26/05/2025, 14:59
-# Version:     0.0.294
+# Last Update: 03/06/2025, 16:23
+# Version:     0.0.295
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -29,6 +29,7 @@ class LibRoutine:
         identifier: str,
         container=None,
         library=None,
+        dependencies=None,
     ):
         # there has to be a base name, which we refer to as identifier
         self._identifier = identifier
@@ -38,6 +39,9 @@ class LibRoutine:
             raise ValueError("LibRoutine must be associated with a library")
         self._library = library
         self._input_variables = []
+        if dependencies is None:
+            dependencies = []
+        self._dependencies = dependencies
 
     @property
     def library(self):

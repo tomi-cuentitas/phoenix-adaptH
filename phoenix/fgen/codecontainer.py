@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 27/05/2025, 13:36
-# Version:     0.1.523
+# Last Update: 03/06/2025, 17:11
+# Version:     0.1.553
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -218,10 +218,9 @@ class CodeContainer:
         self,
         name,
         generating,
-        size=None,
-        dtype="f64",
+        *args,
         autorequire=True,
-        **genargs,
+        **kwargs,
     ):
         """
         Request any new variable type from a namespace. Use autoname if necessary.
@@ -229,11 +228,10 @@ class CodeContainer:
         # TODO
         variable = self.namespace.request_variable(
             generating,
-            name=name,
-            size=size,
+            name,
+            *args,
+            **kwargs,
             enum_first=True,
-            dtype=dtype,
-            **genargs,
         )
         if autorequire:
             self.requires(variable)
@@ -900,6 +898,20 @@ class CaptureContainer(CodeContainer):
         return super().reset_captured()
 
 
+# class ObserveCaptureContainer(CaptureContainer):
+#     """A container that captures anything, remembers it and then releases it on build"""
+
+#     def __init__(self, *args, context, **buildargs):
+#         super().__init__(*args, context=context, **buildargs)
+#         self.add_capture_trigger(lambda x: True)
+
+#     def build(self, **kwargs):
+#         for capture in self.captured:
+#             self.requires(capture)
+#         super().build(**kwargs)
+#         return self
+
+
 class DefinitionContainer(CaptureContainer, PreambleContainer):
     """
     A code container that defines stuff and prevents them from getting passed
@@ -972,7 +984,10 @@ class RoutineContainer(
         self._def_layer.add_capture_trigger(LibRoutineLocalVariable)
 
     def _prep_hidden_layers_pre(self, context, **buildargs):
-        self._def_layer = CaptureContainer(context=context, **buildargs)
+        self._def_layer = CaptureContainer(
+            context=context,
+            **buildargs,
+        )
         self._var_layer = CaptureContainer(
             context=self._def_layer.context, **buildargs
         )
@@ -1193,6 +1208,10 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
         self._import_line_class = import_line_class
         self._grouped_imports = []
         self.add_capture_trigger(ExternalRoutine)
+
+    def list_imports(self):
+        """list the imports in the format (library, [routine1, routine2, ...])"""
+        yield from self._grouped_imports
 
     def manage_captured(self, **kwargs):
         # called in build. Preselect and check the imports

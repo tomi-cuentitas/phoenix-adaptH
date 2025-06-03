@@ -5,11 +5,19 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 26/05/2025, 17:03
-# Version:     0.0.568
+# Last Update: 03/06/2025, 16:14
+# Version:     0.0.586
 #
 #################################################end#of#autoheader#do#not#modify
 
+
+NOTES
+=====
+
+Dependencies in LibRoutine and in Library are always LibRoutines.
+
+In MakeFileManager, the associated Targets are extracted and targets depend on targets,
+to stay in the ecosystem. 
 
 """
 
@@ -37,6 +45,9 @@ class Library:
 
     FILEENDING = "txt"
     INDENTSTR = "  "
+
+    # also allow global libraries such as omp, cuda intrinsics, ...
+    LIBTYPE = "LOC"
 
     LIBRARY_CONTAINER = LibraryContainer
 
@@ -151,100 +162,12 @@ class Library:
             return dict(self._meta)
         return self._meta.get(key)
 
-    def _get_dependencies(self):
-        dependencies = {}
-        for _, libroutine in self._libroutines.items():
-            for _, dep in libroutine.dependencies:
-                if dep.library.name not in dependencies:
-                    dependencies[dep.library.name] = (dep.library, [dep])
-                else:
-                    dependencies[dep.library.name][1].append(dep)
-        return dependencies
-
-
-"""
-NAMING SCHEME
-=============
-
-backends/lib/backend_[backend_specifier]_[implementation].[ending]
-e.g.: backend_f90_base.f90, backend_cuda_poly.cu, ...
-
-
-first to be implemented
--------------------------
-
-linear: one instruction: one scale for one x_i
-y_j <- a * x_i
-
-multilinear: one instruction: one scale for one x_i
-z_l <- a * x_i * y_j
-
-subroutinecall: call another subroutine
-name(*params)
-
-
-later to be implemted
----------------------
-
-special function: sin, cos, exp, log, snh, csh
-sfun_sin y_j <- a_i * [sin, cos, ...](b_i * x_i) + c_i
-
-bivariate multinomial: one instruction <-> combined powers of multiple x_i
-z_l <- a_1 x_i,1 ** n_1,1 * x_i,2 ** n_1,2 * ... y_i,1 ** m_1,1 * ... + 
-
-multinomial: one instruction <-> combined powers of multiple x_i
-y_j <- a_1 x_i,1 ** n_1,1 * x_i,2 ** n_1,2 * ... + 
-
-polynomial: one instruction <-> powers of one x_i
-y_j <- a_1 x_i ** n_1 + ...
-
-monomial: one instruction <-> one power of one x_i
-y_j <- a x_i ** n
-
-affine (linear plus a constant): one instruction: one scaled x_i and one offset b
-y_j <- a x_i + b
-
-lookup: one instruction: one specific x_i
-y_j <- x_i
-
-mask: one instruction: one specific x_i
-y_i <- x_i with extras
-
-permutation: one instruction: a pair of i and j, where i is mapped to j
-y_j <- x_i with extras
-
-
-"""
-
-
-# import subprocess
-# import os
-
-
-# module_name = "backend_f90_base"
-
-# try:
-#     subprocess.Popen(
-#         [
-#             "f2py",
-#             "-c",
-#             "-m",
-#             module_name,
-#             "../src/backend_f90_base.f90",
-#         ],
-#         cwd="./backends/lib",
-#     )
-#     print(f"Module '{module_name}' compiled successfully!")
-# except subprocess.CalledProcessError as e:
-#     print("Compilation failed!")
-#     print(e.stderr)
-
-# from phoenix.fgen.backends.lib.backend_f90_base import backend_f90_base
-
-# print(dir(backend_f90_base))
-
-# print(backend_f90_base.foo())
-# print(backend_f90_base.xxx)
-
-
-# a = Library("test")
+    # def _get_dependencies(self):
+    #     dependencies = {}
+    #     for _, libroutine in self._libroutines.items():
+    #         for _, dep in libroutine.dependencies:
+    #             if dep.library.name not in dependencies:
+    #                 dependencies[dep.library.name] = (dep.library, [dep])
+    #             else:
+    #                 dependencies[dep.library.name][1].append(dep)
+    #     return dependencies
