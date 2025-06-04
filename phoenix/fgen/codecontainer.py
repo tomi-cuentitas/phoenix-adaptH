@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 03/06/2025, 17:11
-# Version:     0.1.553
+# Last Update: 04/06/2025, 17:33
+# Version:     0.1.555
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -690,7 +690,14 @@ class StatementLine(CodeLine):
         return self
 
     def construct_code_lines(self):
-        yield type(self).BLUEPRINT.format(**self._value_dict)
+        processed_value_dict = {}
+        for key, value in self._value_dict.items():
+            if isinstance(value, LibRoutineVariable):
+                processed_value_dict[key] = value.expr()
+            else:
+                processed_value_dict[key] = str(value)
+
+        yield type(self).BLUEPRINT.format(**processed_value_dict)
 
 
 class CommentLine(CodeLine):
@@ -841,9 +848,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -1036,8 +1041,7 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1128,8 +1132,7 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1190,7 +1193,9 @@ class RoutineCallContainer(CodeLine):
             for call_arg in self._call_args
         ]
         call_arg_names = [call_arg.as_argument() for call_arg in call_args]
-        call_string = f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
+        call_string = (
+            f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
+        )
         yield call_string
 
     # generate the call using info from the ExternalRoutine variable

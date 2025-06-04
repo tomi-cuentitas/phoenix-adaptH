@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 03/06/2025, 17:02
-# Version:     0.0.752
+# Last Update: 04/06/2025, 17:31
+# Version:     0.0.778
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -281,9 +281,7 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(
-            self
-        ).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -300,6 +298,7 @@ class LibRoutineVariable:
             print("this should not have happened.")
 
     def __str__(self):
+        # return self.expr()
         if self.is_scalar:
             return f"{self.name}"
         return f"{self.name}[{self.size}]"
@@ -314,39 +313,40 @@ class LibRoutineVariable:
     def __del__(self):
         self.release()
 
-    @staticmethod
-    def process_offsets(
-        *offsets,
-        simplify=True,
-        allow_strings=False,
-    ):
-        offset_str_list = []
-        offset_int = 0
-        for offset in offsets:
-            if isinstance(offset, int):
-                if simplify:
-                    offset_int += offset
-                else:
-                    offset_str_list.append(str(offset))
-            elif isinstance(offset, LibRoutineVariable):
-                if offset.size is not None:
-                    raise ValueError(
-                        "only scalar offsets are allowed in this context"
-                    )
-                offset_str_list.append(offset.expr)
-            else:
-                if allow_strings:
-                    offset_str_list.append(str(offset))
-                else:
-                    raise ValueError(
-                        f"offset {offset} is not an integer or LibRoutineVariable"
-                    )
-        if simplify:
-            if offset_int > 0:
-                offset_str_list.append(str(offset_int))
-        if not offset_str_list:
-            offset_str_list = ["0"]
-        return offset_str_list
+    # @staticmethod
+    # def process_offsets(
+    #     *offsets,
+    #     simplify=True,
+    #     allow_strings=False,
+    # ):
+    #     offset_str_list = []
+    #     offset_int = 0
+    #     for offset in offsets:
+    #         if isinstance(offset, int):
+    #             if simplify:
+    #                 offset_int += offset
+    #             else:
+    #                 offset_str_list.append(str(offset))
+    #         elif isinstance(offset, LibRoutineVariable):
+    #             if offset.size is not None:
+    #                 raise ValueError(
+    #                     "only scalar offsets are allowed in this context"
+    #                 )
+    #             offset_str_list.append(offset.expr())
+    #         else:
+    #             if allow_strings:
+    #                 offset_str_list.append(str(offset))
+    #             else:
+    #                 print(offset, type(offset))
+    #                 raise ValueError(
+    #                     f"offset {offset} is not an integer or LibRoutineVariable"
+    #                 )
+    #     if simplify:
+    #         if offset_int > 0:
+    #             offset_str_list.append(str(offset_int))
+    #     if not offset_str_list:
+    #         offset_str_list = ["0"]
+    #     return offset_str_list
 
     def get_definition_lines(self) -> str:
         """create the line that defines the variable"""
@@ -414,24 +414,30 @@ class LibRoutineVariable:
         """access variable type"""
         return self._VAR_IDENTIFIER
 
-    def expr_at(
-        self,
-        *offsets,
-        simplify=True,
-        allow_strings=False,
-    ):
-        """expression at offset"""
-        if self.is_scalar:
-            raise ValueError("Scalar does not provide index access")
+    # def expr_at(
+    #     self,
+    #     *offsets,
+    #     simplify=True,
+    #     allow_strings=False,
+    # ):
+    #     """expression at offset"""
+    #     if self.is_scalar:
+    #         raise ValueError("Scalar does not provide index access")
 
-        offset_str_list = self.process_offsets(
-            *offsets,
-            simplify=simplify,
-            allow_strings=allow_strings,
-        )
+    #     offset_str_list = self.process_offsets(
+    #         *offsets,
+    #         simplify=simplify,
+    #         allow_strings=allow_strings,
+    #     )
+    #     print("asd", offset_str_list)
 
-        offset_str = " + ".join(offset_str_list)
-        return f"{self.name}[{offset_str}]"
+    #     offset_str = " + ".join(offset_str_list)
+    #     return f"{self.name}[{offset_str}]"
+
+    def at(self, *offsets, simplify=True):
+        """access the value at an offset"""
+        assert not self.is_scalar
+        return ValueAt(self, *offsets, simplify=True, allow_strings=True)
 
     def expr(self):
         """expression for the whole variable"""
@@ -681,7 +687,7 @@ class LibRoutineConstant(LibRoutineVariable):
                 raise ValueError("value size does not match the given size.")
             self._value = value
 
-        super().__init__(name=name, size=None, **kwargs)
+        super().__init__(name=name, size=size, **kwargs)
 
     @property
     def value(self):
@@ -705,6 +711,76 @@ class LibRoutineConstant(LibRoutineVariable):
             raise ValueError("Cannot append to a scalar variable.")
         self._value.append(value)
         self._size = len(self._value)
+
+
+class ValueAt(LibRoutineVariable):
+    """
+    A lookup mask
+    """
+
+    def __init__(self, variable, *offsets, simplify=False, **kwargs):
+        super().__init__(
+            name=variable.name,
+            size=None,
+            namespace=Namespace(),
+            dtype=variable.dtype,
+        )
+
+        if variable.is_scalar:
+            raise ValueError(
+                f"Scalar {variable.name} does not provide index access"
+            )
+
+        self._variable = variable
+        self._offsets = offsets
+        self.simplify = simplify
+
+    @staticmethod
+    def process_offsets(
+        *offsets,
+        simplify=True,
+        allow_strings=False,
+    ):
+        offset_str_list = []
+        offset_int = 0
+        for offset in offsets:
+            if isinstance(offset, int):
+                if simplify:
+                    offset_int += offset
+                else:
+                    offset_str_list.append(str(offset))
+            elif isinstance(offset, LibRoutineVariable):
+                offset_str_list.append(offset.expr())
+            else:
+                if allow_strings:
+                    offset_str_list.append(str(offset))
+                else:
+                    print(offset, type(offset))
+                    raise ValueError(
+                        f"offset {offset} is not an integer or LibRoutineVariable"
+                    )
+        if simplify:
+            if offset_int > 0:
+                offset_str_list.append(str(offset_int))
+        if not offset_str_list:
+            offset_str_list = ["0"]
+        return offset_str_list
+
+    def expr(self):
+        """expression at offset"""
+
+        offset_str_list = self.process_offsets(
+            *self._offsets,
+            simplify=self.simplify,
+        )
+
+        offset_str = " + ".join(offset_str_list)
+        return f"{self.name}[{offset_str}]"
+
+    # def expr(self):
+    #     if isinstance(self._offsets, int):
+    #         return f"{self._variable.expr()}[{self._offsets}]"
+    #     return f"{self._variable.expr()}[{self._offsets.expr()}]"
 
 
 class LibRoutineMultiFrame(LibRoutineVariable):

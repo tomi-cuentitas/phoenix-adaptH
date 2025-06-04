@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 03/06/2025, 17:16
-# Version:     0.0.520
+# Last Update: 04/06/2025, 17:30
+# Version:     0.0.628
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -45,6 +45,8 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineMultiFrame,
     ExternalRoutine,
 )
+
+from phoenix.fgen.instructionvar import SymbolicOffset
 
 from phoenix.fgen.libroutine import LibRoutine
 from phoenix.fgen.library import Library
@@ -128,9 +130,7 @@ class F90RoutineContainer(RoutineContainer):
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -146,9 +146,7 @@ class F90KernelContainer(KernelContainer):
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -165,8 +163,8 @@ class F90AffineContainer(StatementLine):
     def __init__(self, y, yo, a, x, xo, b, *, context, **params):
         super().__init__(
             {
-                "y_expression": y.expr_at(*yo),
-                "x_expression": x.expr_at(*xo),
+                "y_expression": y.at(*yo),
+                "x_expression": x.at(*xo),
                 "a_value": a,
                 "b_value": b,
             },
@@ -243,9 +241,9 @@ class F90LibRoutineVariable(LibRoutineVariable):
                 return "integer"
         raise ValueError(f"Unknown dtype: {dtype}")
 
-    def expr_at(self, *offsets, **kwargs):
+    def at(self, *offsets, **kwargs):
         """Fortran variables start at 1, not 0"""
-        return super().expr_at(1, *offsets, **kwargs)
+        return super().at(1, *offsets, **kwargs)
 
 
 class F90LocalVariable(F90LibRoutineVariable, LibRoutineLocalVariable):
@@ -293,7 +291,7 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
             linebreak=" &",
             prefix=line + prefix,
             suffix=suffix,
-            prefix_suffix_lines=True,
+            prefix_suffix_lines=False,
         ):
             yield line
 
@@ -445,7 +443,7 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             size=42,
             dtype="i64",
         )
-        foo2.format(foo=f"{temp2.expr_at(5)} + 2")
+        foo2.format(foo=f"{temp2} + 2")
         foo2.requires(temp2)
         yield foo2
 
@@ -463,9 +461,92 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             size=42,
             dtype="i64",
         )
-        foo.format(foo=f"{temp1.expr_at(5)} + 2")
+        foo.format(foo=f"{temp1.at(5)} + 2")
         foo.requires(my_fancy_var)
         yield foo
+
+    def handle_mapapply_instruction(self, instruction, context, buildargs):
+        """default handler for mapapply instruction"""
+
+        offset_variables = {}
+        num_env = len(list(instruction.environments))
+        for environment in instruction.environments:
+            for target_class, offset_object in environment.items():
+                if target_class not in offset_variables:
+                    offset_variables[target_class] = [None] * num_env
+
+        for num, environment in enumerate(instruction.environments):
+            for target_class, offset_object in environment.items():
+                offset_variables[target_class][num] = offset_object
+                print(
+                    "when I see",
+                    target_class.__name__,
+                    ", I treat this as ",
+                    offset_object,
+                    " for now.",
+                )
+
+            # yield from self.containers_from_instruction(
+            #     instruction.content,
+            #     context=context.inherit(environment=environment),
+            #     **buildargs,
+            # )
+
+        multi_frame_variable = LibRoutineMultiFrame(num_env)
+        symbolic_environment = InstructionEnvironment()
+
+        dummy_line = F90CommentLine(context=context).set_line(
+            "this is the mapapply"
+        )
+
+        dummy_line.requires(multi_frame_variable)
+        print("assigned yet?", multi_frame_variable, multi_frame_variable.local)
+        yield dummy_line
+
+        for variable, offsets in offset_variables.items():
+            print(variable.__name__)
+            for offset in offsets:
+                print(type(offset))
+                print(offset.output_config)
+                values = list(offset.evaluate())
+                assert len(values) == 1
+
+                print("offsets:", list(offset.evaluate()))
+                input_config = offset.input_config
+                output_config = offset.output_config
+
+                print("crucial", type(offset))
+
+                foo = type(offset)(
+                    SymbolicOffset(
+                        multi_frame_variable,
+                        input_config=input_config,
+                        output_config=output_config,
+                    )
+                )
+
+                print(foo)
+
+                symbolic_environment.update(
+                    variable,
+                    type(offset)(
+                        SymbolicOffset(
+                            multi_frame_variable,
+                            input_config=input_config,
+                            output_config=output_config,
+                        )
+                    ),
+                )
+
+                print(symbolic_environment)
+
+        yield from self.containers_from_instruction(
+            instruction.content,
+            context=context.inherit(environment=symbolic_environment),
+            **buildargs,
+        )
+
+        print(offset_variables)
 
 
 Fortran90Builder.set_instruction_class_handler(
@@ -505,8 +586,12 @@ largegroup = InstructionGroup([test, test, test])
 
 
 from phoenix.keymap import KeyMap
-from phoenix.fgen.instructionvar import InstructionVariable
+from phoenix.fgen.instructionvar import (
+    InstructionVariable,
+    InstructionEnvironment,
+)
 from phoenix.fgen.instruction import (
+    MapApplyInstruction,
     LinearOperationInstruction,
     OffsetEnvironmentInstruction,
 )
@@ -532,8 +617,8 @@ VarOut = InstructionVariable.new(name="output1", config=big_km)
 # VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
 # KeyMapInstructionVariable("input1", keymap=big_km)
 
-VarInpInner = InstructionVariable.new("inner_input1", config=None)
-VarOutInner = InstructionVariable.new("inner_output1", config=None)
+VarInpInner = InstructionVariable.new("inner_input1", config=ltl_km)
+VarOutInner = InstructionVariable.new("inner_output1", config=ltl_km)
 
 # print(InstructionVariable().name)
 
@@ -563,30 +648,46 @@ test_instructions1 = InstructionGroup(
     ]
 )
 
-test_instructions2 = InstructionGroup(
-    [
-        OffsetEnvironmentInstruction(
-            InstructionGroup(
-                [
-                    OffsetEnvironmentInstruction(
-                        test_instructions_inner,
-                        offsets={
-                            VarInpInner: VarInp(f"foo{val_inp}"),
-                        },
-                    )
-                    for val_inp in range(2)
-                ]
-            ),
-            offsets={
-                VarOutInner: VarOut(f"foo{val_out}"),
-            },
+test_instructions2_mapapply = MapApplyInstruction(
+    content=test_instructions_inner,
+    environments=[
+        InstructionEnvironment(
+            {
+                VarInpInner: VarInp(f"foo{val}"),
+                VarOutInner: VarOut(f"foo{val}"),
+            }
         )
-        for val_out in range(1)
-    ]
+        for val in range(2)
+    ],
 )
 
+
+# test_instructions2 = InstructionGroup(
+#     [
+#         OffsetEnvironmentInstruction(
+#             InstructionGroup(
+#                 [
+#                     OffsetEnvironmentInstruction(
+#                         test_instructions_inner,
+#                         offsets={
+#                             VarInpInner: VarInp(f"foo{val_inp}"),
+#                         },
+#                     )
+#                     for val_inp in range(2)
+#                 ]
+#             ),
+#             offsets={
+#                 VarOutInner: VarOut(f"foo{val_out}"),
+#             },
+#         )
+#         for val_out in range(3)
+#     ]
+# )
+
 # largegroup = test_instructions1.flatten()
-largegroup = test_instructions1
+# largegroup = test_instructions1
+# largegroup = test_instructions2_mapapply.flatten()
+largegroup = test_instructions2_mapapply
 
 ctxt = Context()
 ctxt.namespace.assign(

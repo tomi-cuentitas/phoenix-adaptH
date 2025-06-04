@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 14/04/2025, 15:48
-# Version:     0.0.1160
+# Last Update: 04/06/2025, 17:00
+# Version:     0.0.1192
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -121,9 +121,7 @@ class InstructionVariable(_Chainable):
         if input_config is None:
             input_config = type(self)._default_config
         output_config = input_config
-        super().__init__(
-            input_config=input_config, output_config=output_config
-        )
+        super().__init__(input_config=input_config, output_config=output_config)
         self._offsets = []
         if _pure_copy:
             self._offsets = list(offsets)
@@ -269,9 +267,7 @@ class InstructionVariableOffset(_Chainable):
     """
 
     def __init__(self, value, input_config=None, output_config=None):
-        super().__init__(
-            input_config=input_config, output_config=output_config
-        )
+        super().__init__(input_config=input_config, output_config=output_config)
         self._value = value
         # self._fixed_value = None
 
@@ -345,16 +341,17 @@ class KeyOffset(InstructionVariableOffset):
     """
 
     def __init__(self, key, keymap=None, out_config=None):
-        super().__init__(
-            value=key, input_config=keymap, output_config=out_config
-        )
         if keymap is not None:
             if key not in keymap:
                 raise KeyError(f"Key '{key}' not found in keymap {keymap}")
+            out_config = keymap[key]
+        super().__init__(
+            value=key, input_config=keymap, output_config=out_config
+        )
 
     def compute(self, config=None):
         current_pointer = self._get_config(config=config)
-        assert current_pointer is not None
+        assert current_pointer is not None, config
         offset, new_pointer = current_pointer.goto(self._value)
         return offset, new_pointer
 
@@ -417,14 +414,17 @@ class SymbolicOffset(InstructionVariableOffset):
         """stringify whatever enters"""
         # this might change once I have completely implemented RoutineVariables
         if self._value is None:
-            return "?", self.output_config
+            return self._origin, self.output_config
+            # return "?", self.output_config
         return self._value, self.output_config
 
 
 class InstructionEnvironment:
     """Defines an instruction environment where all known variables can be stored"""
 
-    def __init__(self, **variables):
+    def __init__(self, variables=None):
+        if variables is None:
+            variables = {}
         self._variables: Dict[type, InstructionVariable] = variables
 
     def items(self):
@@ -446,7 +446,7 @@ class InstructionEnvironment:
         """deepcopy implementation"""
         if memo is None:
             memo = {}
-        return self.deepcopy(memo=memo, **kwargs)
+        return self.__deepcopy__(memo=memo, **kwargs)
 
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
