@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 04/06/2025, 17:33
-# Version:     0.1.555
+# Last Update: 05/06/2025, 14:56
+# Version:     0.1.573
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -678,26 +678,56 @@ class StatementLine(CodeLine):
             context=context,
             **params,
         )
-        self._value_dict = value_dict
-        self.extend_value_dict()
+        self._element_dict = value_dict
 
-    def set_value(self, key, value):
+    def set_element(self, key, value):
         """set the value in the value dict"""
-        self._value_dict[key] = value
+        self._element_dict[key] = value
 
-    def extend_value_dict(self):
+    def extend_element_dict(self):
         """extend the value dict by some parameters created from other parameters"""
         return self
 
     def construct_code_lines(self):
-        processed_value_dict = {}
-        for key, value in self._value_dict.items():
+        self.extend_element_dict()
+        processed_element_dict = {}
+        for key, value in self._element_dict.items():
             if isinstance(value, LibRoutineVariable):
-                processed_value_dict[key] = value.expr()
+                processed_element_dict[key] = value.expr()
             else:
-                processed_value_dict[key] = str(value)
+                processed_element_dict[key] = str(value)
 
-        yield type(self).BLUEPRINT.format(**processed_value_dict)
+        yield type(self).BLUEPRINT.format(**processed_element_dict)
+
+
+class AssignmentLine(StatementLine):
+    """A simple assignment"""
+
+    BLUEPRINT = "{target} = {value}"
+
+    def __init__(self, target=None, value=None, *, context, **params):
+        super().__init__(value_dict={}, context=context, **params)
+        self._target = target
+        self._value = value
+
+    def set_value(self, value):
+        """set the value"""
+        self._value = value
+
+    def set_target(self, target):
+        """set the target"""
+        self._target = target
+
+    def extend_element_dict(self):
+        if isinstance(self._value, LibRoutineVariable):
+            self._element_dict["value"] = self._value.expr()
+        else:
+            self._element_dict["value"] = str(self._value)
+        if isinstance(self._target, LibRoutineVariable):
+            self._element_dict["target"] = self._target.expr()
+        else:
+            self._element_dict["target"] = str(self._target)
+        return self
 
 
 class CommentLine(CodeLine):
@@ -848,7 +878,9 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -1041,7 +1073,8 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1132,7 +1165,8 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1193,9 +1227,7 @@ class RoutineCallContainer(CodeLine):
             for call_arg in self._call_args
         ]
         call_arg_names = [call_arg.as_argument() for call_arg in call_args]
-        call_string = (
-            f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
-        )
+        call_string = f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
         yield call_string
 
     # generate the call using info from the ExternalRoutine variable

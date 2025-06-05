@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 04/06/2025, 17:30
-# Version:     0.0.628
+# Last Update: 05/06/2025, 15:26
+# Version:     0.0.720
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,6 +34,7 @@ from phoenix.fgen.codecontainer import (
     MultiFrameContainer,
     RoutineCallContainer,
     ImportSectionContainer,
+    AssignmentLine,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -130,7 +131,9 @@ class F90RoutineContainer(RoutineContainer):
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -146,7 +149,9 @@ class F90KernelContainer(KernelContainer):
     INDENT_BODY = True
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -208,6 +213,7 @@ class F90LibRoutineVariable(LibRoutineVariable):
     _intent = None
 
     def lookup_intent(self, intent):
+        """lookup the INTENT keyword in definitions"""
         if intent is None:
             return None
         if intent == "RO":
@@ -423,29 +429,29 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             context=context,
         )
 
-        foo1 = CodeLine("! this is a test expression", context=context)
-        temp1 = foo1.request_unique(
-            "test_some_constant",
-            F90Constant,
-            value=[32, 31, 30],
-            # size=None,
-            dtype="i64",
-        )
-        foo1.format(foo=f"{temp1} + 2")
-        foo1.requires(temp1)
-        yield foo1
+        # foo1 = CodeLine("! this is a test expression", context=context)
+        # temp1 = foo1.request_unique(
+        #     "test_some_constant",
+        #     F90Constant,
+        #     value=[32, 31, 30],
+        #     # size=None,
+        #     dtype="i64",
+        # )
+        # foo1.format(foo=f"{temp1} + 2")
+        # foo1.requires(temp1)
+        # yield foo1
 
-        foo2 = CodeLine("! this is another test expression", context=context)
-        temp2 = self.request_temp(
-            foo2,
-            "test_temporary1",
-            F90LocalVariable,
-            size=42,
-            dtype="i64",
-        )
-        foo2.format(foo=f"{temp2} + 2")
-        foo2.requires(temp2)
-        yield foo2
+        # foo2 = CodeLine("! this is another test expression", context=context)
+        # temp2 = self.request_temp(
+        #     foo2,
+        #     "test_temporary1",
+        #     F90LocalVariable,
+        #     size=42,
+        #     dtype="i64",
+        # )
+        # foo2.format(foo=f"{temp2} + 2")
+        # foo2.requires(temp2)
+        # yield foo2
 
         yield CodeLine("", context=context)
 
@@ -453,38 +459,40 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         yield from super().handle_generic_instruction(
             instruction, context, buildargs
         )
-        foo = CodeLine("! this is a test expression {foo}", context=context)
-        temp1 = self.request_temp(
-            foo,
-            "test_temporary1",
-            F90LocalVariable,
-            size=42,
-            dtype="i64",
-        )
-        foo.format(foo=f"{temp1.at(5)} + 2")
-        foo.requires(my_fancy_var)
-        yield foo
+        # foo = CodeLine("! this is a test expression {foo}", context=context)
+        # temp1 = self.request_temp(
+        #     foo,
+        #     "test_temporary1",
+        #     F90LocalVariable,
+        #     size=42,
+        #     dtype="i64",
+        # )
+        # foo.format(foo=f"{temp1.at(5)} + 2")
+        # foo.requires(my_fancy_var)
+        # yield foo
 
     def handle_mapapply_instruction(self, instruction, context, buildargs):
         """default handler for mapapply instruction"""
 
-        offset_variables = {}
+        offsetted_variables = {}
+        offset_values = {}
         num_env = len(list(instruction.environments))
         for environment in instruction.environments:
             for target_class, offset_object in environment.items():
-                if target_class not in offset_variables:
-                    offset_variables[target_class] = [None] * num_env
+                if target_class not in offsetted_variables:
+                    offsetted_variables[target_class] = [None] * num_env
+                    offset_values[target_class] = [None] * num_env
 
         for num, environment in enumerate(instruction.environments):
             for target_class, offset_object in environment.items():
-                offset_variables[target_class][num] = offset_object
-                print(
-                    "when I see",
-                    target_class.__name__,
-                    ", I treat this as ",
-                    offset_object,
-                    " for now.",
-                )
+                offsetted_variables[target_class][num] = offset_object
+                # print(
+                #     "when I see",
+                #     target_class.__name__,
+                #     ", I treat this as ",
+                #     offset_object,
+                #     " for now.",
+                # )
 
             # yield from self.containers_from_instruction(
             #     instruction.content,
@@ -492,61 +500,87 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             #     **buildargs,
             # )
 
-        multi_frame_variable = LibRoutineMultiFrame(num_env)
+        multi_frame_variable = F90MultiFrame(num_env)
         symbolic_environment = InstructionEnvironment()
 
-        dummy_line = F90CommentLine(context=context).set_line(
-            "this is the mapapply"
-        )
-
+        dummy_line = F90CommentLine(context=context).set_line("")
         dummy_line.requires(multi_frame_variable)
-        print("assigned yet?", multi_frame_variable, multi_frame_variable.local)
-        yield dummy_line
+        # yield dummy_line
 
-        for variable, offsets in offset_variables.items():
-            print(variable.__name__)
-            for offset in offsets:
-                print(type(offset))
-                print(offset.output_config)
+        for var_num, (target_class, offset_groups) in enumerate(
+            offsetted_variables.items()
+        ):
+            offset_variable_class = None
+            # print(variable.__name__)
+            for num, offset in enumerate(offset_groups):
+                # print(type(offset))
+                # print(offset.output_config)
+                # print("offsets:", list(offset.evaluate()))
+
+                if offset_variable_class is None:
+                    offset_variable_class = type(offset)
+                else:
+                    assert offset_variable_class == type(offset)
+
                 values = list(offset.evaluate())
                 assert len(values) == 1
+                offset_values[target_class][num] = sum(values)
 
-                print("offsets:", list(offset.evaluate()))
                 input_config = offset.input_config
                 output_config = offset.output_config
 
-                print("crucial", type(offset))
+                # print("crucial", type(offset))
 
-                foo = type(offset)(
+                # foo = type(offset)(
+                #     SymbolicOffset(
+                #         multi_frame_variable,
+                #         input_config=input_config,
+                #         output_config=output_config,
+                #     )
+                # )
+
+                # print(foo)
+
+                # print(values)
+
+            value_depot = F90Constant(
+                f"offsets_{target_class.__name__}",
+                value=offset_values[target_class],
+                dtype="i32",
+            )
+
+            var_char = chr(ord("a") + var_num)
+            offset_value_holder = dummy_line.request_temp(
+                f"offs_{var_char}",
+                generating=F90LocalVariable,
+                dtype="i32",
+            )
+
+            assignment_line = AssignmentLine(context=context)
+            assignment_line.set_target(offset_value_holder)
+            assignment_line.set_value(value_depot.at(multi_frame_variable))
+
+            assert offset_variable_class is not None
+
+            symbolic_environment.update(
+                target_class,
+                offset_variable_class(
                     SymbolicOffset(
-                        multi_frame_variable,
+                        offset_value_holder,
                         input_config=input_config,
                         output_config=output_config,
                     )
-                )
+                ),
+            )
 
-                print(foo)
-
-                symbolic_environment.update(
-                    variable,
-                    type(offset)(
-                        SymbolicOffset(
-                            multi_frame_variable,
-                            input_config=input_config,
-                            output_config=output_config,
-                        )
-                    ),
-                )
-
-                print(symbolic_environment)
+            assignment_line.requires(value_depot)
+            yield assignment_line
 
         yield from self.containers_from_instruction(
             instruction.content,
             context=context.inherit(environment=symbolic_environment),
             **buildargs,
         )
-
-        print(offset_variables)
 
 
 Fortran90Builder.set_instruction_class_handler(
@@ -598,16 +632,17 @@ from phoenix.fgen.instruction import (
 
 
 ltl_km = KeyMap(name="little")
+ltl_km.entry("key0")
 ltl_km.entry("key1")
 ltl_km.entry("key2")
 ltl_km.entry("key3")
+ltl_km.entry("key4")
+ltl_km.entry("key5")
+ltl_km.entry("key6")
 
 big_km = KeyMap(name="big")
-big_km.link("foo0", ltl_km)
-big_km.link("foo1", ltl_km)
-big_km.link("foo2", ltl_km)
-big_km.link("foo3", ltl_km)
-big_km.link("foo4", ltl_km)
+for val in range(12):
+    big_km.link(f"foo{val}", ltl_km)
 
 big_km.update()
 # print(list(big_km.keys()))
@@ -625,13 +660,25 @@ VarOutInner = InstructionVariable.new("inner_output1", config=ltl_km)
 test_instructions_inner = InstructionGroup(
     [
         LinearOperationInstruction(
-            VarOutInner("key1"), VarInpInner("key3"), 1.0 + 2j
+            VarOutInner("key0"), VarInpInner("key6"), 1.0 + 0.6j
         ),
         LinearOperationInstruction(
-            VarOutInner("key2"), VarInpInner("key2"), 1.0 + 2j
+            VarOutInner("key1"), VarInpInner("key5"), 1.0 + 1.5j
         ),
         LinearOperationInstruction(
-            VarOutInner("key3"), VarInpInner("key1"), 1.0 + 2j
+            VarOutInner("key2"), VarInpInner("key4"), 1.0 + 2.4j
+        ),
+        LinearOperationInstruction(
+            VarOutInner("key3"), VarInpInner("key3"), 1.0 + 3.3j
+        ),
+        LinearOperationInstruction(
+            VarOutInner("key4"), VarInpInner("key2"), 1.0 + 4.2j
+        ),
+        LinearOperationInstruction(
+            VarOutInner("key5"), VarInpInner("key1"), 1.0 + 5.1j
+        ),
+        LinearOperationInstruction(
+            VarOutInner("key6"), VarInpInner("key0"), 1.0 + 6.0j
         ),
     ]
 )
@@ -657,7 +704,7 @@ test_instructions2_mapapply = MapApplyInstruction(
                 VarOutInner: VarOut(f"foo{val}"),
             }
         )
-        for val in range(2)
+        for val in range(12)
     ],
 )
 

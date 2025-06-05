@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 04/06/2025, 17:31
-# Version:     0.0.778
+# Last Update: 05/06/2025, 15:20
+# Version:     0.0.789
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -281,7 +281,9 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -442,6 +444,9 @@ class LibRoutineVariable:
     def expr(self):
         """expression for the whole variable"""
         return f"{self.name}"
+
+    def expr_at(self, offset_string):
+        return f"{self.name} [ {offset_string} ]"
 
 
 class UniqueString(LibRoutineVariable):
@@ -720,7 +725,7 @@ class ValueAt(LibRoutineVariable):
 
     def __init__(self, variable, *offsets, simplify=False, **kwargs):
         super().__init__(
-            name=variable.name,
+            name=None,
             size=None,
             namespace=Namespace(),
             dtype=variable.dtype,
@@ -734,6 +739,10 @@ class ValueAt(LibRoutineVariable):
         self._variable = variable
         self._offsets = offsets
         self.simplify = simplify
+
+    @property
+    def name(self):
+        return self._variable.name
 
     @staticmethod
     def process_offsets(
@@ -775,7 +784,8 @@ class ValueAt(LibRoutineVariable):
         )
 
         offset_str = " + ".join(offset_str_list)
-        return f"{self.name}[{offset_str}]"
+        return self._variable.expr_at(offset_str)
+        # return f"{self.name}[{offset_str}]"
 
     # def expr(self):
     #     if isinstance(self._offsets, int):
@@ -794,6 +804,7 @@ class LibRoutineMultiFrame(LibRoutineVariable):
 
     local_variable_class = LibRoutineLocalVariable
     input_variable_class = LibRoutineInputVariable
+    extra_offset = None
 
     # it can be associated with a range-like source, such as a loop or the grid/block ID on GPUs
     # maybe let it rise like other variables and introduce a "handled" flag that is true once the
