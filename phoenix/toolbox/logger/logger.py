@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   10/03/2025
-# Last Update: 25/03/2025, 16:12
-# Version:     0.0.895
+# Last Update: 06/06/2025, 13:30
+# Version:     0.0.900
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -423,9 +423,13 @@ class Logger:
             source=source,
         )
 
-    def success(self, message="done!", source=None):
+    def success(self, message="success!", source=None):
         """make a success log message"""
-        return (self._log_success(message, source=source),)
+        return self._log_success(message, source=source)
+
+    def done(self, message="done!", source=None):
+        """make a success log message"""
+        return self._log_success(message, source=source)
 
     def debug(self, *messages, source=None):
         """make a debug log message"""
@@ -484,4 +488,13 @@ class Logger:
 #     self._write_to_stdout("", "", str(message), "ERROR", level)
 
 
+# global handles. Should be fine as these are monadic
 GLOBAL_LOGGER = Logger(None, loglevel=2, stdout=True)
+
+# quick access routines
+info = GLOBAL_LOGGER.info
+success = GLOBAL_LOGGER.success
+done = GLOBAL_LOGGER.done
+debug = GLOBAL_LOGGER.debug
+warn = GLOBAL_LOGGER.warn
+error = GLOBAL_LOGGER.error

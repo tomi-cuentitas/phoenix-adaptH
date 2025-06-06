@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 06/06/2025, 13:19
-# Version:     0.0.1283
+# Last Update: 06/06/2025, 13:29
+# Version:     0.0.1289
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -29,6 +29,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineMultiFrame,
 )
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
+from phoenix.toolbox.logger import done, success, info, warn, error, debug
 
 from phoenix.fgen.instruction import (
     GenericInstruction,
@@ -56,12 +57,6 @@ from phoenix.fgen.codecontainer import (
 )
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
-
-info = log.info
-success = log.success
-debug = log.debug
-warn = log.warn
-error = log.error
 
 
 class BuilderSegment:
@@ -845,7 +840,8 @@ if __name__ == "__main__":
         pass
 
     log.set_loglevel(5)
-    log.set_logfile("testlog.txt")
+    log.set_logfile("testlog.log")
+    # log.set_logfile(None)
 
     info("run some tests")
     mybuilder = TestBuilder("testbuilder", foo="bar")
