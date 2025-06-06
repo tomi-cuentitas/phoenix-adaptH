@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 05/06/2025, 15:26
-# Version:     0.0.720
+# Last Update: 06/06/2025, 13:13
+# Version:     0.0.805
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -74,6 +74,104 @@ GLOBAL_LOGGER.add_note(
 GLOBAL_LOGGER.log_to_stdout(False)
 
 
+class F90LibRoutineVariable(LibRoutineVariable):
+    """LibRoutineVariable F90 Base class"""
+
+    _intent = None
+
+    def lookup_intent(self, intent):
+        """lookup the INTENT keyword in definitions"""
+        if intent is None:
+            return None
+        if intent == "RO":
+            return "IN"
+        if intent == "WO":
+            return "OUT"
+        if intent == "RW":
+            return "INOUT"
+        raise ValueError(f"Unknown intent: {intent}")
+
+    def get_definition_lines(self) -> str:
+        """create the line that defines the variable"""
+        intent_str = ""
+        dimension_str = ""
+        intent = self.lookup_intent(type(self)._intent)
+        if intent:
+            intent_str = f", intent({intent})"
+        if not self.is_scalar:
+            dimension_str = f", dimension({self._size})"
+        yield f"{self.lookup_dtype(self._dtype)}{intent_str}{dimension_str} :: {self._name}"
+
+    def lookup_dtype(self, dtype):
+        match dtype:
+            case "f64":
+                return "double precision"
+            case "f32":
+                return "real"
+            case "i64":
+                return "integer(8)"
+            case "i32":
+                return "integer"
+        raise ValueError(f"Unknown dtype: {dtype}")
+
+    def at(self, *offsets, **kwargs):
+        """Fortran variables start at 1, not 0"""
+        return super().at(1, *offsets, **kwargs)
+
+    def expr_at(self, offset_string):
+        return f"{self.name}({offset_string})"
+
+
+class F90LocalVariable(F90LibRoutineVariable, LibRoutineLocalVariable):
+    """LibRoutineVariable F90 Base class"""
+
+
+class F90InputVariable(F90LibRoutineVariable, LibRoutineInputVariable):
+    _intent = "RO"
+
+
+class F90OutputVariable(F90LibRoutineVariable, LibRoutineOutputVariable):
+    _intent = "WO"
+
+
+class F90InOutVariable(F90LibRoutineVariable, LibRoutineInOutVariable):
+    _intent = "RW"
+
+
+# class F90MultiFrame(F90LibRoutineVariable, LibRoutineMultiFrame):
+#     local_variable_class = F90LocalVariable
+#     input_variable_class = F90InputVariable
+
+
+class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
+    def get_definition_lines(self) -> str:
+        """create the line that defines the variable"""
+        dimension_str = ""
+        if not self.is_scalar:
+            dimension_str = f", dimension({self._size})"
+        if self.is_scalar:
+            yield f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name} = {self.value}"
+            return
+        line = f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name}({self.size}) = "
+        prefix = "(/"
+        suffix = "/)"
+        conv = float
+        if self.dtype[0] == "i":
+            conv = int
+        for line in multiline_iterable(
+            [conv(value) for value in self.values],
+            separator=", ",
+            max_line_length=100,
+            indent="",
+            extra_indent="  ",
+            linebreak=" &",
+            prefix=line + prefix,
+            suffix=suffix,
+            prefix_suffix_lines=False,
+        ):
+            yield line
+
+
 ###############################################################################
 #
 # .oPYo.                   o            o
@@ -86,6 +184,10 @@ GLOBAL_LOGGER.log_to_stdout(False)
 # ::::::: ::::::: :::::: ::::: ::::::: ::: :::::: ::::::: :::::: :::::::
 # ::::::: ::::::: :::::: ::::: ::::::: ::: :::::: ::::::: :::::: :::::::
 ###############################################################################
+
+
+class F90AssignmentLine(AssignmentLine):
+    """F90 version of an assignment line"""
 
 
 class F90CodeLine(CodeLine):
@@ -104,6 +206,7 @@ class F90MultiFrameContainer(MultiFrameContainer):
     """Plain Text version of a DefinitionContainer"""
 
     INDENT_BODY = True
+    LOCAL_VARIABLE_CLASS = F90LocalVariable
 
     def generate_head_containers(self):
         if self._multiframe_variable is not None:
@@ -147,6 +250,7 @@ class F90KernelContainer(KernelContainer):
     """Plain Text version of a RoutineDefinition"""
 
     INDENT_BODY = True
+    INPUT_VARIABLE_CLASS = F90InputVariable
 
     def generate_head_containers(self, **_):
         call_args = (
@@ -207,101 +311,6 @@ class F90LibraryContainer(LibraryContainer):
         yield from self.codelines_from_text("")
 
 
-class F90LibRoutineVariable(LibRoutineVariable):
-    """LibRoutineVariable F90 Base class"""
-
-    _intent = None
-
-    def lookup_intent(self, intent):
-        """lookup the INTENT keyword in definitions"""
-        if intent is None:
-            return None
-        if intent == "RO":
-            return "IN"
-        if intent == "WO":
-            return "OUT"
-        if intent == "RW":
-            return "INOUT"
-        raise ValueError(f"Unknown intent: {intent}")
-
-    def get_definition_lines(self) -> str:
-        """create the line that defines the variable"""
-        intent_str = ""
-        dimension_str = ""
-        intent = self.lookup_intent(type(self)._intent)
-        if intent:
-            intent_str = f", intent({intent})"
-        if not self.is_scalar:
-            dimension_str = f", dimension({self._size})"
-        yield f"{self.lookup_dtype(self._dtype)}{intent_str}{dimension_str} :: {self._name}"
-
-    def lookup_dtype(self, dtype):
-        match dtype:
-            case "f64":
-                return "double precision"
-            case "f32":
-                return "real"
-            case "i64":
-                return "integer(8)"
-            case "i32":
-                return "integer"
-        raise ValueError(f"Unknown dtype: {dtype}")
-
-    def at(self, *offsets, **kwargs):
-        """Fortran variables start at 1, not 0"""
-        return super().at(1, *offsets, **kwargs)
-
-
-class F90LocalVariable(F90LibRoutineVariable, LibRoutineLocalVariable):
-    """LibRoutineVariable F90 Base class"""
-
-
-class F90InputVariable(F90LibRoutineVariable, LibRoutineInputVariable):
-    _intent = "RO"
-
-
-class F90OutputVariable(F90LibRoutineVariable, LibRoutineOutputVariable):
-    _intent = "WO"
-
-
-class F90InOutVariable(F90LibRoutineVariable, LibRoutineInOutVariable):
-    _intent = "RW"
-
-
-class F90MultiFrame(F90LibRoutineVariable, LibRoutineMultiFrame):
-    local_variable_class = F90LocalVariable
-    input_variable_class = F90InputVariable
-
-
-class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
-    def get_definition_lines(self) -> str:
-        """create the line that defines the variable"""
-        dimension_str = ""
-        if not self.is_scalar:
-            dimension_str = f", dimension({self._size})"
-        if self.is_scalar:
-            yield f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name} = {self.value}"
-            return
-        line = f"{self.lookup_dtype(self._dtype)}, parameter :: {self._name}({self.size}) = "
-        prefix = "(/"
-        suffix = "/)"
-        conv = float
-        if self.dtype[0] == "i":
-            conv = int
-        for line in multiline_iterable(
-            [conv(value) for value in self.values],
-            separator=", ",
-            max_line_length=100,
-            indent="",
-            extra_indent="  ",
-            linebreak=" &",
-            prefix=line + prefix,
-            suffix=suffix,
-            prefix_suffix_lines=False,
-        ):
-            yield line
-
-
 class F90Library(Library):
     """F90 Version of a Library"""
 
@@ -332,6 +341,7 @@ my_fancy_var = F90InOutVariable(
 class Fortran90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
+    ASSIGNMENT_CLASS = F90AssignmentLine
     # _routine_cls = F90RoutineContainer
     # _comment_cls = F90CommentLine
 
@@ -471,115 +481,17 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         # foo.requires(my_fancy_var)
         # yield foo
 
-    def handle_mapapply_instruction(self, instruction, context, buildargs):
-        """default handler for mapapply instruction"""
-
-        offsetted_variables = {}
-        offset_values = {}
-        num_env = len(list(instruction.environments))
-        for environment in instruction.environments:
-            for target_class, offset_object in environment.items():
-                if target_class not in offsetted_variables:
-                    offsetted_variables[target_class] = [None] * num_env
-                    offset_values[target_class] = [None] * num_env
-
-        for num, environment in enumerate(instruction.environments):
-            for target_class, offset_object in environment.items():
-                offsetted_variables[target_class][num] = offset_object
-                # print(
-                #     "when I see",
-                #     target_class.__name__,
-                #     ", I treat this as ",
-                #     offset_object,
-                #     " for now.",
-                # )
-
-            # yield from self.containers_from_instruction(
-            #     instruction.content,
-            #     context=context.inherit(environment=environment),
-            #     **buildargs,
-            # )
-
-        multi_frame_variable = F90MultiFrame(num_env)
-        symbolic_environment = InstructionEnvironment()
-
-        dummy_line = F90CommentLine(context=context).set_line("")
-        dummy_line.requires(multi_frame_variable)
-        # yield dummy_line
-
-        for var_num, (target_class, offset_groups) in enumerate(
-            offsetted_variables.items()
-        ):
-            offset_variable_class = None
-            # print(variable.__name__)
-            for num, offset in enumerate(offset_groups):
-                # print(type(offset))
-                # print(offset.output_config)
-                # print("offsets:", list(offset.evaluate()))
-
-                if offset_variable_class is None:
-                    offset_variable_class = type(offset)
-                else:
-                    assert offset_variable_class == type(offset)
-
-                values = list(offset.evaluate())
-                assert len(values) == 1
-                offset_values[target_class][num] = sum(values)
-
-                input_config = offset.input_config
-                output_config = offset.output_config
-
-                # print("crucial", type(offset))
-
-                # foo = type(offset)(
-                #     SymbolicOffset(
-                #         multi_frame_variable,
-                #         input_config=input_config,
-                #         output_config=output_config,
-                #     )
-                # )
-
-                # print(foo)
-
-                # print(values)
-
-            value_depot = F90Constant(
-                f"offsets_{target_class.__name__}",
-                value=offset_values[target_class],
-                dtype="i32",
-            )
-
-            var_char = chr(ord("a") + var_num)
-            offset_value_holder = dummy_line.request_temp(
-                f"offs_{var_char}",
-                generating=F90LocalVariable,
-                dtype="i32",
-            )
-
-            assignment_line = AssignmentLine(context=context)
-            assignment_line.set_target(offset_value_holder)
-            assignment_line.set_value(value_depot.at(multi_frame_variable))
-
-            assert offset_variable_class is not None
-
-            symbolic_environment.update(
-                target_class,
-                offset_variable_class(
-                    SymbolicOffset(
-                        offset_value_holder,
-                        input_config=input_config,
-                        output_config=output_config,
-                    )
-                ),
-            )
-
-            assignment_line.requires(value_depot)
-            yield assignment_line
-
-        yield from self.containers_from_instruction(
-            instruction.content,
-            context=context.inherit(environment=symbolic_environment),
-            **buildargs,
+    def create_external_array(
+        self,
+        *args,
+        context,
+        **kwargs,
+    ):
+        return super().create_external_array(
+            *args,
+            context=context,
+            local_class=F90LocalVariable,
+            constant_class=F90Constant,
         )
 
 
@@ -647,13 +559,13 @@ for val in range(12):
 big_km.update()
 # print(list(big_km.keys()))
 
-VarInp = InstructionVariable.new(name="input1", config=big_km)
-VarOut = InstructionVariable.new(name="output1", config=big_km)
+VarInp = InstructionVariable.new(name="input", config=big_km)
+VarOut = InstructionVariable.new(name="output", config=big_km)
 # VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
 # KeyMapInstructionVariable("input1", keymap=big_km)
 
-VarInpInner = InstructionVariable.new("inner_input1", config=ltl_km)
-VarOutInner = InstructionVariable.new("inner_output1", config=ltl_km)
+VarInpInner = InstructionVariable.new("inner_input", config=ltl_km)
+VarOutInner = InstructionVariable.new("inner_output", config=ltl_km)
 
 # print(InstructionVariable().name)
 
@@ -929,3 +841,58 @@ class Library:
 
 # The libroutine object can be called in python, too, as it now is specific
 # to a backend.
+
+
+# def handle_mapapply_instruction_old(self, instruction, context, buildargs):
+#     """default handler for mapapply instruction"""
+
+#     (
+#         offset_variable_class,
+#         offset_values,
+#         (input_config, output_config),
+#     ) = self.extract_mapapply_data(instruction)
+#     num_env = len(offset_values)
+
+#     multi_frame_variable = LibRoutineMultiFrame(num_env)
+#     symbolic_environment = InstructionEnvironment()
+
+#     context.container.requires(multi_frame_variable)
+
+#     for var_num, (target_class, values) in enumerate(
+#         offset_values.items()
+#     ):
+#         value_depot = F90Constant(
+#             f"offsets_{target_class.__name__}",
+#             value=values,
+#             dtype="i32",
+#         )
+
+#         var_char = chr(ord("a") + var_num)
+#         offset_value_holder = context.container.request_temp(
+#             f"offs_{var_char}",
+#             generating=F90LocalVariable,
+#             dtype="i32",
+#         )
+
+#         symbolic_environment.update(
+#             target_class,
+#             offset_variable_class(
+#                 SymbolicOffset(
+#                     offset_value_holder,
+#                     input_config=input_config,
+#                     output_config=output_config,
+#                 )
+#             ),
+#         )
+
+#         assignment_line = AssignmentLine(context=context, **buildargs)
+#         assignment_line.set_target(offset_value_holder)
+#         assignment_line.set_value(value_depot.at(multi_frame_variable))
+#         assignment_line.requires(value_depot)
+#         yield assignment_line
+
+#     yield from self.containers_from_instruction(
+#         instruction.content,
+#         context=context.inherit(environment=symbolic_environment),
+#         **buildargs,
+#     )

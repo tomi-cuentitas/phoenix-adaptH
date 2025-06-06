@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 05/06/2025, 15:20
-# Version:     0.0.789
+# Last Update: 06/06/2025, 13:08
+# Version:     0.0.792
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -446,6 +446,7 @@ class LibRoutineVariable:
         return f"{self.name}"
 
     def expr_at(self, offset_string):
+        """create the expression for the value at an offset"""
         return f"{self.name} [ {offset_string} ]"
 
 
@@ -692,6 +693,7 @@ class LibRoutineConstant(LibRoutineVariable):
                 raise ValueError("value size does not match the given size.")
             self._value = value
 
+        print("Ahhhahh", name)
         super().__init__(name=name, size=size, **kwargs)
 
     @property

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 03/06/2025, 17:11
-# Version:     0.0.1263
+# Last Update: 06/06/2025, 13:19
+# Version:     0.0.1283
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,7 +23,11 @@ from phoenix.fgen.libroutine import LibRoutine
 from phoenix.fgen.context import Context
 
 from phoenix.fgen.instruction import Instruction
-from phoenix.fgen.libroutinevar import LibRoutineVariable, Namespace
+from phoenix.fgen.libroutinevar import (
+    LibRoutineVariable,
+    Namespace,
+    LibRoutineMultiFrame,
+)
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 
 from phoenix.fgen.instruction import (
@@ -41,11 +45,13 @@ from phoenix.fgen.instruction import (
 
 from phoenix.fgen.makefile import MakeFileManager
 
+from phoenix.fgen.instructionvar import SymbolicOffset
 
 from phoenix.fgen.codecontainer import (
     CommentLine,
     DefinitionContainer,
     RoutineContainer,
+    AssignmentLine,
     # ObserveCaptureContainer,
 )
 
@@ -182,6 +188,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
     _comment_cls = CommentLine
     # _routine_cls = RoutineContainer
+    _assignment_class = AssignmentLine
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -509,6 +516,149 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             context=context.inherit(environment=instruction.environment),
             **buildargs,
         )
+
+    @log.wrap_call
+    def extract_mapapply_data(self, instruction):
+        """prepare the mapapply instruction by extracting the offset data from the environments"""
+
+        offsetted_variables = {}
+        offset_values = {}
+        num_env = len(list(instruction.environments))
+        for environment in instruction.environments:
+            for target_class, offset_object in environment.items():
+                if target_class not in offsetted_variables:
+                    offsetted_variables[target_class] = [None] * num_env
+                    offset_values[target_class] = [None] * num_env
+
+        for num, environment in enumerate(instruction.environments):
+            for target_class, offset_object in environment.items():
+                offsetted_variables[target_class][num] = offset_object
+
+        # these loops are separated to make sure, that every relevant target class
+        # has been mentioned in every environment
+        for target_class, offset_object in offsetted_variables.items():
+            offset_variable_class = None
+            input_config = None
+            output_config = None
+            for num, offset in enumerate(offset_object):
+                if offset_variable_class is None:
+                    offset_variable_class = type(offset)
+                    input_config = offset.input_config
+                    output_config = offset.output_config
+                else:
+                    assert offset_variable_class == type(offset)
+                    assert input_config == offset.input_config
+                    assert output_config == offset.output_config
+
+                assert offset is not None
+                values = list(offset.evaluate())
+                assert len(values) == 1
+                offset_values[target_class][num] = sum(values)
+
+        assert offset_variable_class is not None
+
+        return (
+            offset_variable_class,
+            offset_values,
+            (input_config, output_config),
+        )
+
+    @log.wrap_call
+    def create_external_array(
+        self,
+        name,
+        values,
+        dtype,
+        *,
+        context,
+        **kwargs,
+    ):
+        """treat a range of numbers as an external array"""
+
+        constant_class = kwargs.get("constant_class")
+        local_class = kwargs.get("local_class")
+        external_values = constant_class(
+            name + "_values",
+            value=values,
+            dtype=dtype,
+            namespace=context.namespace,
+            enum_first=False,
+        )
+
+        local_choice = context.container.request_temp(
+            name,
+            generating=local_class,
+            dtype=dtype,
+            autorequire=False,
+        )
+
+        return external_values, local_choice
+
+    @log.wrap_call_gen
+    def handle_mapapply_instruction(self, instruction, context, buildargs):
+        """default handler for mapapply instruction"""
+
+        (
+            offset_variable_class,
+            offset_values,
+            (input_config, output_config),
+        ) = self.extract_mapapply_data(instruction)
+        num_env = len(offset_values)
+
+        multi_frame_variable = LibRoutineMultiFrame(num_env)
+        symbolic_environment = InstructionEnvironment()
+
+        context.container.requires(multi_frame_variable)
+
+        for var_num, (target_class, values) in enumerate(
+            offset_values.items()
+        ):
+            var_char = chr(ord("a") + var_num)
+            name = f"offs_{target_class.__name__}_{var_char}"
+
+            (value_depot, local_choice) = self.create_external_array(
+                name,
+                values,
+                "i32",
+                context=context,
+            )
+
+            symbolic_environment.update(
+                target_class,
+                offset_variable_class(
+                    SymbolicOffset(
+                        local_choice,
+                        input_config=input_config,
+                        output_config=output_config,
+                    )
+                ),
+            )
+
+            context.container.requires(value_depot)
+            context.container.requires(local_choice)
+
+            yield self.create_assignment(
+                local_choice,
+                value_depot.at(multi_frame_variable),
+                context,
+                buildargs,
+            )
+
+        yield from self.containers_from_instruction(
+            instruction.content,
+            context=context.inherit(environment=symbolic_environment),
+            **buildargs,
+        )
+
+    @log.wrap_call
+    def create_assignment(self, target, value, context, buildargs):
+        """create an assignment container of the right type"""
+        assignment_line = type(self)._assignment_class(
+            context=context, **buildargs
+        )
+        assignment_line.set_target(target)
+        assignment_line.set_value(value)
+        return assignment_line
 
     @classmethod
     @log.wrap_call

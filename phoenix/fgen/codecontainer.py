@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 05/06/2025, 14:56
-# Version:     0.1.573
+# Last Update: 06/06/2025, 11:29
+# Version:     0.1.577
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -785,6 +785,7 @@ class MultiFrameContainer(EmbeddingContainer):
     """
 
     DEFAULT_LOOP_VARIABLE = LibRoutineLocalVariable
+    LOCAL_VARIABLE_CLASS = LibRoutineLocalVariable
 
     def __init__(self, *, context, loop_variable=None, **buildargs):
         super().__init__(context=context, **buildargs)
@@ -809,6 +810,7 @@ class MultiFrameContainer(EmbeddingContainer):
             prefix=prefix,
             dtype="i32",
             size=None,
+            local_variable_class=type(self).LOCAL_VARIABLE_CLASS,
         )
         return self
 
@@ -1119,6 +1121,8 @@ class KernelContainer(RoutineContainer):
     is called. The loops and other call attributes are invoked in a kernalize container
     """
 
+    INPUT_VARIABLE_CLASS = LibRoutineInputVariable
+
     def __init__(self, name, *, context, **buildargs):
         super().__init__(name, context=context, **buildargs)
         self._ker_layer.add_capture_trigger(LibRoutineMultiFrame)
@@ -1155,6 +1159,7 @@ class KernelContainer(RoutineContainer):
                 dtype="i32",
                 size=None,
                 prefix="krnl",
+                input_variable_class=type(self).INPUT_VARIABLE_CLASS,
             )
 
     def build(self, **kwargs):
