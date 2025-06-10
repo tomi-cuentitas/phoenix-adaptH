@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 19/03/2025, 17:10
-# Version:     0.0.703
+# Last Update: 04/06/2025, 12:42
+# Version:     0.0.706
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -282,7 +282,7 @@ class SymbolicInstructionVariable(InstructionVariable):
 class InstructionEnvironment:
     """Defines an instruction environment where all known variables can be stored"""
 
-    def __init__(self, **variables):
+    def __init__(self, variables):
         self._variables: Dict[str, InstructionVariable] = variables
 
     def items(self):
@@ -296,14 +296,14 @@ class InstructionEnvironment:
     def copy(self, **_) -> InstructionEnvironment:
         """make a proper copy"""
         return self.__class__(
-            **{key: var.copy() for key, var in self._variables.items()}
+            {key: var.copy() for key, var in self._variables.items()}
         )
 
     def deepcopy(self, memo=None, **kwargs):
         """deepcopy implementation"""
         if memo is None:
             memo = {}
-        return self.deepcopy(memo=memo, **kwargs)
+        return self.__deepcopy__(memo=memo, **kwargs)
 
     def __deepcopy__(self, memo=None, **kwargs):
         if memo is None:
@@ -323,15 +323,22 @@ class InstructionEnvironment:
     ) -> InstructionEnvironment:
         """merge an environment with another"""
         new_environment = self.copy()
-        new_environment.update(**other_environment.as_dict())
+        new_environment.update(other_environment.as_dict())
         return new_environment
 
     def __or__(self, other: InstructionEnvironment) -> InstructionEnvironment:
         return self.merge(other)
 
-    def update(self, **kwargs):
+    def update(self, inner_class, outer_class):
         """update the internal dictionary. Extend if possible"""
-        for varname, variable in kwargs.items():
+        if inner_class in self._variables:
+            self._variables[inner_class] |= outer_class
+        else:
+            self._variables[inner_class] = outer_class
+
+    def update_multiple(self, pairs):
+        """update the internal dictionary. Extend if possible"""
+        for varname, variable in pairs.items():
             if varname in self._variables:
                 self._variables[varname] |= variable
             else:
