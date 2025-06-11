@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 06/06/2025, 13:29
-# Version:     0.0.1289
+# Last Update: 11/06/2025, 15:41
+# Version:     0.0.1301
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -388,8 +388,18 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         libroutine = library.new_libroutine(
             name=routine_container.name, container=routine_container
         )
+        self.append_to_makefile(libroutine)
 
         return libroutine
+
+    def append_to_makefile(self, libroutine):
+        if self.makefile is None:
+            return False
+        target = self.libroutine_to_target(libroutine)
+        self.makefile.append(target)
+
+    def libroutine_to_target(self, libroutine):
+        return False
 
     @log.wrap_call
     def create_routine_container(
@@ -605,9 +615,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
         context.container.requires(multi_frame_variable)
 
-        for var_num, (target_class, values) in enumerate(
-            offset_values.items()
-        ):
+        for var_num, (target_class, values) in enumerate(offset_values.items()):
             var_char = chr(ord("a") + var_num)
             name = f"offs_{target_class.__name__}_{var_char}"
 
@@ -864,3 +872,9 @@ if __name__ == "__main__":
 
     success()
     info("moin")
+
+
+# a = {}
+# foo = Library("asd")
+# a[foo] = "bar"
+# print(a[foo])

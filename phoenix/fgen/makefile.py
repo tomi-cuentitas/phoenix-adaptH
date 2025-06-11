@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 03/06/2025, 16:14
-# Version:     0.0.472
+# Last Update: 11/06/2025, 15:42
+# Version:     0.0.475
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -52,6 +52,7 @@ class MakeFileManager:
         self._targets = {}
         self._cleanable = []
         self._make_all = []
+        self._known = {}
 
     def set_filename(self, filename):
         """set the makefile's filename"""
