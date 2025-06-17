@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 11/06/2025, 15:41
-# Version:     0.0.1301
+# Last Update: 17/06/2025, 13:43
+# Version:     0.0.1302
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -494,15 +494,15 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         return
         yield
 
-    @log.wrap_call_gen
-    def handle_mapapply_instruction(self, instruction, context, buildargs):
-        """default handler for mapapply instruction"""
-        for environment in instruction.environments:
-            yield from self.containers_from_instruction(
-                instruction.content,
-                context=context.inherit(environment=environment),
-                **buildargs,
-            )
+    # @log.wrap_call_gen
+    # def handle_mapapply_instruction(self, instruction, context, buildargs):
+    #     """default handler for mapapply instruction"""
+    #     for environment in instruction.environments:
+    #         yield from self.containers_from_instruction(
+    #             instruction.content,
+    #             context=context.inherit(environment=environment),
+    #             **buildargs,
+    #         )
 
     @log.wrap_call_gen
     def handle_variation_instruction(self, instruction, context, buildargs):
@@ -615,7 +615,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
         context.container.requires(multi_frame_variable)
 
-        for var_num, (target_class, values) in enumerate(offset_values.items()):
+        for var_num, (target_class, values) in enumerate(
+            offset_values.items()
+        ):
             var_char = chr(ord("a") + var_num)
             name = f"offs_{target_class.__name__}_{var_char}"
 

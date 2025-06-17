@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/06/2025
-# Last Update: 06/06/2025, 16:13
-# Version:     0.0.241
+# Last Update: 12/06/2025, 14:52
+# Version:     0.0.271
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-
+from sys import stdout
 from time import time
 
 
@@ -50,7 +50,7 @@ def timesegments_to_string(hours, minutes, seconds, millis=None):
         collect.append(f"{seconds:02d}s")
     if millis is not None or (not collect):
         collect.append(f"{millis:03d}ms")
-    return "".join(collect)
+    return " ".join(collect)
 
 
 def format_time(value, show_millis=False):
@@ -223,6 +223,8 @@ class Progress:
     def __format__(self, format_spec=None):
         format_spec = format_spec.strip()
         alignment = ""
+        if not format_spec:
+            return str(self)
         if format_spec[0] in ["<", ">", "^"]:
             alignment = format_spec[0]
             format_spec = format_spec[1:]
@@ -259,7 +261,7 @@ class Progress:
 
     def __str__(self):
         if self.finished:
-            return f"{self:name}: {self:bar10} {self:percent5.1f} (done after {self:elapsed} seconds)"
+            return f"{self:name}: {self:bar10} {self:percent5.1f} (after {self:elapsed})"
         return f"{self:name}: {self:bar10} {self:percent5.1f} ({self:etr} remaining)"
 
 
@@ -290,20 +292,22 @@ pc = CountProgress("test count", nval)
 pn.start()
 pc.start()
 
+selected = pn
+
 # print(pn, pc)
 # sleep(0.1)
 # pn.set(0.0001)
 # pc.set(0)
 
-print(pn, pc)
+stdout.write(str(selected))
+stdout.flush()
 sleep(0.01)
 
 for val in range(nval):
     pn.set((1 + val) / nval)
     pc.inc()
-    print(pn, pc)
+    stdout.write("\r" + f"{str(pn): <50} | {str(pc): <50}")
+    stdout.flush()
     sleep(0.01)
 
-sleep(0.01)
-pn.set(nval)
-print(pn, pc)
+print()

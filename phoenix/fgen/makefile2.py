@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 17/06/2025, 14:30
-# Version:     0.0.524
+# Last Update: 17/06/2025, 15:08
+# Version:     0.0.574
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -30,68 +30,6 @@ Therefore, a makefile can be automatically created.
 
 
 import warnings
-
-
-class _MFIdentifier:
-    """an identifier to help identifying groups"""
-
-    _known_identifiers = {}
-
-    @classmethod
-    def get(cls, identifier):
-        """get identifier"""
-        if identifier in cls._known_identifiers:
-            return cls._known_identifiers[identifier]
-        raise KeyError("unknown identifier")
-
-    @classmethod
-    def create(cls, identifier, order=None, silent=False):
-        """create a new identifier, but make sure its unique"""
-        if identifier in cls._known_identifiers:
-            raise KeyError("duplicated identifier")
-        if order is None:
-            order = len(cls._known_identifiers)
-        new_ident = _MFIdentifier(identifier, order, silent=silent)
-        cls._known_identifiers[identifier] = new_ident
-        return new_ident
-
-    @property
-    def default_silent_state(self):
-        """access silent target state"""
-        return self.default_silent
-
-    def __init__(self, ident, order, silent=False):
-        self.default_silent = silent
-        self.ident = ident
-        self.order = order
-
-    def __eq__(self, other):
-        return self.ident == other.ident
-
-    def __gt__(self, other):
-        return self.order > other.order
-
-    def __hash__(self):
-        return hash((self.ident, self.order))
-
-    def __str__(self):
-        return f"[{self.order}]:{self.ident}"
-
-    def __repr__(self):
-        return str(self)
-
-
-MFGID_PATTERN = _MFIdentifier.create("PATTERN", order=0)
-MFGID_HEADER = _MFIdentifier.create("HEADER", order=2, silent=True)
-MFGID_PREPROC = _MFIdentifier.create("PREPROC", order=3)
-MFGID_SOURCE = _MFIdentifier.create("SOURCE", order=4, silent=True)
-MFGID_OBJECT = _MFIdentifier.create("OBJECT", order=5)
-MFGID_SHAREDLIB = _MFIdentifier.create("SHAREDLIB", order=7)
-MFGID_STATICLIB = _MFIdentifier.create("STATICLIB", order=9)
-MFGID_SPECIAL = _MFIdentifier.create("SPECIAL", order=20)
-MFGID_EXTERNLIB = _MFIdentifier.create("EXTERNLIB", order=998, silent=True)
-MFGID_GENERIC = _MFIdentifier.create("GENERIC", order=999)
-MFGID_GENERAL = _MFIdentifier.create("GENERAL", order=20)
 
 
 def no_duplicates(listlike):
@@ -133,9 +71,12 @@ class MakeFileManager:
             raise ValueError(f"target {target.target_name()} already exists")
         return False
 
-    def get_makefile_lines(self):
+    def get_makefile_lines(self, include_silent=False):
         """get the lines that go to the actual makefile"""
-        for target in self.all_targets():
+        for target in sorted(no_duplicates(self.targets_with_dependencies())):
+            if target.is_silent:
+                if not include_silent:
+                    continue
             yield from self.filter_double_space(
                 target.target_get_makefile_lines()
             )
@@ -163,27 +104,31 @@ class MakeFileManager:
             yield from targ.get_dependencies(recursive=True)
             yield targ
 
-    def manage_targets(self, iterable):
-        """manage the targets: group them and remove duplicates"""
-        groups = {}
-        for targ in iterable:
-            identifier = targ.get_target_group()
-            if identifier not in groups:
-                groups[identifier] = []
-            groups[identifier].append(targ)
-        for identifier, targets in sorted(groups.items()):
-            yield from no_duplicates(targets)
+    # def manage_targets(self, iterable):
+    #     """manage the targets: group them and remove duplicates"""
+    #     groups = {}
+    #     for targ in iterable:
+    #         identifier = targ.get_target_identifier()
+    #         if identifier not in groups:
+    #             groups[identifier] = []
+    #         groups[identifier].append(targ)
+    #     for identifier, targets in sorted(groups.items()):
+    #         yield from no_duplicates(targets)
 
-    def all_targets(self):
-        """get all targets, duplicates only once"""
-        yield from self.manage_targets(self.targets_with_dependencies())
+    # def all_targets(self):
+    #     """get all targets, duplicates only once"""
+    #     yield from self.manage_targets(self.targets_with_dependencies())
 
 
 class MakeFileTarget:
     """manages a target in a makefile"""
 
-    TAB = "\t"
-    GROUP_IDENTIFIER = _MFIdentifier.get("GENERIC")
+    _TAB = "\t"
+    _default_silent = False
+    _order_num = 999
+    _identifier = "GENERIC"
+
+    # GROUP_IDENTIFIER = _MFIdentifier.get("GENERIC")
 
     def __init__(self, name, dependencies=None, silent=None):
         self.name = name
@@ -195,9 +140,23 @@ class MakeFileTarget:
                 raise TypeError("dep must be an instance of MakeFileTarget")
         self.dependencies = dependencies
         if silent is None:
-            print("choose default silent state for target", self.name)
-            self._silent = type(self).GROUP_IDENTIFIER.default_silent_state
-            print(self._silent)
+            self._silent = type(self)._default_silent
+
+    def __init_subclass__(
+        cls,
+        order=None,
+        identifier=None,
+        silent=None,
+    ):
+        if order is None:
+            order = cls._order_num
+        cls._order_num = order
+        if identifier is None:
+            identifier = cls.__name__
+        cls._identifier = identifier
+        if silent is None:
+            silent = cls._default_silent
+        cls._default_silent = silent
 
     @property
     def is_silent(self):
@@ -205,9 +164,9 @@ class MakeFileTarget:
         return self._silent
 
     @classmethod
-    def get_target_group(cls):
+    def get_target_identifier(cls):
         """get a group identifier"""
-        return cls.GROUP_IDENTIFIER
+        return cls._identifier
 
     def get_dependencies(self, recursive=True):
         """recursively get all depenendcies"""
@@ -216,11 +175,29 @@ class MakeFileTarget:
                 yield from dep.get_dependencies(recursive=True)
             yield dep
 
+    @property
+    def class_rank(self):
+        """access the classes order number"""
+        return type(self)._order_num
+
+    @property
+    def _sort_hash(self):
+        return (
+            self.class_rank,
+            len(no_duplicates(self.get_dependencies(recursive=True))),
+            self.target_name(),
+        )
+
     def __eq__(self, other):
         return self.target_name() == other.target_name()
 
     def __gt__(self, other):
-        return self.target_name() > other.target_name()
+        return self._sort_hash > other._sort_hash
+        # if self.class_rank < other.class_rank:
+        #     return False
+        # if self.class_rank > other.class_rank:
+        #     return True
+        # return self.target_name() > other.target_name()
 
     def target_name(self):
         """get the proper target name"""
@@ -267,13 +244,11 @@ class MakeFileTarget:
 
     def target_get_makefile_lines(self):
         """get the lines that have to be appended in the makefile"""
-        if self.is_silent:
-            return
         depnames = " ".join(dep.target_name() for dep in self.dependencies)
         yield f"{self.target_name()}: {depnames}"
         for line in self.generate():
             if line is not None:
-                yield f"{self.TAB}" + line
+                yield f"{type(self)._TAB}" + line
 
     def generate(self, *flags):
         """get the lines that actually generate the target"""
@@ -328,4 +303,47 @@ class MakeFileTarget:
 #     print(line)
 
 
-print(MFGID_SOURCE.default_silent_state)
+class MFTPattern(MakeFileTarget, silent=False, order=0, identifier="PATTERN"):
+    pass
+
+
+class MFTHeader(MakeFileTarget, silent=False, order=2, identifier="HEADER"):
+    pass
+
+
+class MFTPreProcessor(
+    MakeFileTarget, silent=False, order=3, identifier="PREPROCESSOR"
+):
+    pass
+
+
+class MFTSource(MakeFileTarget, silent=True, order=4, identifier="SOURCE"):
+    pass
+
+
+class MFTObject(MakeFileTarget, silent=False, order=10, identifier="OBJECT"):
+    pass
+
+
+class MFTSharedLibrary(
+    MakeFileTarget, silent=False, order=20, identifier="SHAREDLIBRARY"
+):
+    pass
+
+
+class MFTStaticLibrary(
+    MakeFileTarget, silent=False, order=30, identifier="STATICLIBRARY"
+):
+    pass
+
+
+class MFTSpecial(
+    MakeFileTarget, silent=False, order=100, identifier="SPECIAL"
+):
+    pass
+
+
+class MFTExternalLibrary(
+    MakeFileTarget, silent=True, order=200, identifier="EXTERNALLIBRARY"
+):
+    pass
