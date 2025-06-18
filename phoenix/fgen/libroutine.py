@@ -5,96 +5,10 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/02/2025
-# Last Update: 03/06/2025, 16:23
-# Version:     0.0.295
+# Last Update: 18/06/2025, 13:47
+# Version:     0.0.296
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
-
-
-class LibRoutine:
-    """
-    LibRoutine collects and manages all information for a routine in a library.
-    It stores everything necessary to define, call and import the object.
-
-    The init does not require instructions or containers, as the object is more
-    of a representative that could also represent code that does not come from
-    containers.
-    """
-
-    def __init__(
-        self,
-        identifier: str,
-        container=None,
-        library=None,
-        dependencies=None,
-    ):
-        # there has to be a base name, which we refer to as identifier
-        self._identifier = identifier
-        self._container = container
-        # the library the libroutine is attached to
-        if library is None:
-            raise ValueError("LibRoutine must be associated with a library")
-        self._library = library
-        self._input_variables = []
-        if dependencies is None:
-            dependencies = []
-        self._dependencies = dependencies
-
-    @property
-    def library(self):
-        """read-only access to attribute library"""
-        return self._library
-
-    @property
-    def container(self):
-        """read-only access to attribute container"""
-        return self._container
-
-    @property
-    def name(self):
-        """read-only access to attribute name"""
-        suffix = self.get_suffix()
-        if suffix:
-            suffix = f"_{suffix}"
-        return f"{self._identifier}{suffix}"
-
-    def get_suffix(self):
-        """get the naming suffix, which will be some kind of hash"""
-        return ""
-
-    @property
-    def key(self):
-        """read-only access to attribute identifier"""
-        return self.create_key()
-
-    @property
-    def identifier(self):
-        """read-only access to attribute identifier"""
-        return str(self._identifier)
-
-    def get_meta(self):
-        """return meta information on the library"""
-        return {
-            "subroutine_name": self.name,
-            "identifier": self.identifier,
-            "library": self.library,
-        }
-
-    # def get_call(self, **substitutions):
-    #     """get the container of calling the routine"""
-    #     self._container.get_call(self, **substitutions)
-
-    # def get_signature(self):
-    #     """get the call signature of the routine"""
-    #     return self._container.get_signature()
-
-    def get_import(self):
-        """get the import statement for this libroutine"""
-        return f"from {self.library.name} import {self.identifier}"
-
-    def create_key(self):
-        """create a key that represents the libroutine in lists etc"""
-        return self._identifier

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 03/06/2025, 16:14
-# Version:     0.0.586
+# Last Update: 18/06/2025, 14:44
+# Version:     0.1.69
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -27,13 +27,138 @@ Library module description
 
 """
 
+
+from typing import Type
+
 from phoenix.fgen.codecontainer import (
     LibraryContainer,
     GroupContainer,
     # RoutineContainer,
 )
 from phoenix.fgen.context import Context
-from phoenix.fgen.libroutine import LibRoutine
+
+from phoenix.fgen.libroutinevar import LibRoutineMultiFrame
+
+
+class LibraryContent:
+    """parent class for anything that lives in a library"""
+
+    def __init__(self, identifier, *, library=None, dependencies=None):
+        # there has to be a base name, which we refer to as identifier
+        self._identifier = identifier
+
+        # the library the libroutine is attached to
+        if library is None:
+            raise ValueError("LibRoutine must be associated with a library")
+        self._library = library
+        if dependencies is None:
+            dependencies = []
+        self._dependencies = dependencies
+
+    @property
+    def library(self):
+        """read-only access to attribute library"""
+        return self._library
+
+    @property
+    def name(self):
+        """read-only access to attribute name"""
+        suffix = self.get_suffix()
+        if suffix:
+            suffix = f"_{suffix}"
+        return f"{self._identifier}{suffix}"
+
+    def get_suffix(self):
+        """get the naming suffix, which will be some kind of hash"""
+        return ""
+
+    @property
+    def identifier(self):
+        """read-only access to attribute identifier"""
+        return str(self._identifier)
+
+    def get_meta(self):
+        """return meta information on the library"""
+        return {
+            "library": self.library,
+            "identifier": self.identifier,
+        }
+
+
+class LibRoutine(LibraryContent):
+    """
+    LibRoutine collects and manages all information for a routine in a library.
+    It stores everything necessary to define, call and import the object.
+
+    The init does not require instructions or containers, as the object is more
+    of a representative that could also represent code that does not come from
+    containers.
+    """
+
+    def __init__(
+        self,
+        identifier: str,
+        library=None,
+        arguments=None,
+        dependencies=None,
+    ):
+        super().__init__(identifier, library=library, dependencies=dependencies)
+        if arguments is None:
+            arguments = []
+        self._arguments = arguments
+        # self._container = container
+        self._input_variables = []
+
+    # @property
+    # def container(self):
+    #     """read-only access to attribute container"""
+    #     return self._container
+
+    @property
+    def key(self):
+        """read-only access to attribute identifier"""
+        return self.create_key()
+
+    def get_meta(self):
+        """return meta information on the library"""
+        return (
+            super()
+            .get_meta()
+            .update(
+                {
+                    "subroutine_name": self.name,
+                }
+            )
+        )
+
+    def get_arguments(self):
+        """get the arguments"""
+        yield from self._arguments
+
+    def get_argument_assignments(self):
+        """get the arguments' assignments"""
+        for variable in self.get_arguments():
+            yield variable.assignment
+            # if isinstance(variable.assignment, LibRoutineMultiFrame):
+            #     yield variable.assignment.recreate()
+            # else:
+            #     yield variable.assignment
+
+    # def get_call(self, **substitutions):
+    #     """get the container of calling the routine"""
+    #     self._container.get_call(self, **substitutions)
+
+    # def get_signature(self):
+    #     """get the call signature of the routine"""
+    #     return self._container.get_signature()
+
+    def get_import(self):
+        """get the import statement for this libroutine"""
+        return f"from {self.library.name} import {self.identifier}"
+
+    def create_key(self):
+        """create a key that represents the libroutine in lists etc"""
+        return self._identifier
 
 
 class Library:
@@ -50,6 +175,7 @@ class Library:
     LIBTYPE = "LOC"
 
     LIBRARY_CONTAINER = LibraryContainer
+    LIBROUTINE_CLASS = LibRoutine
 
     def __init__(self, libname):
         self._libname = libname
@@ -65,10 +191,10 @@ class Library:
             "compiled": False,
         }
         self._dependencies = set()  # other libraries
-        self._libroutines = {}
+        self._libcontent = {}
 
         self._library_container = None
-        self._routines_container = None
+        self._routine_containers = []
 
         self.initialize_library_containers()
 
@@ -82,7 +208,7 @@ class Library:
         self._routines_container = GroupContainer(
             context=self._library_container.context
         )
-        self._library_container.append(self._routines_container)
+        # self._library_container.append(self._routines_container)
 
     def build_all(self):
         """build the library container"""
@@ -90,28 +216,49 @@ class Library:
 
     def get_codelines(self, indent=0):
         """get the codelines from the inner container object"""
-        yield from self._library_container.get_codelines(indent=indent)
+        yield from self.get_codelines_head(indent=indent)
+        yield from self.get_codelines_prmb(indent=indent)
+        for container in self.routine_containers:
+            yield from container.get_codelines(indent=indent)
+        yield from self.get_codelines_foot(indent=indent)
+
+    def get_codelines_head(self, indent=0):
+        yield from self._library_container.get_codelines_head(indent=indent)
+
+    def get_codelines_prmb(self, indent=0):
+        yield from self._library_container.get_codelines_preamble(indent=indent)
+
+    def get_codelines_foot(self, indent=0):
+        yield from self._library_container.get_codelines_head(indent=indent)
 
     @property
-    def routine_section(self):
+    def routine_containers(self):
         """access the container where to put new stuff"""
-        return self._routines_container
+        return self._routine_containers
 
     @property
     def context(self):
         """access the context where to put new stuff"""
-        return self.routine_section.context
+        return self._library_container.context
 
-    def new_libroutine(self, name, container):
+    def new_libroutine_from_container(self, name, container):
         """add a new libroutine from a container"""
-        libroutine = LibRoutine(name, container=container, library=self)
-        self.routine_section.append(container)
+        self.routine_containers.append(container)
+        container.build_all()
+        arguments = list(container.get_argument_variables())
+        # container.reset_all()
+        print(f"args of {container}:", arguments)
+        libroutine = type(self).LIBROUTINE_CLASS(
+            name,
+            library=self,
+            arguments=arguments,
+        )
         self.register_libroutine(libroutine)
         return libroutine
 
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""
-        self._libroutines[libroutine.name] = libroutine
+        self._libcontent[libroutine.name] = libroutine
 
     @property
     def fileending(self):
@@ -124,13 +271,13 @@ class Library:
         return self._libname
 
     @property
-    def libroutines(self):
-        """generator-access to libroutines"""
-        yield from self._libroutines.items()
+    def content(self):
+        """generator-access to libroutines and other content"""
+        yield from self._libcontent.items()
 
     # def append(self, libroutine, exception_existing=False):
     #     """append a routine to the library"""
-    #     if libroutine.key in self._libroutines:
+    #     if libroutine.key in self._libcontent:
     #         if exception_existing:
     #             raise KeyError(
     #                 f"Routine '{libroutine.name}' already exists in library"
@@ -139,7 +286,7 @@ class Library:
     #     self.register_libroutine(libroutine)
 
     def __getitem__(self, key):
-        return self._libroutines.get(key)
+        return self._libcontent.get(key)
 
     def compile(self):
         """compile the library"""
@@ -161,13 +308,3 @@ class Library:
         if key is None:
             return dict(self._meta)
         return self._meta.get(key)
-
-    # def _get_dependencies(self):
-    #     dependencies = {}
-    #     for _, libroutine in self._libroutines.items():
-    #         for _, dep in libroutine.dependencies:
-    #             if dep.library.name not in dependencies:
-    #                 dependencies[dep.library.name] = (dep.library, [dep])
-    #             else:
-    #                 dependencies[dep.library.name][1].append(dep)
-    #     return dependencies

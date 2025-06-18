@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 06/06/2025, 13:08
-# Version:     0.0.792
+# Last Update: 18/06/2025, 15:18
+# Version:     0.0.804
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -281,9 +281,7 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(
-            self
-        ).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -490,8 +488,8 @@ class ExternalRoutine(LibRoutineVariable):
         """Set the call name. Might include alias and library names. Set at import"""
         self._call_name = name
 
-    def get_call_requirements(self):
-        """yields the requirements used in the call"""
+    # def get_call_requirements(self):
+    #     """yields the requirements used in the call"""
 
     @property
     def libroutine(self):
@@ -522,11 +520,12 @@ class ExternalRoutine(LibRoutineVariable):
 
     def get_argument_assignments(self):
         """get the arguments and their assignments"""
-        for variable in self.libroutine.container.get_argument_variables():
-            if isinstance(variable.assignment, LibRoutineMultiFrame):
-                yield variable.assignment  # .recreate()
-            else:
-                yield variable.assignment
+        yield from self.libroutine.get_argument_assignments()
+        # for variable in self.libroutine.get_arguments():
+        #     if isinstance(variable.assignment, LibRoutineMultiFrame):
+        #         yield variable.assignment  # .recreate()
+        #     else:
+        #         yield variable.assignment
 
 
 class LibRoutineLocalVariable(LibRoutineVariable):
@@ -535,9 +534,12 @@ class LibRoutineLocalVariable(LibRoutineVariable):
     _VAR_IDENTIFIER = "LOCAL"
     _CLASS_BASE = "loc"
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, enum_first=False, **kwargs):
         super().__init__(
-            *args, **kwargs, status=LibRoutineVariable.STATUS_INOUT
+            *args,
+            **kwargs,
+            status=LibRoutineVariable.STATUS_INOUT,
+            enum_first=enum_first,
         )
 
 
@@ -851,10 +853,18 @@ class LibRoutineMultiFrame(LibRoutineVariable):
         assert local_variable_class is not None
         if context is None:
             raise ValueError("No context provided")
-        self._local = local_variable_class(
-            namespace=context.namespace,
-            **kwargs,
+        self._local = context.namespace.request_temp(
+            local_variable_class,
+            name="loc",
+            origin=context.container,
+            dtype=self._dtype,
         )
+        # this was the old way, that does not allow recycling of temp variables,
+        # which would be bad in GPU kernels, where threadId.x needs to map to all
+        # self._local = local_variable_class(
+        #     namespace=context.namespace,
+        #     **kwargs,
+        # )
         context.container.requires(self.local)
         return self._local
 

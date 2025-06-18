@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 06/06/2025, 11:29
-# Version:     0.1.577
+# Last Update: 18/06/2025, 14:51
+# Version:     0.1.599
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -817,7 +817,7 @@ class MultiFrameContainer(EmbeddingContainer):
     def generate_head_containers(self):
         if self._multiframe_variable is not None:
             yield from self.codelines_from_text(
-                f":BEGIN REPEAT: {self._multiframe_variable.expr()} from {self._min_value} to {self._max_value}"
+                f":BEGIN REPEAT: {self._multiframe_variable.expr()} from {self._min_value} to {self._max_value-1}"
             )
 
     def generate_foot_containers(self):
@@ -880,9 +880,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -1075,8 +1073,7 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1170,8 +1167,7 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1232,7 +1228,9 @@ class RoutineCallContainer(CodeLine):
             for call_arg in self._call_args
         ]
         call_arg_names = [call_arg.as_argument() for call_arg in call_args]
-        call_string = f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
+        call_string = (
+            f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
+        )
         yield call_string
 
     # generate the call using info from the ExternalRoutine variable
@@ -1382,15 +1380,6 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def generate_foot_containers(self, **_):
         yield from self.codelines_from_text(f"END LIBRARY {self.name}")
-
-    # def capture_check(self, requirement):
-    #     """perform a capture check for the requirement"""
-    #     # library level must capture all required variables!
-    #     if requirement.vtype in ["IMPORT", "CONSTANT"]:
-    #         return True
-    #     raise ValueError(
-    #         "only constants are allowed to traverse up to library definition level"
-    #     )
 
 
 if __name__ == "__main__":

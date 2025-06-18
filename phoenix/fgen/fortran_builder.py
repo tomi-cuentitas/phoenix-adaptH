@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 06/06/2025, 13:13
-# Version:     0.0.805
+# Last Update: 18/06/2025, 15:06
+# Version:     0.0.844
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -29,6 +29,7 @@ from phoenix.fgen.codecontainer import (
     RoutineContainer,
     ConditionalContainer,
     NamedContainer,
+    LoopCaptureContainer,
     KernelContainer,
     LibraryContainer,
     MultiFrameContainer,
@@ -49,8 +50,8 @@ from phoenix.fgen.libroutinevar import (
 
 from phoenix.fgen.instructionvar import SymbolicOffset
 
-from phoenix.fgen.libroutine import LibRoutine
-from phoenix.fgen.library import Library
+# from phoenix.fgen.libroutine import LibRoutine
+from phoenix.fgen.library import Library, LibRoutine
 
 from phoenix.fgen.instruction import AffineOperationInstruction
 
@@ -234,9 +235,7 @@ class F90RoutineContainer(RoutineContainer):
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -253,9 +252,7 @@ class F90KernelContainer(KernelContainer):
     INPUT_VARIABLE_CLASS = F90InputVariable
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -311,12 +308,17 @@ class F90LibraryContainer(LibraryContainer):
         yield from self.codelines_from_text("")
 
 
+class F90LibRoutine(LibRoutine):
+    """F90 Version of a LibRoutine, for consinstency"""
+
+
 class F90Library(Library):
     """F90 Version of a Library"""
 
     FILEENDING = "f90"
     INDENTSTR = "  "
     LIBRARY_CONTAINER = F90LibraryContainer
+    LIBROUTINE_CLASS = F90LibRoutine
 
 
 ###############################################################################
@@ -366,13 +368,13 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
     #     )
 
     def handle_environment_instruction(self, instruction, context, buildargs):
-        foo = F90CommentLine(context=context)
-        lvar = F90MultiFrame(14)
-        foo.requires(lvar)
-        foo.set_line(
-            f"I probably need a multiframe variable here. I will use {lvar.name}"
-        )
-        yield foo
+        # foo = F90CommentLine(context=context)
+        # lvar = F90MultiFrame(14)
+        # foo.requires(lvar)
+        # foo.set_line(
+        #     f"I probably need a multiframe variable here. I will use {lvar.name}"
+        # )
+        # yield foo
         yield from super().handle_environment_instruction(
             instruction, context, buildargs
         )
@@ -396,6 +398,8 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         x_var_imag = context.namespace.find_assignment(type(src0), "imag")
         y_var_real = context.namespace.find_assignment(type(tgt0), "real")
         y_var_imag = context.namespace.find_assignment(type(tgt0), "imag")
+        # print("find assignment", x_var_real, y_var_real)
+        # print(context.environment)
         x_var_offs = src0.offsets
         y_var_offs = tgt0.offsets
         a_real = alpha.real
@@ -769,39 +773,46 @@ test_def_container = RoutineContainer(
 test_context.namespace.assign(
     VarInp,
     "real",
-    LibRoutineInputVariable(VarInp, "real", "inp_r", size=999),
+    LibRoutineInputVariable(VarInp, "real", "myinp_r", size=999),
 )
 test_context.namespace.assign(
     VarInp,
     "imag",
-    LibRoutineInputVariable(VarInp, "imag", "inp_i", size=999),
+    LibRoutineInputVariable(VarInp, "imag", "myinp_i", size=999),
 )
 test_context.namespace.assign(
     VarOut,
     "real",
-    LibRoutineOutputVariable(VarOut, "real", "out_l", size=999),
+    LibRoutineOutputVariable(VarOut, "real", "myout_r", size=999),
 )
 test_context.namespace.assign(
     VarOut,
     "imag",
-    LibRoutineOutputVariable(VarOut, "imag", "out_g", size=999),
+    LibRoutineOutputVariable(VarOut, "imag", "myout_i", size=999),
 )
 
-
-test_routine_container = RoutineCallContainer(
-    ext_routine, context=test_def_container.context
-)
 
 test_lib_container.append(test_def_container)
-test_def_container.append(test_routine_container)
-test_def_container.append(test_routine_container)
-test_def_container.append(test_routine_container)
-test_def_container.append(test_routine_container)
+for _ in range(4):
+    this_emb_routine_call_container = LoopCaptureContainer(
+        F90MultiFrameContainer, context=test_def_container.context
+    )
+    test_routine_call_container = RoutineCallContainer(
+        ext_routine, context=this_emb_routine_call_container.context
+    )
+    this_emb_routine_call_container.append(test_routine_call_container)
+
+    test_def_container.append(this_emb_routine_call_container)
 
 test_lib_container.build_all()
 for indent, line in test_lib_container.get_codelines():
     print(indent * "  " + line)
 
+
+for container in my_library._routines_container.body:
+    if isinstance(container, RoutineContainer):
+        print(container.name)
+        print(list(container.get_argument_variables()))
 
 sys.exit()
 

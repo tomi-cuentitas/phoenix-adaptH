@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 17/06/2025, 13:43
-# Version:     0.0.1302
+# Last Update: 18/06/2025, 14:31
+# Version:     0.0.1311
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -18,7 +18,8 @@ from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
 
 from phoenix.fgen.library import Library
-from phoenix.fgen.libroutine import LibRoutine
+
+# from phoenix.fgen.libroutine import LibRoutine
 
 from phoenix.fgen.context import Context
 
@@ -384,22 +385,13 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             routine_container=routine_container,
             **buildargs,
         )
-
-        libroutine = library.new_libroutine(
-            name=routine_container.name, container=routine_container
+        libroutine = library.new_libroutine_from_container(
+            name=routine_container.name,
+            container=routine_container,
         )
-        self.append_to_makefile(libroutine)
+        # self.append_to_makefile(libroutine)
 
         return libroutine
-
-    def append_to_makefile(self, libroutine):
-        if self.makefile is None:
-            return False
-        target = self.libroutine_to_target(libroutine)
-        self.makefile.append(target)
-
-    def libroutine_to_target(self, libroutine):
-        return False
 
     @log.wrap_call
     def create_routine_container(
@@ -528,6 +520,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
         offsetted_variables = {}
         offset_values = {}
+        offset_variable_classes = {}
         num_env = len(list(instruction.environments))
         for environment in instruction.environments:
             for target_class, offset_object in environment.items():
@@ -542,16 +535,16 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         # these loops are separated to make sure, that every relevant target class
         # has been mentioned in every environment
         for target_class, offset_object in offsetted_variables.items():
-            offset_variable_class = None
+            offset_variable_classes[target_class] = None
             input_config = None
             output_config = None
             for num, offset in enumerate(offset_object):
-                if offset_variable_class is None:
-                    offset_variable_class = type(offset)
+                if offset_variable_classes[target_class] is None:
+                    offset_variable_classes[target_class] = type(offset)
                     input_config = offset.input_config
                     output_config = offset.output_config
                 else:
-                    assert offset_variable_class == type(offset)
+                    assert offset_variable_classes[target_class] == type(offset)
                     assert input_config == offset.input_config
                     assert output_config == offset.output_config
 
@@ -560,10 +553,10 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 assert len(values) == 1
                 offset_values[target_class][num] = sum(values)
 
-        assert offset_variable_class is not None
+            assert offset_variable_classes[target_class] is not None
 
         return (
-            offset_variable_class,
+            offset_variable_classes,
             offset_values,
             (input_config, output_config),
         )
@@ -604,7 +597,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         """default handler for mapapply instruction"""
 
         (
-            offset_variable_class,
+            offset_variable_classes,
             offset_values,
             (input_config, output_config),
         ) = self.extract_mapapply_data(instruction)
@@ -615,9 +608,16 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
         context.container.requires(multi_frame_variable)
 
-        for var_num, (target_class, values) in enumerate(
-            offset_values.items()
-        ):
+        print(
+            (
+                offset_variable_classes,
+                offset_values,
+                (input_config, output_config),
+            )
+        )
+
+        for var_num, (target_class, values) in enumerate(offset_values.items()):
+            print(var_num, (target_class, values))
             var_char = chr(ord("a") + var_num)
             name = f"offs_{target_class.__name__}_{var_char}"
 
@@ -630,7 +630,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
             symbolic_environment.update(
                 target_class,
-                offset_variable_class(
+                offset_variable_classes[target_class](
                     SymbolicOffset(
                         local_choice,
                         input_config=input_config,
@@ -649,6 +649,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 buildargs,
             )
 
+        print("from_mapapply:", symbolic_environment)
         yield from self.containers_from_instruction(
             instruction.content,
             context=context.inherit(environment=symbolic_environment),
