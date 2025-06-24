@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/01/2025
-# Last Update: 30/01/2025, 14:08
-# Version:     0.0.79
+# Last Update: 24/06/2025, 16:50
+# Version:     0.0.103
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -20,10 +20,11 @@
 # regroup a set of instructions
 
 
-from phoenix.fgen.instruction3 import (
+from phoenix.fgen.instruction import (
     GenericInstruction,
     InstructionGroup,
     PolynomialInstruction,
+    LeafInstruction,
 )
 
 x = GenericInstruction(foo="bar")
@@ -31,31 +32,35 @@ print(x.params)
 print(x.ftype)
 
 
-class SpecificInstruction(GenericInstruction, ftype="specific"):
+class SpecificInstruction(
+    LeafInstruction, ftype="specific", defining_keys=["foo"]
+):
     def __init__(self, *, foo):
         super().__init__(foo=foo)
 
 
-SpecificInstruction.set_alias("fooofooo", "foo")
+# SpecificInstruction.set_alias("fooofooo", "foo")
 
 
-class OtherSpecificInstruction(GenericInstruction, ftype="otherspecific"):
+class OtherSpecificInstruction(LeafInstruction, ftype="otherspecific"):
     pass
 
 
-class MoreSpecificInstruction(SpecificInstruction, ftype="more"):
+class MoreSpecificInstruction(
+    SpecificInstruction, ftype="more", defining_keys=[]
+):
     def __init__(self):
         super().__init__(foo="default")
 
 
-MoreSpecificInstruction.set_alias("fooofooofooo", "fooofooo")
+# MoreSpecificInstruction.set_alias("fooofooofooo", "fooofooo")
 
 
 y = SpecificInstruction(foo="foo")
 z = OtherSpecificInstruction(foo="bar")
 k = MoreSpecificInstruction()
 print(y.ftype)
-print(k["fooofooofooo"])
+print(k["foo"])
 
 print(InstructionGroup._get_itype_common_root([z, k]))
 
@@ -70,20 +75,22 @@ print(y.is_subtype(y))
 # print(foo.is_subtype(y))
 
 print()
-bar = InstructionGroup([foo, foo])
+bar = InstructionGroup([foo, foo, foo, foo, foo, foo])
 for instruction in bar.instructions:
     print(instruction)
 
 print()
 
 baz = bar.flatten()
-foo = baz.grouped(lambda x: x["foo"])
-print([len(instr) for instr in foo.instructions])
-bar = baz.group_to_size(5)
-print([len(instr) for instr in bar.instructions])
-
 for instruction in baz.instructions:
     print(instruction)
+
+foz = baz.grouped(lambda x: x["foo"])
+print([len(instr) for instr in foz.instructions])
+
+bar = baz.grouped_to_size(5)
+print([len(instr) for instr in bar.instructions])
+
 
 try:
     next(baz.instructions)["foo"] = "bazbaz"
@@ -101,7 +108,7 @@ for ins in test.instructions:
     print(ins)
 
 print()
-for ins in foo.unpack(recursive=True):
+for ins in foz.unpack():
     print(ins, len(ins), ins.to_dict(), ins.to_tuple())
     print("in this test we output 'foo' as {foo}.".format(**ins))
 
@@ -111,10 +118,10 @@ for ins in foo.unpack(recursive=True):
 
 print(test.ftype, test.itype)
 
-polytest = PolynomialInstruction("foo", "bar", 0, 1, 2, 3)
-print(polytest.to_dict())
-print(polytest.ftype)
-print(polytest.itype)
+# polytest = PolynomialInstruction(tgt0="foo", src0="bar", coeffs=[0, 1, 2, 3])
+# print(polytest.to_dict())
+# print(polytest.ftype)
+# print(polytest.itype)
 
 baz = InstructionGroup([foo, bar])
 print(baz.ftype)
