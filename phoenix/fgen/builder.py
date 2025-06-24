@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 18/06/2025, 14:31
-# Version:     0.0.1311
+# Last Update: 24/06/2025, 14:58
+# Version:     0.0.1312
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -517,7 +517,6 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @log.wrap_call
     def extract_mapapply_data(self, instruction):
         """prepare the mapapply instruction by extracting the offset data from the environments"""
-
         offsetted_variables = {}
         offset_values = {}
         offset_variable_classes = {}
@@ -544,7 +543,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                     input_config = offset.input_config
                     output_config = offset.output_config
                 else:
-                    assert offset_variable_classes[target_class] == type(offset)
+                    assert offset_variable_classes[target_class] == type(
+                        offset
+                    )
                     assert input_config == offset.input_config
                     assert output_config == offset.output_config
 
@@ -616,7 +617,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             )
         )
 
-        for var_num, (target_class, values) in enumerate(offset_values.items()):
+        for var_num, (target_class, values) in enumerate(
+            offset_values.items()
+        ):
             print(var_num, (target_class, values))
             var_char = chr(ord("a") + var_num)
             name = f"offs_{target_class.__name__}_{var_char}"

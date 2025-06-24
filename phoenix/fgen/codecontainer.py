@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 18/06/2025, 14:51
-# Version:     0.1.599
+# Last Update: 24/06/2025, 16:11
+# Version:     0.1.611
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -240,7 +240,7 @@ class CodeContainer:
     def request_assigned(self, ivariable_type, key, autorequire=True):
         """find a variable in the attached namespace"""
         variable = self.namespace.find_assignment(
-            ivariable_type, key, exception_existing=False
+            ivariable_type, key, exception_not_existing=False
         )
         if variable is None:
             return None
@@ -880,7 +880,9 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -1073,7 +1075,8 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1167,7 +1170,8 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1212,7 +1216,7 @@ class RoutineCallContainer(CodeLine):
         for assignment in external_routine.get_argument_assignments():
             source, key = assignment
             if isinstance(source, LibRoutineMultiFrame):
-                local = source.recreate()
+                local = source.recreate(namespace=context.namespace)
                 self.requires(local)
             else:
                 local = self.request_assigned(source, key, autorequire=True)
@@ -1228,9 +1232,7 @@ class RoutineCallContainer(CodeLine):
             for call_arg in self._call_args
         ]
         call_arg_names = [call_arg.as_argument() for call_arg in call_args]
-        call_string = (
-            f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
-        )
+        call_string = f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
         yield call_string
 
     # generate the call using info from the ExternalRoutine variable

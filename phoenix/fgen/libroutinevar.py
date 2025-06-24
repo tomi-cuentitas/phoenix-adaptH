@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 18/06/2025, 15:18
-# Version:     0.0.804
+# Last Update: 24/06/2025, 16:14
+# Version:     0.0.826
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -109,25 +109,37 @@ class Namespace:
             raise KeyError(f"variable {name} not found")
         return None
 
-    def find_assignment_dict(self, ivariable_type, exception_existing=True):
+    def find_assignment_dict(
+        self, ivariable_type, exception_not_existing=True
+    ):
         """find a variable dict in the namespace"""
         if ivariable_type in self._assigned:
             return self._assigned[ivariable_type]
         if self._parent is not None:
-            return self._parent.find_assignment_dict(ivariable_type)
-        if exception_existing:
+            return self._parent.find_assignment_dict(
+                ivariable_type, exception_not_existing=exception_not_existing
+            )
+        if exception_not_existing:
             raise KeyError(
                 f"instruction variable {ivariable_type} not assigned."
             )
         return None
 
-    def find_assignment(self, ivariable_type, key, exception_existing=True):
+    def find_assignment(
+        self, ivariable_type, key, exception_not_existing=True
+    ):
         """find a variable in the namespace"""
         assignment_dict = self.find_assignment_dict(
-            ivariable_type, exception_existing=exception_existing
+            ivariable_type, exception_not_existing=exception_not_existing
         )
+        if assignment_dict is None:
+            if exception_not_existing:
+                raise KeyError(
+                    f"assignment of instruction variable {ivariable_type} does not provide key {key}."
+                )
+            return None
         if key not in assignment_dict:
-            if exception_existing:
+            if exception_not_existing:
                 raise KeyError(
                     f"assignment of instruction variable {ivariable_type} does not provide key {key}."
                 )
@@ -281,7 +293,9 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -837,9 +851,25 @@ class LibRoutineMultiFrame(LibRoutineVariable):
         # default value when branching needs to be suppressed
         self._default_value = min_value
 
-    def recreate(self):
-        """recreate the multi frame object to rerise it"""
-        return type(self)(self.max_value, min_value=self.min_value)
+    def recreate(self, namespace=None, key=None):
+        """recreate the multi frame object to rerise it. If it has been recreated
+        in the same namespace already, return that.
+        """
+        if namespace is None:
+            # simply recreate.
+            return type(self)(self.max_value, min_value=self.min_value)
+        # try to find assignment in namespace
+        lookup = namespace.find_assignment(
+            self, key=key, exception_not_existing=False
+        )
+        # if not successful, ...
+        if lookup is None:
+            ret = type(self)(self.max_value, min_value=self.min_value)
+            namespace.assign(self, key, ret)
+            # create it as above and register it in namespace
+            return ret
+        # if you are here, then you found it
+        return lookup
 
     def create_local_representative(
         self,
@@ -888,6 +918,7 @@ class LibRoutineMultiFrame(LibRoutineVariable):
                 **kwargs,
             )
         context.container.requires(self.local)
+        context.namespace.assign(self, None, self.local)
         return self._local
 
     def reset_representative(self):

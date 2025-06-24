@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 18/06/2025, 15:06
-# Version:     0.0.844
+# Last Update: 24/06/2025, 16:11
+# Version:     0.0.852
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -36,6 +36,7 @@ from phoenix.fgen.codecontainer import (
     RoutineCallContainer,
     ImportSectionContainer,
     AssignmentLine,
+    CodeContainer,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -235,7 +236,9 @@ class F90RoutineContainer(RoutineContainer):
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -252,7 +255,9 @@ class F90KernelContainer(KernelContainer):
     INPUT_VARIABLE_CLASS = F90InputVariable
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -766,7 +771,9 @@ ext_routine = ExternalRoutine(my_library["foofoo_kernel"])
 test_context = Context()
 test_lib_container = LibraryContainer("example", context=test_context)
 test_def_container = RoutineContainer(
-    "blubber", context=test_lib_container.context
+    # test_def_container = KernelContainer(
+    "blubber",
+    context=test_lib_container.context,
 )
 
 
@@ -794,8 +801,9 @@ test_context.namespace.assign(
 
 test_lib_container.append(test_def_container)
 for _ in range(4):
-    this_emb_routine_call_container = LoopCaptureContainer(
-        F90MultiFrameContainer, context=test_def_container.context
+    this_emb_routine_call_container = CodeContainer(  # LoopCaptureContainer(
+        # F90MultiFrameContainer,
+        context=test_def_container.context,
     )
     test_routine_call_container = RoutineCallContainer(
         ext_routine, context=this_emb_routine_call_container.context
@@ -809,7 +817,7 @@ for indent, line in test_lib_container.get_codelines():
     print(indent * "  " + line)
 
 
-for container in my_library._routines_container.body:
+for container in my_library._routine_containers:
     if isinstance(container, RoutineContainer):
         print(container.name)
         print(list(container.get_argument_variables()))

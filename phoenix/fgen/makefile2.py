@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 17/06/2025, 15:08
-# Version:     0.0.574
+# Last Update: 24/06/2025, 13:02
+# Version:     0.0.576
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -46,12 +46,23 @@ class MakeFileManager:
     """manages creation, execution and design of makefiles"""
 
     def __init__(self, name, **_):
-        self.name = name
-        self._filename = f"Makefile_{name}"
+        self._name = name
+        if name is None:
+            self._filename = "Makefile"
+        else:
+            self._filename = f"Makefile_{name}"
         self._is_created = False
         self._targets = {}
-        self._cleanable = []
-        self._make_all = []
+
+    @property
+    def filename(self):
+        """read-only access to filename"""
+        return self._filename
+
+    @property
+    def name(self):
+        """read-only access to name"""
+        return self._name
 
     def set_filename(self, filename):
         """set the makefile's filename"""
@@ -131,14 +142,14 @@ class MakeFileTarget:
     # GROUP_IDENTIFIER = _MFIdentifier.get("GENERIC")
 
     def __init__(self, name, dependencies=None, silent=None):
-        self.name = name
-        self.path = "."
+        self._name = name
+        self._path = "."
         if dependencies is None:
             dependencies = []
         for dep in dependencies:
             if not isinstance(dep, MakeFileTarget):
                 raise TypeError("dep must be an instance of MakeFileTarget")
-        self.dependencies = dependencies
+        self._dependencies = dependencies
         if silent is None:
             self._silent = type(self)._default_silent
 
@@ -157,6 +168,21 @@ class MakeFileTarget:
         if silent is None:
             silent = cls._default_silent
         cls._default_silent = silent
+
+    @property
+    def name(self):
+        """read-only access to name"""
+        return self._name
+
+    @property
+    def path(self):
+        """read-only access to path"""
+        return self._path
+
+    @property
+    def dependencies(self):
+        """read-only access to dependencies"""
+        yield from self._dependencies
 
     @property
     def is_silent(self):

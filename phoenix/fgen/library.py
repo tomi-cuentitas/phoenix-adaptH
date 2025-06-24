@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 18/06/2025, 14:44
-# Version:     0.1.69
+# Last Update: 24/06/2025, 15:26
+# Version:     0.1.89
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -102,7 +102,9 @@ class LibRoutine(LibraryContent):
         arguments=None,
         dependencies=None,
     ):
-        super().__init__(identifier, library=library, dependencies=dependencies)
+        super().__init__(
+            identifier, library=library, dependencies=dependencies
+        )
         if arguments is None:
             arguments = []
         self._arguments = arguments
@@ -177,7 +179,8 @@ class Library:
     LIBRARY_CONTAINER = LibraryContainer
     LIBROUTINE_CLASS = LibRoutine
 
-    def __init__(self, libname):
+    def __init__(self, libname, build_hash=None):
+        self._build_hash = build_hash
         self._libname = libname
         self._fileinfo = {
             "basepath": ".",
@@ -196,6 +199,8 @@ class Library:
         self._library_container = None
         self._routine_containers = []
 
+        # set this to make the library unique
+
         self.initialize_library_containers()
 
     def initialize_library_containers(self):
@@ -205,9 +210,11 @@ class Library:
         self._library_container = type(self).LIBRARY_CONTAINER(
             self.name, context=context
         )
-        self._routines_container = GroupContainer(
-            context=self._library_container.context
-        )
+        # I separated the libroutines to be able to build them earlier.
+        # This is relevant to have the MultiFrameVariables raised!
+        # self._routines_container = GroupContainer(
+        #     context=self._library_container.context
+        # )
         # self._library_container.append(self._routines_container)
 
     def build_all(self):
@@ -218,15 +225,19 @@ class Library:
         """get the codelines from the inner container object"""
         yield from self.get_codelines_head(indent=indent)
         yield from self.get_codelines_prmb(indent=indent)
+        yield indent, ""
         for container in self.routine_containers:
             yield from container.get_codelines(indent=indent)
+            yield indent, ""
         yield from self.get_codelines_foot(indent=indent)
 
     def get_codelines_head(self, indent=0):
         yield from self._library_container.get_codelines_head(indent=indent)
 
     def get_codelines_prmb(self, indent=0):
-        yield from self._library_container.get_codelines_preamble(indent=indent)
+        yield from self._library_container.get_codelines_preamble(
+            indent=indent
+        )
 
     def get_codelines_foot(self, indent=0):
         yield from self._library_container.get_codelines_head(indent=indent)
@@ -268,7 +279,9 @@ class Library:
     @property
     def name(self):
         """read-only access to property name"""
-        return self._libname
+        if self._build_hash is None:
+            return self._libname
+        return self._libname + f"_{self._build_hash}"
 
     @property
     def content(self):
