@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 24/06/2025, 16:11
-# Version:     0.1.611
+# Last Update: 30/06/2025, 13:15
+# Version:     0.1.627
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -497,7 +497,11 @@ class EmbeddingContainer(CodeContainer):
 
 
 class PreambleContainer(CodeContainer):
-    """A container allowing for a preamble"""
+    """
+    A container allowing for a preamble.
+    The preamble section comes between head and foot and before the body, therefore the
+    preamble class inheritance reference must be before the EmbeddingContainer.
+    """
 
     def __init__(self, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
@@ -506,6 +510,7 @@ class PreambleContainer(CodeContainer):
     def get_codelines_preamble(
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
+        """get the preamble code lines"""
         if self._container_prmb is not None:
             for content in self._container_prmb:
                 yield from content.get_codelines(indent=indent, **kwargs)
@@ -1341,9 +1346,9 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
         )
         yield from self.get_codelines_foot(indent, **kwargs)
 
-    def reset(self):
+    def reset(self, **kwargs):
         self._repeat_containers = []
-        return super().reset()
+        return super().reset(**kwargs)
 
 
 class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
@@ -1361,10 +1366,10 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         self._def_layer.add_capture_trigger(LibRoutineConstant)
         self._imp_layer.add_capture_trigger(ExternalRoutine)
 
-    def build(self):
-        self._imp_layer.build()
-        self._def_layer.build()
-        return super().build()
+    def build(self, **kwargs):
+        self._imp_layer.build(**kwargs)
+        self._def_layer.build(**kwargs)
+        return super().build(**kwargs)
 
     def generate_preamble_containers(self, **_):
         yield from self.codelines_from_text("# IMPORTS")
@@ -1382,6 +1387,22 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def generate_foot_containers(self, **_):
         yield from self.codelines_from_text(f"END LIBRARY {self.name}")
+
+
+class HookContainer(CodeLine):
+    """
+    A HookContainer is a dummy placeholder to be able to require variables and more
+    without the need to place some lines there
+    """
+
+    def __init__(self, *, context, **buildargs):
+        super().__init__(None, context=context, **buildargs)
+
+    def construct_code_lines(self, **_):
+        """construct the code line"""
+        # this is a generator to include line breaks if necessary
+        return
+        yield
 
 
 if __name__ == "__main__":

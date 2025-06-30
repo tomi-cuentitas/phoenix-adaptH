@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 24/06/2025, 16:11
-# Version:     0.0.852
+# Last Update: 30/06/2025, 17:52
+# Version:     0.0.965
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -37,6 +37,7 @@ from phoenix.fgen.codecontainer import (
     ImportSectionContainer,
     AssignmentLine,
     CodeContainer,
+    HookContainer,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -411,6 +412,14 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         a_imag = alpha.imag
         b_real = beta.real
         b_imag = beta.imag
+
+        hook = HookContainer(context=context)
+
+        hook.requires(x_var_real)
+        hook.requires(x_var_imag)
+        hook.requires(y_var_real)
+        hook.requires(y_var_imag)
+
         yield F90AffineContainer(
             y_var_real,
             y_var_offs,
@@ -540,378 +549,590 @@ largegroup = InstructionGroup([test, test, test])
 """
 
 
-from phoenix.keymap import KeyMap
-from phoenix.fgen.instructionvar import (
-    InstructionVariable,
-    InstructionEnvironment,
-)
-from phoenix.fgen.instruction import (
-    MapApplyInstruction,
-    LinearOperationInstruction,
-    OffsetEnvironmentInstruction,
-)
+if __name__ == "__main__":
+    from phoenix.keymap import KeyMap
+    from phoenix.fgen.instructionvar import (
+        InstructionVariable,
+        InstructionEnvironment,
+    )
+    from phoenix.fgen.instruction import (
+        MapApplyInstruction,
+        LinearOperationInstruction,
+        OffsetEnvironmentInstruction,
+    )
 
+    ltl_km = KeyMap(name="little")
+    ltl_km.entry("key0")
+    ltl_km.entry("key1")
+    ltl_km.entry("key2")
+    ltl_km.entry("key3")
+    ltl_km.entry("key4")
+    ltl_km.entry("key5")
+    ltl_km.entry("key6")
 
-ltl_km = KeyMap(name="little")
-ltl_km.entry("key0")
-ltl_km.entry("key1")
-ltl_km.entry("key2")
-ltl_km.entry("key3")
-ltl_km.entry("key4")
-ltl_km.entry("key5")
-ltl_km.entry("key6")
+    big_km = KeyMap(name="big")
+    for val in range(12):
+        big_km.link(f"foo{val}", ltl_km)
 
-big_km = KeyMap(name="big")
-for val in range(12):
-    big_km.link(f"foo{val}", ltl_km)
+    big_km.update()
+    # print(list(big_km.keys()))
 
-big_km.update()
-# print(list(big_km.keys()))
+    VarInp = InstructionVariable.new(name="input", config=big_km)
+    VarOut = InstructionVariable.new(name="output", config=big_km)
+    # VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
+    # KeyMapInstructionVariable("input1", keymap=big_km)
 
-VarInp = InstructionVariable.new(name="input", config=big_km)
-VarOut = InstructionVariable.new(name="output", config=big_km)
-# VarOut = KeyMapInstructionVariable("output1", keymap=big_km)
-# KeyMapInstructionVariable("input1", keymap=big_km)
+    VarInpInner = InstructionVariable.new("inner_input", config=ltl_km)
+    VarOutInner = InstructionVariable.new("inner_output", config=ltl_km)
 
-VarInpInner = InstructionVariable.new("inner_input", config=ltl_km)
-VarOutInner = InstructionVariable.new("inner_output", config=ltl_km)
+    # print(InstructionVariable().name)
 
-# print(InstructionVariable().name)
+    test_instructions_inner = InstructionGroup(
+        [
+            LinearOperationInstruction(
+                VarOutInner("key0"), VarInpInner("key6"), 1.0 + 0.6j
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key1"), VarInpInner("key5"), 1.0 + 1.5j
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key2"), VarInpInner("key4"), 1.0 + 2.4j
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key3"), VarInpInner("key3"), 1.0 + 3.3j
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key4"), VarInpInner("key2"), 1.0 + 4.2j
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key5"), VarInpInner("key1"), 1.0 + 5.1j
+            ),
+            LinearOperationInstruction(
+                VarOutInner("key6"), VarInpInner("key0"), 1.0 + 6.0j
+            ),
+        ]
+    )
+    test_instructions1 = InstructionGroup(
+        [
+            OffsetEnvironmentInstruction(
+                test_instructions_inner,
+                offsets={
+                    VarInpInner: VarInp(f"foo{val}"),
+                    VarOutInner: VarOut(f"foo{val}"),
+                },
+            )
+            for val in range(3)
+        ]
+    )
 
-test_instructions_inner = InstructionGroup(
-    [
-        LinearOperationInstruction(
-            VarOutInner("key0"), VarInpInner("key6"), 1.0 + 0.6j
+    test_instructions2_mapapply = MapApplyInstruction(
+        content=test_instructions_inner,
+        environments=[
+            InstructionEnvironment(
+                {
+                    VarInpInner: VarInp(f"foo{val}"),
+                    VarOutInner: VarOut(f"foo{val}"),
+                }
+            )
+            for val in range(12)
+        ],
+    )
+
+    # test_instructions2 = InstructionGroup(
+    #     [
+    #         OffsetEnvironmentInstruction(
+    #             InstructionGroup(
+    #                 [
+    #                     OffsetEnvironmentInstruction(
+    #                         test_instructions_inner,
+    #                         offsets={
+    #                             VarInpInner: VarInp(f"foo{val_inp}"),
+    #                         },
+    #                     )
+    #                     for val_inp in range(2)
+    #                 ]
+    #             ),
+    #             offsets={
+    #                 VarOutInner: VarOut(f"foo{val_out}"),
+    #             },
+    #         )
+    #         for val_out in range(3)
+    #     ]
+    # )
+
+    # largegroup = test_instructions1.flatten()
+    # largegroup = test_instructions1
+    # largegroup = test_instructions2_mapapply.flatten()
+    largegroup = test_instructions2_mapapply
+
+    ctxt = Context()
+    ctxt.namespace.assign(
+        VarInp,
+        "real",
+        F90InputVariable(VarInp, "real", "input_real", size=999),
+    )
+    ctxt.namespace.assign(
+        VarInp,
+        "imag",
+        F90InputVariable(VarInp, "imag", "input_imag", size=999),
+    )
+    ctxt.namespace.assign(
+        VarOut,
+        "real",
+        F90OutputVariable(VarOut, "real", "output_real", size=999),
+    )
+    ctxt.namespace.assign(
+        VarOut,
+        "imag",
+        F90OutputVariable(VarOut, "imag", "output_imag", size=999),
+    )
+
+    lib_container = F90LibraryContainer("test_library23", context=ctxt)
+
+    # lib_container.add_capture_trigger(lambda x: True)
+
+    # container_tree = a.create_routine_container(
+    #     "foo", largegroup, context=lib_container.context
+    # )
+
+    container_tree = my_builder.create_routine_container(
+        # container_tree = my_builder.build(
+        "foohoo",
+        largegroup,
+        context=lib_container.context,
+        # routine_container=F90KernelContainer,
+        routine_container=F90RoutineContainer,
+    )
+
+    lib_container.append(container_tree)
+    lib_container.build_all()
+
+    for indent, line in lib_container.get_codelines():
+        print(indent * "  " + line)
+
+    my_library = F90Library("testlibrary")
+
+    assignments = {
+        (VarInp, "real"): F90InputVariable(
+            VarInp, "real", "inp_real", size=99
         ),
-        LinearOperationInstruction(
-            VarOutInner("key1"), VarInpInner("key5"), 1.0 + 1.5j
+        (VarInp, "imag"): F90InputVariable(
+            VarInp, "imag", "inp_imag", size=99
         ),
-        LinearOperationInstruction(
-            VarOutInner("key2"), VarInpInner("key4"), 1.0 + 2.4j
+        (VarOut, "real"): F90OutputVariable(
+            VarOut, "real", "out_real", size=99
         ),
-        LinearOperationInstruction(
-            VarOutInner("key3"), VarInpInner("key3"), 1.0 + 3.3j
+        (VarOut, "imag"): F90OutputVariable(
+            VarOut, "imag", "out_imag", size=99
         ),
-        LinearOperationInstruction(
-            VarOutInner("key4"), VarInpInner("key2"), 1.0 + 4.2j
-        ),
-        LinearOperationInstruction(
-            VarOutInner("key5"), VarInpInner("key1"), 1.0 + 5.1j
-        ),
-        LinearOperationInstruction(
-            VarOutInner("key6"), VarInpInner("key0"), 1.0 + 6.0j
-        ),
-    ]
-)
-test_instructions1 = InstructionGroup(
-    [
-        OffsetEnvironmentInstruction(
-            test_instructions_inner,
-            offsets={
-                VarInpInner: VarInp(f"foo{val}"),
-                VarOutInner: VarOut(f"foo{val}"),
-            },
+    }
+
+    libroutine1 = my_builder.instructions_to_libroutine(
+        "foofoo",
+        largegroup,
+        my_library,
+        assignments,
+        routine_container=F90RoutineContainer,
+    )
+
+    libroutine2 = my_builder.instructions_to_libroutine(
+        "foofoo",
+        largegroup,
+        my_library,
+        assignments,
+        routine_container=F90RoutineContainer,
+    )
+
+    libroutine3 = my_builder.instructions_to_libroutine(
+        "foofoo_kernel",
+        largegroup,
+        my_library,
+        assignments,
+        routine_container=F90KernelContainer,
+        # routine_container=F90RoutineContainer,
+    )
+
+    print(libroutine1.name)
+    print(libroutine2.name)
+
+    print(my_library._library_container)
+
+    my_library.build_all()
+
+    for indent, line in my_library.get_codelines():
+        print(indent * "  " + line)
+
+    print(
+        my_library["foofoo"],
+        my_library["foofoo"].library,
+        my_library["foofoo"].name,
+    )
+
+    print()
+    print("####")
+    print("####")
+    print("####")
+    print()
+    print("artificial call scenario:")
+    print("-------------------------")
+    print()
+
+    ext_routine = ExternalRoutine(my_library["foofoo_kernel"])
+
+    test_context = Context()
+    test_lib_container = LibraryContainer("example", context=test_context)
+    test_def_container = RoutineContainer(
+        # test_def_container = KernelContainer(
+        "blubber",
+        context=test_lib_container.context,
+    )
+
+    test_context.namespace.assign(
+        VarInp,
+        "real",
+        LibRoutineInputVariable(VarInp, "real", "myinp_r", size=999),
+    )
+    test_context.namespace.assign(
+        VarInp,
+        "imag",
+        LibRoutineInputVariable(VarInp, "imag", "myinp_i", size=999),
+    )
+    test_context.namespace.assign(
+        VarOut,
+        "real",
+        LibRoutineOutputVariable(VarOut, "real", "myout_r", size=999),
+    )
+    test_context.namespace.assign(
+        VarOut,
+        "imag",
+        LibRoutineOutputVariable(VarOut, "imag", "myout_i", size=999),
+    )
+
+    test_lib_container.append(test_def_container)
+    for _ in range(4):
+        this_emb_routine_call_container = CodeContainer(  # LoopCaptureContainer(
+            # F90MultiFrameContainer,
+            context=test_def_container.context,
         )
-        for val in range(3)
-    ]
-)
-
-test_instructions2_mapapply = MapApplyInstruction(
-    content=test_instructions_inner,
-    environments=[
-        InstructionEnvironment(
-            {
-                VarInpInner: VarInp(f"foo{val}"),
-                VarOutInner: VarOut(f"foo{val}"),
-            }
+        test_routine_call_container = RoutineCallContainer(
+            ext_routine, context=this_emb_routine_call_container.context
         )
-        for val in range(12)
-    ],
-)
+        this_emb_routine_call_container.append(test_routine_call_container)
+
+        test_def_container.append(this_emb_routine_call_container)
+
+    test_lib_container.build_all()
+    for indent, line in test_lib_container.get_codelines():
+        print(indent * "  " + line)
+
+    for container in my_library._routine_containers:
+        if isinstance(container, RoutineContainer):
+            print(container.name)
+            print(list(container.get_argument_variables()))
+
+    # sys.exit()
+
+    """
+    class Library:
+
+        library container class
+        [(builder, routine), ...]
+
+        create_container_tree():
+            create library container
+            capture container
+            include routines
+            build captures
+
+    """
+
+    # inside library (autocreate library if none given)
+    # Builder/BuildChain places CodeContainer from Instruction(s) in
+    # LibraryContainer, managed by Library via standardized routines
+
+    # Routine has instruction inside and information on InstructionVariables
+    # It is completely abstract and is based on instruction related objects.
+
+    # A Builder/Buildchain is loaded from a default file. Or created.
+
+    # It will either create code in an existing library and refer to that or
+    # create its own library (and refer to that) based on the routines name,
+    # instructions, properties (e.g. no_imag), ...
+
+    # the result is a LibRoutine object for every routine in a library, storing
+    # name and signature of the implemented piece of code. The library object is
+    # aware of the libroutine object and its dependencies to be able to generate
+    # a proper make file
+
+    # The libroutine object can be called in python, too, as it now is specific
+    # to a backend.
+
+    # def handle_mapapply_instruction_old(self, instruction, context, buildargs):
+    #     """default handler for mapapply instruction"""
+
+    #     (
+    #         offset_variable_class,
+    #         offset_values,
+    #         (input_config, output_config),
+    #     ) = self.extract_mapapply_data(instruction)
+    #     num_env = len(offset_values)
+
+    #     multi_frame_variable = LibRoutineMultiFrame(num_env)
+    #     symbolic_environment = InstructionEnvironment()
+
+    #     context.container.requires(multi_frame_variable)
+
+    #     for var_num, (target_class, values) in enumerate(
+    #         offset_values.items()
+    #     ):
+    #         value_depot = F90Constant(
+    #             f"offsets_{target_class.__name__}",
+    #             value=values,
+    #             dtype="i32",
+    #         )
+
+    #         var_char = chr(ord("a") + var_num)
+    #         offset_value_holder = context.container.request_temp(
+    #             f"offs_{var_char}",
+    #             generating=F90LocalVariable,
+    #             dtype="i32",
+    #         )
+
+    #         symbolic_environment.update(
+    #             target_class,
+    #             offset_variable_class(
+    #                 SymbolicOffset(
+    #                     offset_value_holder,
+    #                     input_config=input_config,
+    #                     output_config=output_config,
+    #                 )
+    #             ),
+    #         )
+
+    #         assignment_line = AssignmentLine(context=context, **buildargs)
+    #         assignment_line.set_target(offset_value_holder)
+    #         assignment_line.set_value(value_depot.at(multi_frame_variable))
+    #         assignment_line.requires(value_depot)
+    #         yield assignment_line
+
+    #     yield from self.containers_from_instruction(
+    #         instruction.content,
+    #         context=context.inherit(environment=symbolic_environment),
+    #         **buildargs,
+    #     )
 
 
-# test_instructions2 = InstructionGroup(
-#     [
-#         OffsetEnvironmentInstruction(
-#             InstructionGroup(
-#                 [
-#                     OffsetEnvironmentInstruction(
-#                         test_instructions_inner,
-#                         offsets={
-#                             VarInpInner: VarInp(f"foo{val_inp}"),
-#                         },
-#                     )
-#                     for val_inp in range(2)
-#                 ]
-#             ),
-#             offsets={
-#                 VarOutInner: VarOut(f"foo{val_out}"),
-#             },
-#         )
-#         for val_out in range(3)
-#     ]
-# )
-
-# largegroup = test_instructions1.flatten()
-# largegroup = test_instructions1
-# largegroup = test_instructions2_mapapply.flatten()
-largegroup = test_instructions2_mapapply
-
-ctxt = Context()
-ctxt.namespace.assign(
-    VarInp,
-    "real",
-    F90InputVariable(VarInp, "real", "input_real", size=999),
-)
-ctxt.namespace.assign(
-    VarInp,
-    "imag",
-    F90InputVariable(VarInp, "imag", "input_imag", size=999),
-)
-ctxt.namespace.assign(
-    VarOut,
-    "real",
-    F90OutputVariable(VarOut, "real", "output_real", size=999),
-)
-ctxt.namespace.assign(
-    VarOut,
-    "imag",
-    F90OutputVariable(VarOut, "imag", "output_imag", size=999),
-)
+print("\n")
+print("#" * 60)
+print("\n")
 
 
-lib_container = F90LibraryContainer("test_library23", context=ctxt)
-
-# lib_container.add_capture_trigger(lambda x: True)
-
-# container_tree = a.create_routine_container(
-#     "foo", largegroup, context=lib_container.context
-# )
-
-container_tree = my_builder.create_routine_container(
-    # container_tree = my_builder.build(
-    "foohoo",
-    largegroup,
-    context=lib_container.context,
-    # routine_container=F90KernelContainer,
-    routine_container=F90RoutineContainer,
-)
-
-lib_container.append(container_tree)
-lib_container.build_all()
+pauli_table = {
+    "0": {"0": ("0", 0), "x": ("x", 0), "y": ("y", 0), "z": ("z", 0)},
+    "x": {"0": ("x", 0), "x": ("0", 0), "y": ("z", 1), "z": ("y", 3)},
+    "y": {"0": ("y", 0), "x": ("z", 3), "y": ("0", 0), "z": ("x", 1)},
+    "z": {"0": ("z", 0), "x": ("y", 1), "y": ("x", 3), "z": ("0", 0)},
+}
 
 
-for indent, line in lib_container.get_codelines():
-    print(indent * "  " + line)
+def all_pauli_strings(size, prefix=""):
+    if size <= 0:
+        yield prefix
+    else:
+        yield from all_pauli_strings(size - 1, prefix=f"{prefix}x")
+        yield from all_pauli_strings(size - 1, prefix=f"{prefix}y")
+        yield from all_pauli_strings(size - 1, prefix=f"{prefix}z")
 
 
-my_library = F90Library("testlibrary")
+def pauli_mul(string_a, string_b, coeff_phase=0):
+    assert len(string_a) == len(string_b)
+    result = ""
+    for letter_a, letter_b in zip(string_a, string_b):
+        letter, phase = pauli_table[letter_a][letter_b]
+        result += letter
+        coeff_phase += phase
+    return result, coeff_phase & 3
+
+
+def pad_pauli_string(reduced, nums, size):
+    padded = ["0"] * size
+    for letter, num in zip(reduced, nums):
+        padded[num] = letter
+    return "".join(padded)
+
+
+def simplify_pauli_string(padded):
+    nums = []
+    reduced = ""
+    for num, letter in enumerate(padded):
+        if letter == "0":
+            continue
+        nums.append(num)
+        reduced += letter
+    return reduced, nums
+
+
+def all_spin_groups(size, num_spins, collect=[]):
+    if size == 0:
+        yield tuple(collect)
+    else:
+        for num in range(max(collect + [-1]) + 1, num_spins):
+            yield from all_spin_groups(size - 1, num_spins, collect + [num])
+
+
+def triple_pattern(string_a, string_b, string_c):
+    pat_a = ""
+    pat_b = ""
+    pat_c = ""
+    # map_a = ""
+    # map_b = ""
+    # map_c = ""
+    for let_a, let_b, let_c in zip(string_a, string_b, string_c):
+        if let_a != "0" or let_b != "0" or let_c != "0":
+            pat_a += "X" if let_a in "xyz" else "_"
+            pat_b += "X" if let_b in "xyz" else "_"
+            pat_c += "X" if let_c in "xyz" else "_"
+            # map_a += let_a if let_a in "xyz" else "0"
+            # map_b += let_a if let_b in "xyz" else "0"
+            # map_c += let_a if let_c in "xyz" else "0"
+    return (pat_a, pat_b, pat_c)
+
+
+print(list(all_pauli_strings(2)))
+
+padded = pad_pauli_string("xyz", [0, 3, 5], 6)
+print(padded)
+
+reduced = simplify_pauli_string(padded)
+print(reduced)
+
+product = pauli_mul("xyz", "xxy")
+print(product)
+
+all_groups = list(all_spin_groups(3, 5))
+print(all_groups)
+print(len(all_groups))
+
+
+MAX_SIZE = 3
+NUM_SPINS = 5
+
+#######################################################################
+
+system_keymap = KeyMap(name="system")
+
+scalar_keymap = KeyMap(name="pauli_0")
+scalar_keymap.entry("")
+system_keymap.link(tuple(), scalar_keymap)
+
+for size in range(1, MAX_SIZE + 1):
+    keymap = KeyMap(name=f"pauli_{size}")
+    for substring in all_pauli_strings(size):
+        keymap.entry(substring)
+    for number_tuple in all_spin_groups(size, NUM_SPINS):
+        system_keymap.link(number_tuple, keymap)
+
+for indent, key, domain in system_keymap.tree():
+    print(indent * "  " + f"{str(key):<10} : {domain}")
+
+#######################################################################
+
+hamilton_keymap = KeyMap(name="hamiltonian")
+
+keymap_larmor = KeyMap(name=f"ham_larmor")
+keymap_larmor.entry("x")
+keymap_larmor.entry("y")
+keymap_larmor.entry("z")
+
+keymap_dipdip = KeyMap(name="dipdip")
+keymap_dipdip.entry("xx")
+keymap_dipdip.entry("yy")
+keymap_dipdip.entry("zz")
+
+
+for number_tuple in all_spin_groups(1, NUM_SPINS):
+    hamilton_keymap.link(number_tuple, keymap_larmor)
+
+for number_tuple in all_spin_groups(2, NUM_SPINS):
+    hamilton_keymap.link(number_tuple, keymap_dipdip)
+
+for indent, key, domain in system_keymap.tree():
+    print(indent * "  " + f"{str(key):<10} : {domain}")
+
+
+VarRho = InstructionVariable.new(name="rho", config=system_keymap)
+VarDRho = InstructionVariable.new(name="d_rho", config=system_keymap)
+VarHam = InstructionVariable.new(name="ham", config=hamilton_keymap)
+
+#######################################################################
+
+multiply_cases = {}
+
+for nums_a_key, nums_a_entry in system_keymap.items():
+    nums_a = nums_a_key.onlylabel()
+    for nums_b_key, nums_b_entry in hamilton_keymap.items():
+        nums_b = nums_b_key.onlylabel()
+        for keys_a_key in nums_a_entry.keys():
+            keys_a = keys_a_key.onlylabel()
+            ext_string_a = pad_pauli_string(keys_a, nums_a, NUM_SPINS)
+            for keys_b_key in nums_b_entry.keys():
+                keys_b = keys_b_key.onlylabel()
+                ext_string_b = pad_pauli_string(keys_b, nums_b, NUM_SPINS)
+
+                ext_prod_c, phase = pauli_mul(ext_string_a, ext_string_b)
+                t_pattern = triple_pattern(
+                    ext_string_a, ext_string_b, ext_prod_c
+                )
+                if t_pattern[-1].count("X") > MAX_SIZE:
+                    continue
+                if t_pattern not in multiply_cases:
+                    multiply_cases[t_pattern] = {}
+                if (keys_a, keys_b) not in multiply_cases[t_pattern]:
+                    multiply_cases[t_pattern][(keys_a, keys_b)] = set()
+                keys_c, nums_c = simplify_pauli_string(ext_prod_c)
+                multiply_cases[t_pattern][(keys_a, keys_b)].add(
+                    (keys_c, phase)
+                )
+
+print(len(multiply_cases))
+print(list(multiply_cases.keys()))
+print(multiply_cases[("XXX", "_XX", "XXX")])
+
+
+sys.exit()
+
+my_library = F90Library("pauli_library")
 
 assignments = {
-    (VarInp, "real"): F90InputVariable(VarInp, "real", "inp_real", size=99),
-    (VarInp, "imag"): F90InputVariable(VarInp, "imag", "inp_imag", size=99),
-    (VarOut, "real"): F90OutputVariable(VarOut, "real", "out_real", size=99),
-    (VarOut, "imag"): F90OutputVariable(VarOut, "imag", "out_imag", size=99),
+    (VarRho, "real"): F90InputVariable(
+        VarRho, "real", "rho_real", size=system_keymap.size
+    ),
+    (VarRho, "imag"): F90InputVariable(
+        VarRho, "imag", "rho_imag", size=system_keymap.size
+    ),
+    (VarHam, "real"): F90InputVariable(
+        VarHam, "real", "ham_real", size=hamilton_keymap.size
+    ),
+    (VarHam, "imag"): F90InputVariable(
+        VarHam, "imag", "ham_imag", size=hamilton_keymap.size
+    ),
+    (VarDRho, "real"): F90OutputVariable(
+        VarDRho, "real", "d_rho_real", size=system_keymap.size
+    ),
+    (VarDRho, "imag"): F90OutputVariable(
+        VarDRho, "imag", "d_rho_imag", size=system_keymap.size
+    ),
 }
 
 libroutine1 = my_builder.instructions_to_libroutine(
-    "foofoo",
-    largegroup,
+    "multiply",
+    multiply_instructions,
     my_library,
     assignments,
     routine_container=F90RoutineContainer,
 )
-
-libroutine2 = my_builder.instructions_to_libroutine(
-    "foofoo",
-    largegroup,
-    my_library,
-    assignments,
-    routine_container=F90RoutineContainer,
-)
-
-
-libroutine3 = my_builder.instructions_to_libroutine(
-    "foofoo_kernel",
-    largegroup,
-    my_library,
-    assignments,
-    routine_container=F90KernelContainer,
-    # routine_container=F90RoutineContainer,
-)
-
-print(libroutine1.name)
-print(libroutine2.name)
-
-print(my_library._library_container)
 
 my_library.build_all()
 
 for indent, line in my_library.get_codelines():
     print(indent * "  " + line)
-
-
-print(
-    my_library["foofoo"],
-    my_library["foofoo"].library,
-    my_library["foofoo"].name,
-)
-
-print()
-print("####")
-print("####")
-print("####")
-print()
-print("artificial call scenario:")
-print("-------------------------")
-print()
-
-ext_routine = ExternalRoutine(my_library["foofoo_kernel"])
-
-test_context = Context()
-test_lib_container = LibraryContainer("example", context=test_context)
-test_def_container = RoutineContainer(
-    # test_def_container = KernelContainer(
-    "blubber",
-    context=test_lib_container.context,
-)
-
-
-test_context.namespace.assign(
-    VarInp,
-    "real",
-    LibRoutineInputVariable(VarInp, "real", "myinp_r", size=999),
-)
-test_context.namespace.assign(
-    VarInp,
-    "imag",
-    LibRoutineInputVariable(VarInp, "imag", "myinp_i", size=999),
-)
-test_context.namespace.assign(
-    VarOut,
-    "real",
-    LibRoutineOutputVariable(VarOut, "real", "myout_r", size=999),
-)
-test_context.namespace.assign(
-    VarOut,
-    "imag",
-    LibRoutineOutputVariable(VarOut, "imag", "myout_i", size=999),
-)
-
-
-test_lib_container.append(test_def_container)
-for _ in range(4):
-    this_emb_routine_call_container = CodeContainer(  # LoopCaptureContainer(
-        # F90MultiFrameContainer,
-        context=test_def_container.context,
-    )
-    test_routine_call_container = RoutineCallContainer(
-        ext_routine, context=this_emb_routine_call_container.context
-    )
-    this_emb_routine_call_container.append(test_routine_call_container)
-
-    test_def_container.append(this_emb_routine_call_container)
-
-test_lib_container.build_all()
-for indent, line in test_lib_container.get_codelines():
-    print(indent * "  " + line)
-
-
-for container in my_library._routine_containers:
-    if isinstance(container, RoutineContainer):
-        print(container.name)
-        print(list(container.get_argument_variables()))
-
-sys.exit()
-
-
-"""
-class Library:
-
-    library container class
-    [(builder, routine), ...]
-
-    create_container_tree():
-        create library container
-        capture container
-        include routines
-        build captures
-
-"""
-
-
-# inside library (autocreate library if none given)
-# Builder/BuildChain places CodeContainer from Instruction(s) in
-# LibraryContainer, managed by Library via standardized routines
-
-# Routine has instruction inside and information on InstructionVariables
-# It is completely abstract and is based on instruction related objects.
-
-# A Builder/Buildchain is loaded from a default file. Or created.
-
-# It will either create code in an existing library and refer to that or
-# create its own library (and refer to that) based on the routines name,
-# instructions, properties (e.g. no_imag), ...
-
-# the result is a LibRoutine object for every routine in a library, storing
-# name and signature of the implemented piece of code. The library object is
-# aware of the libroutine object and its dependencies to be able to generate
-# a proper make file
-
-# The libroutine object can be called in python, too, as it now is specific
-# to a backend.
-
-
-# def handle_mapapply_instruction_old(self, instruction, context, buildargs):
-#     """default handler for mapapply instruction"""
-
-#     (
-#         offset_variable_class,
-#         offset_values,
-#         (input_config, output_config),
-#     ) = self.extract_mapapply_data(instruction)
-#     num_env = len(offset_values)
-
-#     multi_frame_variable = LibRoutineMultiFrame(num_env)
-#     symbolic_environment = InstructionEnvironment()
-
-#     context.container.requires(multi_frame_variable)
-
-#     for var_num, (target_class, values) in enumerate(
-#         offset_values.items()
-#     ):
-#         value_depot = F90Constant(
-#             f"offsets_{target_class.__name__}",
-#             value=values,
-#             dtype="i32",
-#         )
-
-#         var_char = chr(ord("a") + var_num)
-#         offset_value_holder = context.container.request_temp(
-#             f"offs_{var_char}",
-#             generating=F90LocalVariable,
-#             dtype="i32",
-#         )
-
-#         symbolic_environment.update(
-#             target_class,
-#             offset_variable_class(
-#                 SymbolicOffset(
-#                     offset_value_holder,
-#                     input_config=input_config,
-#                     output_config=output_config,
-#                 )
-#             ),
-#         )
-
-#         assignment_line = AssignmentLine(context=context, **buildargs)
-#         assignment_line.set_target(offset_value_holder)
-#         assignment_line.set_value(value_depot.at(multi_frame_variable))
-#         assignment_line.requires(value_depot)
-#         yield assignment_line
-
-#     yield from self.containers_from_instruction(
-#         instruction.content,
-#         context=context.inherit(environment=symbolic_environment),
-#         **buildargs,
-#     )

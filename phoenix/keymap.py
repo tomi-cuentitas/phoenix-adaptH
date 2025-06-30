@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/02/2025, 10:55
-# Version:     0.1.0
+# Last Update: 30/06/2025, 16:46
+# Version:     0.1.9
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -204,7 +204,7 @@ class Key:
                 # tkey.parnet._tagged_keyseg(tkey.label)  # copy
             elif isinstance(tkey, Key):
                 self._key_segments += [
-                    parent._tagged_keyseg(label)
+                    parent._to_tagged_keyseg(label)
                     if parent
                     else _KeySegment(label)
                     for parent, label in tkey._unchain(tagged=True)
