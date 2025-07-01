@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 30/06/2025, 17:52
-# Version:     0.0.965
+# Last Update: 01/07/2025, 15:29
+# Version:     0.0.1107
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,6 +38,7 @@ from phoenix.fgen.codecontainer import (
     AssignmentLine,
     CodeContainer,
     HookContainer,
+    ImportContainer,
 )
 from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
@@ -55,7 +56,12 @@ from phoenix.fgen.instructionvar import SymbolicOffset
 # from phoenix.fgen.libroutine import LibRoutine
 from phoenix.fgen.library import Library, LibRoutine
 
-from phoenix.fgen.instruction import AffineOperationInstruction
+from phoenix.fgen.instruction import (
+    AffineOperationInstruction,
+    BiLinearOperationInstruction,
+    IsolateLoopInstruction,
+    RoutineCallInstruction,
+)
 
 from phoenix.toolbox.logger import GLOBAL_LOGGER
 
@@ -189,6 +195,16 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
 ###############################################################################
 
 
+class F90RoutineCallContainer(RoutineCallContainer):
+    """Plain Text version of a StatementLine"""
+
+    def get_call_string(self):
+        """generate the call string"""
+        return (
+            f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
+
+
 class F90AssignmentLine(AssignmentLine):
     """F90 version of an assignment line"""
 
@@ -283,8 +299,38 @@ class F90AffineContainer(StatementLine):
             context=context,
             **params,
         )
-        self.requires(x)
         self.requires(y)
+        self.requires(x)
+
+
+class F90BilinearContainer(StatementLine):
+    INDENT_BODY = False
+    BLUEPRINT = "{y_expression} = {y_expression} + {a_value} * {u_expression} * {v_expression}"
+
+    def __init__(self, y, yo, a, u, uo, v, vo, *, context, **params):
+        super().__init__(
+            {
+                "y_expression": y.at(*yo),
+                "u_expression": u.at(*uo),
+                "v_expression": v.at(*vo),
+                "a_value": a,
+            },
+            context=context,
+            **params,
+        )
+        self.requires(y)
+        self.requires(u)
+        self.requires(v)
+
+
+class F90ImportContainer(ImportContainer):
+    """F90 version for imports"""
+
+    INDENT_BODY = True
+
+    def construct_code_lines(self, **_):
+        """create the codelines required for the import"""
+        yield f"use {self.library.name}"
 
 
 class F90LibraryContainer(LibraryContainer):
@@ -294,7 +340,12 @@ class F90LibraryContainer(LibraryContainer):
 
     def __init__(self, name, *, context, **buildargs):
         # print("f90lib init")
-        super().__init__(name, context=context, **buildargs)
+        super().__init__(
+            name,
+            context=context,
+            import_line_class=F90ImportContainer,
+            **buildargs,
+        )
 
     def generate_head_containers(self, **_):
         yield from self.codelines_from_text(f"MODULE {self.name}")
@@ -349,8 +400,8 @@ my_fancy_var = F90InOutVariable(
 class Fortran90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
-    ASSIGNMENT_CLASS = F90AssignmentLine
-    # _routine_cls = F90RoutineContainer
+    # ASSIGNMENT_CLASS = F90AssignmentLine
+    # _routinecall_cls = F90RoutineCallContainer
     # _comment_cls = F90CommentLine
 
     # def handle_group_instruction(self, instruction, context, buildargs):
@@ -456,48 +507,129 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
             b_imag,
             context=context,
         )
-
-        # foo1 = CodeLine("! this is a test expression", context=context)
-        # temp1 = foo1.request_unique(
-        #     "test_some_constant",
-        #     F90Constant,
-        #     value=[32, 31, 30],
-        #     # size=None,
-        #     dtype="i64",
-        # )
-        # foo1.format(foo=f"{temp1} + 2")
-        # foo1.requires(temp1)
-        # yield foo1
-
-        # foo2 = CodeLine("! this is another test expression", context=context)
-        # temp2 = self.request_temp(
-        #     foo2,
-        #     "test_temporary1",
-        #     F90LocalVariable,
-        #     size=42,
-        #     dtype="i64",
-        # )
-        # foo2.format(foo=f"{temp2} + 2")
-        # foo2.requires(temp2)
-        # yield foo2
-
         yield CodeLine("", context=context)
 
-    def handle_generic_instruction(self, instruction, context, buildargs):
-        yield from super().handle_generic_instruction(
-            instruction, context, buildargs
+    def handle_bilinear_instruction(self, instruction, context, buildargs):
+        instruction_dict = instruction.apply_environment(
+            context.environment
+        ).contribute_to_dict()
+
+        tgt0 = instruction_dict.get("tgt0")
+        src0 = instruction_dict.get("src0")
+        src1 = instruction_dict.get("src1")
+        alpha = instruction_dict.get("alpha")
+        otgt0 = list(tgt0.offsets)
+        osrc0 = list(src0.offsets)
+        osrc1 = list(src1.offsets)
+        yield F90CommentLine(f"tgt0={tgt0.name} @ {otgt0}", context=context)
+        yield F90CommentLine(f"src0={src0.name} @ {osrc0}", context=context)
+        yield F90CommentLine(f"src1={src1.name} @ {osrc1}", context=context)
+        yield F90CommentLine(f"alpha = {alpha}", context=context)
+        u_var_real = context.namespace.find_assignment(type(src0), "real")
+        u_var_imag = context.namespace.find_assignment(type(src0), "imag")
+        v_var_real = context.namespace.find_assignment(type(src1), "real")
+        v_var_imag = context.namespace.find_assignment(type(src1), "imag")
+        y_var_real = context.namespace.find_assignment(type(tgt0), "real")
+        y_var_imag = context.namespace.find_assignment(type(tgt0), "imag")
+        # print("find assignment", x_var_real, y_var_real)
+        # print(context.environment)
+        u_var_offs = src0.offsets
+        v_var_offs = src1.offsets
+        y_var_offs = tgt0.offsets
+        a_real = alpha.real
+        a_imag = alpha.imag
+
+        hook = HookContainer(context=context)
+
+        hook.requires(u_var_real)
+        hook.requires(u_var_imag)
+        hook.requires(v_var_real)
+        hook.requires(v_var_imag)
+        hook.requires(y_var_real)
+        hook.requires(y_var_imag)
+
+        yield F90BilinearContainer(
+            y_var_real,
+            y_var_offs,
+            a_real,
+            u_var_real,
+            u_var_offs,
+            v_var_real,
+            v_var_offs,
+            context=context,
         )
-        # foo = CodeLine("! this is a test expression {foo}", context=context)
-        # temp1 = self.request_temp(
-        #     foo,
-        #     "test_temporary1",
-        #     F90LocalVariable,
-        #     size=42,
-        #     dtype="i64",
-        # )
-        # foo.format(foo=f"{temp1.at(5)} + 2")
-        # foo.requires(my_fancy_var)
-        # yield foo
+        yield F90BilinearContainer(
+            y_var_real,
+            y_var_offs,
+            -a_real,
+            u_var_imag,
+            u_var_offs,
+            v_var_imag,
+            v_var_offs,
+            context=context,
+        )
+        yield F90BilinearContainer(
+            y_var_real,
+            y_var_offs,
+            -a_imag,
+            u_var_imag,
+            u_var_offs,
+            v_var_real,
+            v_var_offs,
+            context=context,
+        )
+        yield F90BilinearContainer(
+            y_var_real,
+            y_var_offs,
+            -a_imag,
+            u_var_real,
+            u_var_offs,
+            v_var_imag,
+            v_var_offs,
+            context=context,
+        )
+
+        yield F90BilinearContainer(
+            y_var_imag,
+            y_var_offs,
+            a_real,
+            u_var_imag,
+            u_var_offs,
+            v_var_real,
+            v_var_offs,
+            context=context,
+        )
+        yield F90BilinearContainer(
+            y_var_imag,
+            y_var_offs,
+            a_real,
+            u_var_real,
+            u_var_offs,
+            v_var_imag,
+            v_var_offs,
+            context=context,
+        )
+        yield F90BilinearContainer(
+            y_var_imag,
+            y_var_offs,
+            a_imag,
+            u_var_real,
+            u_var_offs,
+            v_var_real,
+            v_var_offs,
+            context=context,
+        )
+        yield F90BilinearContainer(
+            y_var_imag,
+            y_var_offs,
+            -a_imag,
+            u_var_imag,
+            u_var_offs,
+            v_var_imag,
+            v_var_offs,
+            context=context,
+        )
+        yield CodeLine("", context=context)
 
     def create_external_array(
         self,
@@ -516,11 +648,15 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
 Fortran90Builder.set_instruction_class_handler(
     AffineOperationInstruction, Fortran90Builder.handle_affine_instruction
 )
+Fortran90Builder.set_instruction_class_handler(
+    BiLinearOperationInstruction, Fortran90Builder.handle_bilinear_instruction
+)
 
 F90LibraryContainer.set_comment_class(F90CommentLine)
 F90RoutineContainer.set_comment_class(F90CommentLine)
 Fortran90Builder.set_comment_class(None)
 Fortran90Builder.set_comment_class(F90CommentLine)
+Fortran90Builder.set_routinecall_class(F90RoutineCallContainer)
 
 # Fortran90Builder.set_routine_class(F90RoutineContainer)
 # Fortran90Builder.set_routine_class(F90KernelContainer)
@@ -665,7 +801,9 @@ if __name__ == "__main__":
     # largegroup = test_instructions2_mapapply.flatten()
     largegroup = test_instructions2_mapapply
 
-    ctxt = Context()
+    my_library = F90Library("testlibrary")
+
+    ctxt = my_library.context
     ctxt.namespace.assign(
         VarInp,
         "real",
@@ -709,8 +847,6 @@ if __name__ == "__main__":
 
     for indent, line in lib_container.get_codelines():
         print(indent * "  " + line)
-
-    my_library = F90Library("testlibrary")
 
     assignments = {
         (VarInp, "real"): F90InputVariable(
@@ -969,7 +1105,7 @@ def simplify_pauli_string(padded):
             continue
         nums.append(num)
         reduced += letter
-    return reduced, nums
+    return reduced, tuple(nums)
 
 
 def all_spin_groups(size, num_spins, collect=[]):
@@ -1015,7 +1151,10 @@ print(len(all_groups))
 
 
 MAX_SIZE = 3
-NUM_SPINS = 5
+NUM_SPINS = 8
+
+inner_keymaps_system = {}
+inner_keymaps_hamilt = {}
 
 #######################################################################
 
@@ -1024,11 +1163,13 @@ system_keymap = KeyMap(name="system")
 scalar_keymap = KeyMap(name="pauli_0")
 scalar_keymap.entry("")
 system_keymap.link(tuple(), scalar_keymap)
+inner_keymaps_system[0] = scalar_keymap
 
 for size in range(1, MAX_SIZE + 1):
     keymap = KeyMap(name=f"pauli_{size}")
     for substring in all_pauli_strings(size):
         keymap.entry(substring)
+    inner_keymaps_system[size] = keymap
     for number_tuple in all_spin_groups(size, NUM_SPINS):
         system_keymap.link(number_tuple, keymap)
 
@@ -1049,6 +1190,8 @@ keymap_dipdip.entry("xx")
 keymap_dipdip.entry("yy")
 keymap_dipdip.entry("zz")
 
+inner_keymaps_hamilt[1] = keymap_larmor
+inner_keymaps_hamilt[2] = keymap_dipdip
 
 for number_tuple in all_spin_groups(1, NUM_SPINS):
     hamilton_keymap.link(number_tuple, keymap_larmor)
@@ -1060,18 +1203,27 @@ for indent, key, domain in system_keymap.tree():
     print(indent * "  " + f"{str(key):<10} : {domain}")
 
 
+VarRes = InstructionVariable.new(name="res", config=system_keymap)
 VarRho = InstructionVariable.new(name="rho", config=system_keymap)
-VarDRho = InstructionVariable.new(name="d_rho", config=system_keymap)
 VarHam = InstructionVariable.new(name="ham", config=hamilton_keymap)
 
 #######################################################################
 
+multiply_operations = {}
 multiply_cases = {}
 
 for nums_a_key, nums_a_entry in system_keymap.items():
     nums_a = nums_a_key.onlylabel()
     for nums_b_key, nums_b_entry in hamilton_keymap.items():
         nums_b = nums_b_key.onlylabel()
+
+        # preemtive check: chance to be in truncated subspace
+        exp_spinnumbers = set.union(
+            set(nums_a_key.onlylabel()), set(nums_b_key.onlylabel())
+        )
+        if len(exp_spinnumbers) > MAX_SIZE + 1:
+            continue
+
         for keys_a_key in nums_a_entry.keys():
             keys_a = keys_a_key.onlylabel()
             ext_string_a = pad_pauli_string(keys_a, nums_a, NUM_SPINS)
@@ -1083,23 +1235,27 @@ for nums_a_key, nums_a_entry in system_keymap.items():
                 t_pattern = triple_pattern(
                     ext_string_a, ext_string_b, ext_prod_c
                 )
+
+                # final validity check - still in truncated subspace?
                 if t_pattern[-1].count("X") > MAX_SIZE:
                     continue
-                if t_pattern not in multiply_cases:
-                    multiply_cases[t_pattern] = {}
-                if (keys_a, keys_b) not in multiply_cases[t_pattern]:
-                    multiply_cases[t_pattern][(keys_a, keys_b)] = set()
+
+                if t_pattern not in multiply_operations:
+                    multiply_operations[t_pattern] = {}
+                    multiply_cases[t_pattern] = set()
+                if (keys_a, keys_b) not in multiply_operations[t_pattern]:
+                    multiply_operations[t_pattern][(keys_a, keys_b)] = set()
                 keys_c, nums_c = simplify_pauli_string(ext_prod_c)
-                multiply_cases[t_pattern][(keys_a, keys_b)].add(
+                multiply_operations[t_pattern][(keys_a, keys_b)].add(
                     (keys_c, phase)
                 )
+                multiply_cases[t_pattern].add((nums_a, nums_b, nums_c))
 
-print(len(multiply_cases))
-print(list(multiply_cases.keys()))
-print(multiply_cases[("XXX", "_XX", "XXX")])
+print(len(multiply_operations))
+print(list(multiply_operations.keys()))
+# print(multiply_operations[("XX_", "_XX", "X_X")])
+# print(multiply_cases[("X_", "XX", "_X")])
 
-
-sys.exit()
 
 my_library = F90Library("pauli_library")
 
@@ -1116,17 +1272,100 @@ assignments = {
     (VarHam, "imag"): F90InputVariable(
         VarHam, "imag", "ham_imag", size=hamilton_keymap.size
     ),
-    (VarDRho, "real"): F90OutputVariable(
-        VarDRho, "real", "d_rho_real", size=system_keymap.size
+    (VarRes, "real"): F90OutputVariable(
+        VarRes, "real", "res_real", size=system_keymap.size
     ),
-    (VarDRho, "imag"): F90OutputVariable(
-        VarDRho, "imag", "d_rho_imag", size=system_keymap.size
+    (VarRes, "imag"): F90OutputVariable(
+        VarRes, "imag", "res_imag", size=system_keymap.size
     ),
 }
 
-libroutine1 = my_builder.instructions_to_libroutine(
+VarInpRInner = {}
+VarInpHInner = {}
+VarTargInner = {}
+
+
+for size in range(MAX_SIZE + 1):
+    VarInpRInner[size] = InstructionVariable.new(
+        name=f"rho_inner_{size}", config=inner_keymaps_system[size]
+    )
+    VarTargInner[size] = InstructionVariable.new(
+        name=f"res_inner_{size}", config=inner_keymaps_system[size]
+    )
+VarInpHInner[1] = InstructionVariable.new(
+    name=f"ham_inner_{size}", config=inner_keymaps_hamilt[1]
+)
+VarInpHInner[2] = InstructionVariable.new(
+    name=f"ham_inner_{size}", config=inner_keymaps_hamilt[2]
+)
+
+libroutines = {}
+
+
+def nice_phase(phase):
+    phase %= 4
+    if phase == 0:
+        return ""
+    if phase == 2:
+        return "- "
+    if phase == 1:
+        return "i "
+    if phase == 3:
+        return "-i "
+
+
+multiply_instructions = []
+instruction_groups = {}
+for num, (template, operations) in enumerate(multiply_operations.items()):
+    print(f"{num:03d}: {template}")
+    instructions = []
+    len_r, len_h, len_t = map(lambda x: x.count("X"), template)
+    for (source1, source2), operation in operations.items():
+        for target, phase in operation:
+            print(f"\t{source1} × {source2} -> {nice_phase(phase)}{target}")
+            instruction = BiLinearOperationInstruction(
+                VarTargInner[len_t](target),
+                VarInpRInner[len_r](source1),
+                VarInpHInner[len_h](source2),
+                1j**phase,
+            )
+            instructions.append(instruction)
+    instruction_groups[template] = InstructionGroup(instructions)
+
+for num, (template, cases) in enumerate(multiply_cases.items()):
+    environments = []
+    print(f"{num:03d}: {template}")
+    for case in cases:
+        rho_nums, ham_nums, res_nums = case
+        print("\t", rho_nums, ham_nums, res_nums)
+        environments.append(
+            InstructionEnvironment(
+                {
+                    VarInpRInner[len(rho_nums)]: VarRho(rho_nums),
+                    VarInpHInner[len(ham_nums)]: VarHam(ham_nums),
+                    VarTargInner[len(res_nums)]: VarRes(res_nums),
+                }
+            )
+        )
+
+    lr_name = f"multiply_{num:03d}"
+    libroutine = my_builder.instructions_to_libroutine(
+        lr_name,
+        MapApplyInstruction(
+            content=instruction_groups[template],
+            environments=environments,
+        ),
+        my_library,
+        assignments,
+        routine_container=F90RoutineContainer,
+    )
+    libroutines[lr_name] = libroutine
+
+libroutine_multiply = my_builder.instructions_to_libroutine(
     "multiply",
-    multiply_instructions,
+    InstructionGroup(
+        [RoutineCallInstruction(lr) for lr in libroutines.values()],
+    ),
     my_library,
     assignments,
     routine_container=F90RoutineContainer,
@@ -1136,3 +1375,5 @@ my_library.build_all()
 
 for indent, line in my_library.get_codelines():
     print(indent * "  " + line)
+
+sys.exit()

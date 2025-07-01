@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 04/06/2025, 17:00
-# Version:     0.0.1192
+# Last Update: 01/07/2025, 13:49
+# Version:     0.0.1220
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -121,7 +121,9 @@ class InstructionVariable(_Chainable):
         if input_config is None:
             input_config = type(self)._default_config
         output_config = input_config
-        super().__init__(input_config=input_config, output_config=output_config)
+        super().__init__(
+            input_config=input_config, output_config=output_config
+        )
         self._offsets = []
         if _pure_copy:
             self._offsets = list(offsets)
@@ -208,10 +210,14 @@ class InstructionVariable(_Chainable):
 
     def progress(self, *offsets):
         """append an extra offset"""
+        # print("progress called with offsets", offsets)
         for offset in offsets:
             if not isinstance(offset, InstructionVariableOffset):
                 offset = self._auto_convert(offset)
+            # print("types:", type(self), type(offset))
+            # print("configs:", self.input_config, self.output_config)
             if not _Chainable.is_compatible(self, offset):
+                # print("here's the problem:", offset, self)
                 raise ValueError("Incompatible offsets cannot be combined")
             self._offsets.append(offset)
             self.output_config = offset.output_config
@@ -267,7 +273,9 @@ class InstructionVariableOffset(_Chainable):
     """
 
     def __init__(self, value, input_config=None, output_config=None):
-        super().__init__(input_config=input_config, output_config=output_config)
+        super().__init__(
+            input_config=input_config, output_config=output_config
+        )
         self._value = value
         # self._fixed_value = None
 
@@ -280,6 +288,7 @@ class InstructionVariableOffset(_Chainable):
     @staticmethod
     def auto_convert(potential_offset, handle="AUTO", config=None):
         """automatically convert the offset using the identifier handle"""
+        # print("auto_convert was called")
         if isinstance(potential_offset, InstructionVariableOffset):
             return potential_offset
         match handle.upper().strip():

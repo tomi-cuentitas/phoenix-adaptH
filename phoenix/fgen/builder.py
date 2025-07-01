@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 24/06/2025, 14:58
-# Version:     0.0.1312
+# Last Update: 01/07/2025, 14:51
+# Version:     0.0.1336
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,6 +28,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
     Namespace,
     LibRoutineMultiFrame,
+    ExternalRoutine,
 )
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 from phoenix.toolbox.logger import done, success, info, warn, error, debug
@@ -41,6 +42,7 @@ from phoenix.fgen.instruction import (
     ContentInstruction,
     VariationInstruction,
     LeafInstruction,
+    RoutineCallInstruction,
     LinkVariableEnvironmentInstruction,
     OffsetEnvironmentInstruction,
 )
@@ -53,6 +55,7 @@ from phoenix.fgen.codecontainer import (
     CommentLine,
     DefinitionContainer,
     RoutineContainer,
+    RoutineCallContainer,
     AssignmentLine,
     # ObserveCaptureContainer,
 )
@@ -183,8 +186,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _excl_instr_classes: Set[type] = set()
 
     _comment_cls = CommentLine
-    # _routine_cls = RoutineContainer
     _assignment_class = AssignmentLine
+    _routinecall_class = RoutineCallContainer
+    _extroutine_class = ExternalRoutine
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -435,6 +439,12 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     #     """set the routine generator"""
     #     cls._routine_cls = routine_gen
 
+    @classmethod
+    @log.wrap_call
+    def set_routinecall_class(cls, routinecall_gen):
+        """set the routine generator"""
+        cls._routinecall_class = routinecall_gen
+
     @log.wrap_call_gen
     def handle_basic_instruction(self, instruction, context, buildargs):
         """default handler for basic instruction"""
@@ -514,12 +524,22 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             **buildargs,
         )
 
+    @log.wrap_call_gen
+    def handle_call_instruction(self, instruction, context, buildargs):
+        """default handler for environment instruction"""
+        ext_routine = type(self)._extroutine_class(instruction.routine)
+        yield type(self)._routinecall_class(
+            ext_routine, context=context, **buildargs
+        )
+
     @log.wrap_call
     def extract_mapapply_data(self, instruction):
         """prepare the mapapply instruction by extracting the offset data from the environments"""
         offsetted_variables = {}
         offset_values = {}
         offset_variable_classes = {}
+        input_config = {}
+        output_config = {}
         num_env = len(list(instruction.environments))
         for environment in instruction.environments:
             for target_class, offset_object in environment.items():
@@ -535,19 +555,19 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         # has been mentioned in every environment
         for target_class, offset_object in offsetted_variables.items():
             offset_variable_classes[target_class] = None
-            input_config = None
-            output_config = None
+            input_config[target_class] = None
+            output_config[target_class] = None
             for num, offset in enumerate(offset_object):
                 if offset_variable_classes[target_class] is None:
                     offset_variable_classes[target_class] = type(offset)
-                    input_config = offset.input_config
-                    output_config = offset.output_config
+                    input_config[target_class] = offset.input_config
+                    output_config[target_class] = offset.output_config
                 else:
                     assert offset_variable_classes[target_class] == type(
                         offset
                     )
-                    assert input_config == offset.input_config
-                    assert output_config == offset.output_config
+                    assert input_config[target_class] == offset.input_config
+                    assert output_config[target_class] == offset.output_config
 
                 assert offset is not None
                 values = list(offset.evaluate())
@@ -560,6 +580,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             offset_variable_classes,
             offset_values,
             (input_config, output_config),
+            num_env,
         )
 
     @log.wrap_call
@@ -601,26 +622,27 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             offset_variable_classes,
             offset_values,
             (input_config, output_config),
+            num_env,
         ) = self.extract_mapapply_data(instruction)
-        num_env = len(offset_values)
-
         multi_frame_variable = LibRoutineMultiFrame(num_env)
         symbolic_environment = InstructionEnvironment()
 
         context.container.requires(multi_frame_variable)
 
-        print(
-            (
-                offset_variable_classes,
-                offset_values,
-                (input_config, output_config),
-            )
-        )
+        # print(
+        #     (
+        #         "This could be important",
+        #         offset_variable_classes,
+        #         offset_values,
+        #         "IO;",
+        #         (input_config, output_config),
+        #     )
+        # )
 
         for var_num, (target_class, values) in enumerate(
             offset_values.items()
         ):
-            print(var_num, (target_class, values))
+            # print(var_num, (target_class, values))
             var_char = chr(ord("a") + var_num)
             name = f"offs_{target_class.__name__}_{var_char}"
 
@@ -636,8 +658,8 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 offset_variable_classes[target_class](
                     SymbolicOffset(
                         local_choice,
-                        input_config=input_config,
-                        output_config=output_config,
+                        input_config=input_config[target_class],
+                        output_config=output_config[target_class],
                     )
                 ),
             )
@@ -652,7 +674,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 buildargs,
             )
 
-        print("from_mapapply:", symbolic_environment)
+        # print("from_mapapply:", symbolic_environment)
         yield from self.containers_from_instruction(
             instruction.content,
             context=context.inherit(environment=symbolic_environment),
@@ -707,6 +729,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             #
             # environments
             (EnvironmentInstruction, cls.handle_environment_instruction),
+            (RoutineCallInstruction, cls.handle_call_instruction),
         ]
         for instruction_class, handler in default_handler_mappings:
             cls.set_instruction_class_handler(instruction_class, handler)

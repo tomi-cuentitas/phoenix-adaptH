@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 24/06/2025, 16:51
-# Version:     0.0.3036
+# Last Update: 01/07/2025, 14:06
+# Version:     0.0.3052
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1427,6 +1427,21 @@ class RoutineRequestInstruction(ContentInstruction, ftype="subroutine"):
         copied_environment._inp_variables = tuple(self.inp_variables)
 
 
+class IsolateLoopInstruction(ContentInstruction, ftype="isolate"):
+    """
+    Isolate the content in its own loop environment
+    """
+
+    def __init__(
+        self,
+        routine,
+    ):
+        super().__init__(
+            routine=routine,
+            itype=self.ftype,
+        )
+
+
 ###############################################################################
 #
 # .oPYo.   .oPYo.  .oPYo.  .oPYo.  o   ooooo  o  .oPYo.
@@ -1439,6 +1454,28 @@ class RoutineRequestInstruction(ContentInstruction, ftype="subroutine"):
 # ::::::: :::::::: ::::::: ::::::: :: ::::::: :: :::::::
 # ::::::: :::::::: ::::::: ::::::: :: ::::::: :: :::::::
 ###############################################################################
+
+
+class RoutineCallInstruction(
+    LeafInstruction, ftype="call", defining_keys="routine"
+):
+    """
+    Base class for routine calls. Use Assignments to map variables to routine variables if required.
+    """
+
+    def __init__(
+        self,
+        routine,
+    ):
+        super().__init__(
+            routine=routine,
+            itype=self.ftype,
+        )
+        self._routine = routine
+
+    @property
+    def routine(self):
+        return self._routine
 
 
 ###############################################################################
@@ -1527,7 +1564,7 @@ class BiLinearOperationInstruction(
     ftype="bilinear",
     defining_keys=["tgt0", "src0", "src1", "alpha"],
 ):
-    """y[key_tgt0] = a * x[key_src] type instruction"""
+    """y[key_tgt0] = a * x1[key_src1] * x2[key_src2] type instruction"""
 
     def __init__(self, tgt0, src0, src1, alpha):
         assert isinstance(tgt0, InstructionVariable)

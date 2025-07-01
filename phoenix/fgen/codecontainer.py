@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 30/06/2025, 13:15
-# Version:     0.1.627
+# Last Update: 01/07/2025, 15:25
+# Version:     0.1.703
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -817,6 +817,12 @@ class MultiFrameContainer(EmbeddingContainer):
             size=None,
             local_variable_class=type(self).LOCAL_VARIABLE_CLASS,
         )
+        # print(
+        #     "ASD",
+        #     self._multiframe_variable.local,
+        #     self._multiframe_variable,
+        #     self._multiframe_variable.max_value,
+        # )
         return self
 
     def generate_head_containers(self):
@@ -1207,8 +1213,18 @@ class ImportContainer(CodeLine):
 
     def construct_code_lines(self, **_):
         """create the codelines required for the import"""
-        for routine in self._routines:
-            yield f":IMPORT: {routine.name} from {self._library.name}"
+        for routine in self.routines:
+            yield f":IMPORT: {routine.name} from {self.library.name}"
+
+    @property
+    def library(self):
+        """read-only access to library"""
+        return self._library
+
+    @property
+    def routines(self):
+        """read-only access to routines"""
+        yield from self._routines
 
 
 class RoutineCallContainer(CodeLine):
@@ -1230,17 +1246,27 @@ class RoutineCallContainer(CodeLine):
 
     def construct_code_lines(self, **_):
         # call name depends on import section
+        yield self.get_call_string()
+
+    def get_call_string(self):
+        """generate the call string"""
+        return (
+            f":CALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
+
+    def get_args_list(self):
+        """get the args list"""
         call_args = [
             call_arg.local
             if isinstance(call_arg, LibRoutineMultiFrame)
             else call_arg
             for call_arg in self._call_args
         ]
-        call_arg_names = [call_arg.as_argument() for call_arg in call_args]
-        call_string = f":CALL: {self._ext_routine.call_name}({', '.join(call_arg_names)})"
-        yield call_string
+        return [call_arg.as_argument() for call_arg in call_args]
 
     # generate the call using info from the ExternalRoutine variable
+    def get_call_name(self):
+        return self._ext_routine.call_name
 
 
 class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
@@ -1273,10 +1299,28 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
             captured_imports.append(to_be_imported)
 
         # add the import codelines to the body. tidy_imports does the grouping
-        for library, routines in self.tidy_imports(captured_imports):
-            self._grouped_imports.append((library, routines))
+        for library, routines in self.tidy_imports(captured_imports).items():
+            routine_selection = []
             for routine in routines:
-                routine.set_call_name(self.compose_call_name(routine, library))
+                if self.check_import_required(library, routine):
+                    routine_selection.append(routine)
+                    routine.set_call_name(
+                        self.compose_call_name(routine, library)
+                    )
+                else:
+                    routine.set_call_name(
+                        self.compose_call_name(routine, None)
+                    )
+            if routine_selection:
+                self._grouped_imports.append((library, routine_selection))
+        print("OUT OF COLLECTION", self._grouped_imports)
+
+    def check_import_required(self, library, routine):
+        """filter the imports whether they are required or not"""
+        print("compare", library, self.context.library)
+        if library == self.context.library:
+            return False
+        return True
 
     def generate_head_containers(self, **kwargs):
         for library, routines in self._grouped_imports:
@@ -1286,12 +1330,18 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
 
     def compose_call_name(self, routine, library):
         """compose the name of the call"""
+        if library is None:
+            return f"{routine.name}"
         return f"{library.name}.{routine.name}"
 
     def tidy_imports(self, list_of_imports):
         """tidy the imports, i.e. handle groups, repeats, ..."""
+        grouped = {}
         for this_import in list_of_imports:
-            yield this_import.library, [this_import]
+            if this_import.library not in grouped:
+                grouped[this_import.library] = set()
+            grouped[this_import.library].add(this_import)
+        return grouped
 
     def compatibility_check(self, _to_be_imported):
         """check if libroutine is compatible"""
@@ -1358,11 +1408,16 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     libroutines, imports, constants, ... that can be called
     """
 
-    def __init__(self, name, *, context, **buildargs):
+    def __init__(
+        self, name, *, context, import_line_class=ImportContainer, **buildargs
+    ):
         # print("library init")
-        self._imp_layer = ImportSectionContainer(context=context)
+        self._imp_layer = ImportSectionContainer(
+            context=context, import_line_class=import_line_class
+        )
         self._def_layer = DefinitionContainer(context=self._imp_layer.context)
         super().__init__(name, context=self._def_layer.context, **buildargs)
+        self._context._library = self
         self._def_layer.add_capture_trigger(LibRoutineConstant)
         self._imp_layer.add_capture_trigger(ExternalRoutine)
 

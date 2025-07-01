@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 24/06/2025, 15:26
-# Version:     0.1.89
+# Last Update: 01/07/2025, 15:27
+# Version:     0.1.93
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -198,14 +198,13 @@ class Library:
 
         self._library_container = None
         self._routine_containers = []
-
         # set this to make the library unique
 
         self.initialize_library_containers()
 
     def initialize_library_containers(self):
         """initialize the library container"""
-        context = Context(name=self.name)
+        context = Context(name=self.name, _library=self)
 
         self._library_container = type(self).LIBRARY_CONTAINER(
             self.name, context=context
@@ -258,7 +257,7 @@ class Library:
         container.build_all()
         arguments = list(container.get_argument_variables())
         # container.reset_all()
-        print(f"args of {container}:", arguments)
+        # print(f"args of {container}:", arguments)
         libroutine = type(self).LIBROUTINE_CLASS(
             name,
             library=self,
