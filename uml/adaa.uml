@@ -1,0 +1,57 @@
+@startuml
+
+class GenericADAA {
+- _BACKEND: CoeffBackend
+- _KEYMAP
+- _FIXED_SIZE
+- _DATATYPES
++ {abstract} identifier
++ {abstract} size
++ {abstract} data
++ unpack()
++ to_zeros()
++ copy()
++ free_memory()
++ reinit()
++ {static} allclose()
++ {static} basic_linop()
++ {static} set_keymap()
++ {static} fix_size()
++ {static} mul()
++ {static} div()
++ {static} add()
++ {static} sub()
++ {static} neg()
+}
+
+
+class ComplexArrayADAA {
+    + {abstract} real
+    + {abstract} imag
+    + {static} basic_linop()
+    + {static} from_numpy()
+    + to_numpy()
+}
+
+GenericADAA <|-- ComplexArrayADAA
+GenericADAA --> CoeffBackend : _BACKEND
+
+
+
+interface CoeffBackend {
+
+}
+
+
+
+CoeffBackend <|.. RawPyCoeffBackend
+CoeffBackend <|.. NumPyCoeffBackend
+CoeffBackend <|.. FortranCoeffBackend
+CoeffBackend <|.. CuPyCoeffBackend
+CoeffBackend <|.. OpenClCoeffBackend
+CoeffBackend <|.. PyCudaCoeffBackend
+
+
+ComplexArrayADAA -right-> GenericADAA
+
+@enduml

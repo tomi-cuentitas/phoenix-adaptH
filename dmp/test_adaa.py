@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 24/10/2024, 15:39
-# Version:     0.0.85
+# Last Update: 07/07/2025, 14:12
+# Version:     0.0.95
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,21 +14,23 @@
 """
 import numpy as np
 from phoenix.adaa_derived import (
-    RawPyADAA,
-    FortranADAA,
-    NumPyADAA,
-    CupyADAA,
-    OpenClADAA,
+    RawPyCA,
+    NumPyCA,
+    FortranCA,
+    CupyCA,
+    OpenClCA,
+    PyCudaCA,
 )
 
 print()
 
 for mainclass in [
-    RawPyADAA,
-    FortranADAA,
-    NumPyADAA,
-    CupyADAA,
-    # OpenClADAA,
+    RawPyCA,
+    NumPyCA,
+    FortranCA,
+    CupyCA,
+    # OpenClCA,
+    # PyCudaCA,
 ]:
     MyClass = mainclass.fix_size(3)
 
@@ -52,6 +54,6 @@ for mainclass in [
         ((foo + bar) * 10j - bar).to_numpy(),
     )
 
-    test = MyClass.ones()
-    print("  ones().real, ones().imag:", test.real, test.imag)
-    print()
+    # test = MyClass.ones()
+    # print("  ones().real, ones().imag:", test.real, test.imag)
+    # print()
