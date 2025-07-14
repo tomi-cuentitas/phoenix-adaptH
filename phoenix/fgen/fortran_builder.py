@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 01/07/2025, 15:29
-# Version:     0.0.1107
+# Last Update: 14/07/2025, 12:52
+# Version:     0.0.1121
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,6 +34,7 @@ from phoenix.fgen.codecontainer import (
     LibraryContainer,
     MultiFrameContainer,
     RoutineCallContainer,
+    KernelCallContainer,
     ImportSectionContainer,
     AssignmentLine,
     CodeContainer,
@@ -59,8 +60,7 @@ from phoenix.fgen.library import Library, LibRoutine
 from phoenix.fgen.instruction import (
     AffineOperationInstruction,
     BiLinearOperationInstruction,
-    IsolateLoopInstruction,
-    RoutineCallInstruction,
+    CallInstruction,
 )
 
 from phoenix.toolbox.logger import GLOBAL_LOGGER
@@ -196,6 +196,16 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
 
 
 class F90RoutineCallContainer(RoutineCallContainer):
+    """Plain Text version of a StatementLine"""
+
+    def get_call_string(self):
+        """generate the call string"""
+        return (
+            f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
+
+
+class F90KernelCallContainer(KernelCallContainer):
     """Plain Text version of a StatementLine"""
 
     def get_call_string(self):
@@ -657,6 +667,8 @@ F90RoutineContainer.set_comment_class(F90CommentLine)
 Fortran90Builder.set_comment_class(None)
 Fortran90Builder.set_comment_class(F90CommentLine)
 Fortran90Builder.set_routinecall_class(F90RoutineCallContainer)
+Fortran90Builder.set_kernelcall_class(F90KernelCallContainer)
+Fortran90Builder.set_mfcontainer_class(F90MultiFrameContainer)
 
 # Fortran90Builder.set_routine_class(F90RoutineContainer)
 # Fortran90Builder.set_routine_class(F90KernelContainer)
@@ -950,7 +962,7 @@ if __name__ == "__main__":
             # F90MultiFrameContainer,
             context=test_def_container.context,
         )
-        test_routine_call_container = RoutineCallContainer(
+        test_routine_call_container = KernelCallContainer(
             ext_routine, context=this_emb_routine_call_container.context
         )
         this_emb_routine_call_container.append(test_routine_call_container)
@@ -965,8 +977,6 @@ if __name__ == "__main__":
         if isinstance(container, RoutineContainer):
             print(container.name)
             print(list(container.get_argument_variables()))
-
-    # sys.exit()
 
     """
     class Library:
@@ -1056,6 +1066,8 @@ if __name__ == "__main__":
     #         context=context.inherit(environment=symbolic_environment),
     #         **buildargs,
     #     )
+
+# sys.exit()
 
 
 print("\n")
@@ -1150,8 +1162,8 @@ print(all_groups)
 print(len(all_groups))
 
 
-MAX_SIZE = 3
-NUM_SPINS = 8
+MAX_SIZE = 2
+NUM_SPINS = 5
 
 inner_keymaps_system = {}
 inner_keymaps_hamilt = {}
@@ -1357,14 +1369,14 @@ for num, (template, cases) in enumerate(multiply_cases.items()):
         ),
         my_library,
         assignments,
-        routine_container=F90RoutineContainer,
+        routine_container=F90KernelContainer,
     )
     libroutines[lr_name] = libroutine
 
 libroutine_multiply = my_builder.instructions_to_libroutine(
     "multiply",
     InstructionGroup(
-        [RoutineCallInstruction(lr) for lr in libroutines.values()],
+        [CallInstruction(lr) for lr in libroutines.values()],
     ),
     my_library,
     assignments,

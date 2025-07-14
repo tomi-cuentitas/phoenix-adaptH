@@ -70,7 +70,7 @@ NREPS = 100
 
 
 # offs = 0
-# plot "performance_fixedpoint.data" u 1:(column(2+offs)) w lp lw 2 title "fixed INT", "" u 1:(column(5+offs)) w lp lw 2 title "fixed ints", "" u 1:(column(8+offs)) w lp lw 2 title "float NumPy", "" u 1:(column(11+offs)) w lp lw 2 title "float Fortran"
+# plot "performance_fixedpoint_mars.data" u 1:(column(2+offs)) w lp lw 2 title "fixed INT", "" u 1:(column(5+offs)) w lp lw 2 title "fixed ints", "" u 1:(column(8+offs)) w lp lw 2 title "float NumPy", "" u 1:(column(11+offs)) w lp lw 2 title "float Fortran"
 
 # offs=0 : min
 # offs=1 : mean

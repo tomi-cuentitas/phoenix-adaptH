@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 01/07/2025, 14:51
-# Version:     0.0.1336
+# Last Update: 14/07/2025, 12:51
+# Version:     0.0.1367
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -38,11 +38,11 @@ from phoenix.fgen.instruction import (
     EnvironmentInstruction,
     MapApplyInstruction,
     InstructionGroup,
-    RoutineRequestInstruction,
+    # RoutineRequestInstruction,
     ContentInstruction,
     VariationInstruction,
     LeafInstruction,
-    RoutineCallInstruction,
+    CallInstruction,
     LinkVariableEnvironmentInstruction,
     OffsetEnvironmentInstruction,
 )
@@ -56,7 +56,10 @@ from phoenix.fgen.codecontainer import (
     DefinitionContainer,
     RoutineContainer,
     RoutineCallContainer,
+    KernelCallContainer,
     AssignmentLine,
+    MultiFrameContainer,
+    LoopCaptureContainer,
     # ObserveCaptureContainer,
 )
 
@@ -188,7 +191,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _comment_cls = CommentLine
     _assignment_class = AssignmentLine
     _routinecall_class = RoutineCallContainer
+    _kernelcall_class = KernelCallContainer
     _extroutine_class = ExternalRoutine
+    _mfcontainer_class = MultiFrameContainer
 
     def __init_subclass__(cls, **kwargs):
         super().__init_subclass__(**kwargs)
@@ -445,6 +450,18 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         """set the routine generator"""
         cls._routinecall_class = routinecall_gen
 
+    @classmethod
+    @log.wrap_call
+    def set_kernelcall_class(cls, kernelcall_gen):
+        """set the kernel generator"""
+        cls._kernelcall_class = kernelcall_gen
+
+    @classmethod
+    @log.wrap_call
+    def set_mfcontainer_class(cls, mfcontainer_gen):
+        """set the kernel generator"""
+        cls._mfcontainer_class = mfcontainer_gen
+
     @log.wrap_call_gen
     def handle_basic_instruction(self, instruction, context, buildargs):
         """default handler for basic instruction"""
@@ -490,11 +507,11 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             instruction, context=context, **buildargs
         )
 
-    @log.wrap_call_gen
-    def handle_routine_instruction(self, instruction, context, buildargs):
-        """default handler for routine instruction"""
-        return
-        yield
+    # @log.wrap_call_gen
+    # def handle_routine_instruction(self, instruction, context, buildargs):
+    #     """default handler for routine instruction"""
+    #     return
+    #     yield
 
     # @log.wrap_call_gen
     # def handle_mapapply_instruction(self, instruction, context, buildargs):
@@ -527,10 +544,38 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @log.wrap_call_gen
     def handle_call_instruction(self, instruction, context, buildargs):
         """default handler for environment instruction"""
+        if instruction.routine.is_kernel:
+            yield from self.handle_kernel_call_instruction(
+                instruction, context, buildargs
+            )
+        else:
+            yield from self.handle_routine_call_instruction(
+                instruction, context, buildargs
+            )
+
+    @log.wrap_call_gen
+    def handle_routine_call_instruction(self, instruction, context, buildargs):
+        """default handler for environment instruction"""
         ext_routine = type(self)._extroutine_class(instruction.routine)
         yield type(self)._routinecall_class(
             ext_routine, context=context, **buildargs
         )
+
+    @log.wrap_call_gen
+    def handle_kernel_call_instruction(self, instruction, context, buildargs):
+        """default handler for environment instruction"""
+        ext_routine = type(self)._extroutine_class(instruction.routine)
+        rep_layer = LoopCaptureContainer(
+            type(self)._mfcontainer_class, context=context, **buildargs
+        )
+
+        call_container = type(self)._kernelcall_class(
+            ext_routine,
+            context=rep_layer.context,
+            **buildargs,
+        )
+        rep_layer.append(call_container)
+        yield rep_layer
 
     @log.wrap_call
     def extract_mapapply_data(self, instruction):
@@ -583,6 +628,12 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             num_env,
         )
 
+    def create_loop_container(self, context, buildargs):
+        """default creator for a looped environment container"""
+        # create a loop container
+        # put the content inside the loop container
+        return MultiFrameContainer(context=context, **buildargs)
+
     @log.wrap_call
     def create_external_array(
         self,
@@ -593,7 +644,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         context,
         **kwargs,
     ):
-        """treat a range of numbers as an external array"""
+        """default createor for external arrays to treat a range of numbers in a table"""
 
         constant_class = kwargs.get("constant_class")
         local_class = kwargs.get("local_class")
@@ -723,13 +774,13 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             (LeafInstruction, cls.handle_leaf_instruction),
             #
             # content based
-            (RoutineRequestInstruction, cls.handle_routine_instruction),
+            # (RoutineRequestInstruction, cls.handle_routine_instruction),
             (MapApplyInstruction, cls.handle_mapapply_instruction),
             (VariationInstruction, cls.handle_variation_instruction),
             #
             # environments
             (EnvironmentInstruction, cls.handle_environment_instruction),
-            (RoutineCallInstruction, cls.handle_call_instruction),
+            (CallInstruction, cls.handle_call_instruction),
         ]
         for instruction_class, handler in default_handler_mappings:
             cls.set_instruction_class_handler(instruction_class, handler)
@@ -856,7 +907,7 @@ if __name__ == "__main__":
         @log.wrap_call
         def test_the_log(self, arg, **kwargs):
             """a good testing routine for the builder's log module"""
-            info("foobar was here")
+            info("this is info")
             debug(f"my argument is {arg}")
             debug(f"my kwarguments are {kwargs}")
             return "fooo"
@@ -866,7 +917,7 @@ if __name__ == "__main__":
         @log.wrap_call
         def test_the_log2(self, arg, **kwargs):
             """a bad testing routine for the builder's log module"""
-            info("foobar was here, too")
+            info("this is info, too")
             debug(f"my argument is {arg}")
             debug(f"my kwarguments are {kwargs}")
             debug("I will raise an exception now.")
@@ -900,7 +951,7 @@ if __name__ == "__main__":
     myoptimizer = TestOptimizer(foo="bazzz")
 
     success()
-    info("moin")
+    info("moin!")
 
 
 # a = {}

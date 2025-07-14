@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 01/07/2025, 14:06
-# Version:     0.0.3052
+# Last Update: 14/07/2025, 12:51
+# Version:     0.0.3068
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1385,61 +1385,62 @@ class BuildParameterInstruction(ContentInstruction, ftype="buildargs"):
 # ======================
 
 
-class RoutineRequestInstruction(ContentInstruction, ftype="subroutine"):
-    """
-    SubroutineGroup
+# class RoutineRequestInstruction(ContentInstruction, ftype="subroutine"):
+#     """
+#     SubroutineGroup
 
-    suggests (!) that upon implementation these instructions are grouped in a
-    subroutine
-    """
+#     suggests (!) that upon implementation these instructions are grouped in a
+#     subroutine
+#     """
 
-    def __init__(
-        self,
-        # inp_variables,
-        # out_variables,
-        operations,
-        itype=None,
-    ):
-        super().__init__(operations, itype=itype)
-        # self._inp_variables = inp_variables  # TODO: not sure yet.
-        # self._out_variables = out_variables  # Might come out naturally.
-        # name might be more relevant...
+#     def __init__(
+#         self,
+#         # inp_variables,
+#         # out_variables,
+#         operations,
+#         itype=None,
+#     ):
+#         super().__init__(operations, itype=itype)
+#         # self._inp_variables = inp_variables  # TODO: not sure yet.
+#         # self._out_variables = out_variables  # Might come out naturally.
+#         # name might be more relevant...
 
-    # def contribute_to_dict(self):
-    #     return {
-    #         "inp_vars": self._inp_variables,
-    #         "out_vars": self._out_variables,
-    #     }
+#     # def contribute_to_dict(self):
+#     #     return {
+#     #         "inp_vars": self._inp_variables,
+#     #         "out_vars": self._out_variables,
+#     #     }
 
-    @property
-    def inp_variables(self):
-        """access read only attribute inp_variables"""
-        return tuple(self._inp_variables)
+#     @property
+#     def inp_variables(self):
+#         """access read only attribute inp_variables"""
+#         return tuple(self._inp_variables)
 
-    @property
-    def out_variables(self):
-        """access read only attribute out_variables"""
-        return tuple(self._out_variables)
+#     @property
+#     def out_variables(self):
+#         """access read only attribute out_variables"""
+#         return tuple(self._out_variables)
 
-    def __deepcopy__(self, memo=None):
-        copied_environment = super().__deepcopy__(memo=memo)
-        copied_environment._inp_variables = tuple(self.inp_variables)
-        copied_environment._inp_variables = tuple(self.inp_variables)
+#     def __deepcopy__(self, memo=None):
+#         copied_environment = super().__deepcopy__(memo=memo)
+#         copied_environment._inp_variables = tuple(self.inp_variables)
+#         copied_environment._inp_variables = tuple(self.inp_variables)
 
 
-class IsolateLoopInstruction(ContentInstruction, ftype="isolate"):
-    """
-    Isolate the content in its own loop environment
-    """
+# Don't feel like I want that to be on instruction level yet.
+# class LoopEnvironmentInstruction(ContentInstruction, ftype="loopenv"):
+#     """
+#     Isolate the content in its own loop environment
+#     """
 
-    def __init__(
-        self,
-        routine,
-    ):
-        super().__init__(
-            routine=routine,
-            itype=self.ftype,
-        )
+#     def __init__(
+#         self,
+#         routine,
+#     ):
+#         super().__init__(
+#             routine=routine,
+#             itype=self.ftype,
+#         )
 
 
 ###############################################################################
@@ -1456,9 +1457,7 @@ class IsolateLoopInstruction(ContentInstruction, ftype="isolate"):
 ###############################################################################
 
 
-class RoutineCallInstruction(
-    LeafInstruction, ftype="call", defining_keys="routine"
-):
+class CallInstruction(LeafInstruction, ftype="call", defining_keys="routine"):
     """
     Base class for routine calls. Use Assignments to map variables to routine variables if required.
     """
@@ -1476,6 +1475,28 @@ class RoutineCallInstruction(
     @property
     def routine(self):
         return self._routine
+
+
+# class KernelCallInstruction(
+#     LeafInstruction, ftype="call", defining_keys="routine"
+# ):
+#     """
+#     Base class for routine calls. Use Assignments to map variables to routine variables if required.
+#     """
+
+#     def __init__(
+#         self,
+#         routine,
+#     ):
+#         super().__init__(
+#             routine=routine,
+#             itype=self.ftype,
+#         )
+#         self._routine = routine
+
+#     @property
+#     def routine(self):
+#         return self._routine
 
 
 ###############################################################################

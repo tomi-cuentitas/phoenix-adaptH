@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 01/07/2025, 15:25
-# Version:     0.1.703
+# Last Update: 14/07/2025, 12:50
+# Version:     0.1.733
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1267,6 +1267,23 @@ class RoutineCallContainer(CodeLine):
     # generate the call using info from the ExternalRoutine variable
     def get_call_name(self):
         return self._ext_routine.call_name
+
+
+class KernelCallContainer(RoutineCallContainer):
+    """Call a routine or routine-like object"""
+
+    def __init__(
+        self,
+        external_kernel,
+        *,
+        context,
+        **buildargs,
+    ):
+        super().__init__(external_kernel, context=context, **buildargs)
+
+    def get_call_string(self):
+        """generate the call string"""
+        return f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
 
 
 class ImportSectionContainer(CaptureContainer, EmbeddingContainer):

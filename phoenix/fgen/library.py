@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 01/07/2025, 15:27
-# Version:     0.1.93
+# Last Update: 14/07/2025, 12:13
+# Version:     0.1.105
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -33,7 +33,8 @@ from typing import Type
 from phoenix.fgen.codecontainer import (
     LibraryContainer,
     GroupContainer,
-    # RoutineContainer,
+    RoutineContainer,
+    KernelContainer,
 )
 from phoenix.fgen.context import Context
 
@@ -101,6 +102,7 @@ class LibRoutine(LibraryContent):
         library=None,
         arguments=None,
         dependencies=None,
+        is_kernel=False,
     ):
         super().__init__(
             identifier, library=library, dependencies=dependencies
@@ -110,6 +112,7 @@ class LibRoutine(LibraryContent):
         self._arguments = arguments
         # self._container = container
         self._input_variables = []
+        self._is_kernel = is_kernel
 
     # @property
     # def container(self):
@@ -120,6 +123,11 @@ class LibRoutine(LibraryContent):
     def key(self):
         """read-only access to attribute identifier"""
         return self.create_key()
+
+    @property
+    def is_kernel(self):
+        """read-only access to attribute identifier"""
+        return self._is_kernel
 
     def get_meta(self):
         """return meta information on the library"""
@@ -255,6 +263,10 @@ class Library:
         """add a new libroutine from a container"""
         self.routine_containers.append(container)
         container.build_all()
+        if isinstance(container, KernelContainer):
+            is_kernel = True
+        else:
+            is_kernel = False
         arguments = list(container.get_argument_variables())
         # container.reset_all()
         # print(f"args of {container}:", arguments)
@@ -262,6 +274,7 @@ class Library:
             name,
             library=self,
             arguments=arguments,
+            is_kernel=is_kernel,
         )
         self.register_libroutine(libroutine)
         return libroutine
