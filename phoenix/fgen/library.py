@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 14/07/2025, 12:13
-# Version:     0.1.105
+# Last Update: 14/07/2025, 17:51
+# Version:     0.1.153
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -53,8 +53,17 @@ class LibraryContent:
             raise ValueError("LibRoutine must be associated with a library")
         self._library = library
         if dependencies is None:
-            dependencies = []
+            dependencies = set()
+        else:
+            dependencies = set(dependencies)
         self._dependencies = dependencies
+        if library is not None:
+            self._dependencies.add(library)
+
+    @property
+    def dependencies(self):
+        """read-only access to attribute library"""
+        yield from self._dependencies
 
     @property
     def library(self):
@@ -219,10 +228,6 @@ class Library:
         )
         # I separated the libroutines to be able to build them earlier.
         # This is relevant to have the MultiFrameVariables raised!
-        # self._routines_container = GroupContainer(
-        #     context=self._library_container.context
-        # )
-        # self._library_container.append(self._routines_container)
 
     def build_all(self):
         """build the library container"""
@@ -247,7 +252,7 @@ class Library:
         )
 
     def get_codelines_foot(self, indent=0):
-        yield from self._library_container.get_codelines_head(indent=indent)
+        yield from self._library_container.get_codelines_foot(indent=indent)
 
     @property
     def routine_containers(self):
@@ -282,6 +287,10 @@ class Library:
     def register_libroutine(self, libroutine):
         """add the libroutine to the known libroutines"""
         self._libcontent[libroutine.name] = libroutine
+        if (lib := libroutine.library) is not None:
+            self._dependencies.add(lib)
+        # for dep in libroutine.dependencies:
+        #     self._dependencies.add(dep)
 
     @property
     def fileending(self):
@@ -299,6 +308,24 @@ class Library:
     def content(self):
         """generator-access to libroutines and other content"""
         yield from self._libcontent.items()
+
+    @property
+    def dependencies(self):
+        """generator-access to libroutines and other dependencies"""
+        yield from self.get_dependencies(recursive=False)
+
+    def get_dependencies(self, recursive=False, _known=None):
+        """gather dependencies, optionally recursive"""
+        if _known is None:
+            _known = set()
+        for dependency in self._dependencies:
+            if dependency not in _known:
+                _known.add(dependency)
+                yield dependency
+                if recursive:
+                    yield from dependency.get_dependencies(
+                        recursive=True, _known=_known
+                    )
 
     # def append(self, libroutine, exception_existing=False):
     #     """append a routine to the library"""

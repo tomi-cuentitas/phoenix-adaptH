@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 14/07/2025, 12:50
-# Version:     0.1.733
+# Last Update: 14/07/2025, 17:37
+# Version:     0.1.753
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -26,7 +26,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineOutputVariable,
     LibRoutineInOutVariable,
     LibRoutineMultiFrame,
-    ExternalRoutine,
+    ExternalImport,
     LibRoutineConstant,
     UniqueString,
 )
@@ -149,7 +149,7 @@ class CodeContainer:
     """
 
     INDENT_BODY = False
-    comment_class = None
+    _comment_class = None
 
     def __init__(self, *, context, **_) -> None:
         # all content that may or may not be useful
@@ -373,14 +373,14 @@ class CodeContainer:
     @classmethod
     def set_comment_class(cls, comment_gen):
         """set the comment generator"""
-        cls.comment_class = comment_gen
+        cls._comment_class = comment_gen
 
     def comment_from_text(self, text, **buildargs):
         """generate one or multiple comment lines"""
-        if type(self).comment_class is not None:
+        if type(self)._comment_class is not None:
             for cline in text.split("\n"):
-                assert callable(type(self).comment_class)
-                yield type(self).comment_class(
+                assert callable(type(self)._comment_class)
+                yield type(self)._comment_class(
                     cline,
                     context=self.context,
                     **buildargs,
@@ -1230,11 +1230,12 @@ class ImportContainer(CodeLine):
 class RoutineCallContainer(CodeLine):
     """Call a routine or routine-like object"""
 
-    def __init__(self, external_routine, *, context, **buildargs):
+    def __init__(self, imported_routine, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
-        self._ext_routine = external_routine
+        self._imp_routine = imported_routine
+        # assert isinstance(imported_routine.imported, LibRoutine)
         self._call_args = []
-        for assignment in external_routine.get_argument_assignments():
+        for assignment in imported_routine.get_argument_assignments():
             source, key = assignment
             if isinstance(source, LibRoutineMultiFrame):
                 local = source.recreate(namespace=context.namespace)
@@ -1242,7 +1243,7 @@ class RoutineCallContainer(CodeLine):
             else:
                 local = self.request_assigned(source, key, autorequire=True)
             self._call_args.append(local)
-        self.requires(self._ext_routine)
+        self.requires(self._imp_routine)
 
     def construct_code_lines(self, **_):
         # call name depends on import section
@@ -1264,9 +1265,9 @@ class RoutineCallContainer(CodeLine):
         ]
         return [call_arg.as_argument() for call_arg in call_args]
 
-    # generate the call using info from the ExternalRoutine variable
+    # generate the call using info from the Imported variable
     def get_call_name(self):
-        return self._ext_routine.call_name
+        return self._imp_routine.call_name
 
 
 class KernelCallContainer(RoutineCallContainer):
@@ -1297,7 +1298,7 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
             import_line_class = type(self).DEFAULT_IMPORT_LINE_CLASS
         self._import_line_class = import_line_class
         self._grouped_imports = []
-        self.add_capture_trigger(ExternalRoutine)
+        self.add_capture_trigger(ExternalImport)
 
     def list_imports(self):
         """list the imports in the format (library, [routine1, routine2, ...])"""
@@ -1436,7 +1437,7 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
         super().__init__(name, context=self._def_layer.context, **buildargs)
         self._context._library = self
         self._def_layer.add_capture_trigger(LibRoutineConstant)
-        self._imp_layer.add_capture_trigger(ExternalRoutine)
+        self._imp_layer.add_capture_trigger(ExternalImport)
 
     def build(self, **kwargs):
         self._imp_layer.build(**kwargs)
@@ -1459,6 +1460,11 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
 
     def generate_foot_containers(self, **_):
         yield from self.codelines_from_text(f"END LIBRARY {self.name}")
+
+    @property
+    def captured_imports(self):
+        """access the captured external routines"""
+        yield from self._imp_layer.captured
 
 
 class HookContainer(CodeLine):

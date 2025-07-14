@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 14/07/2025, 12:52
-# Version:     0.0.1121
+# Last Update: 14/07/2025, 17:51
+# Version:     0.0.1132
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -49,7 +49,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineLocalVariable,
     LibRoutineConstant,
     LibRoutineMultiFrame,
-    ExternalRoutine,
+    ExternalImport,
 )
 
 from phoenix.fgen.instructionvar import SymbolicOffset
@@ -531,10 +531,11 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         otgt0 = list(tgt0.offsets)
         osrc0 = list(src0.offsets)
         osrc1 = list(src1.offsets)
-        yield F90CommentLine(f"tgt0={tgt0.name} @ {otgt0}", context=context)
-        yield F90CommentLine(f"src0={src0.name} @ {osrc0}", context=context)
-        yield F90CommentLine(f"src1={src1.name} @ {osrc1}", context=context)
-        yield F90CommentLine(f"alpha = {alpha}", context=context)
+
+        # yield F90CommentLine(f"tgt0={tgt0.name} @ {otgt0}", context=context)
+        # yield F90CommentLine(f"src0={src0.name} @ {osrc0}", context=context)
+        # yield F90CommentLine(f"src1={src1.name} @ {osrc1}", context=context)
+        # yield F90CommentLine(f"alpha = {alpha}", context=context)
         u_var_real = context.namespace.find_assignment(type(src0), "real")
         u_var_imag = context.namespace.find_assignment(type(src0), "imag")
         v_var_real = context.namespace.find_assignment(type(src1), "real")
@@ -663,7 +664,8 @@ Fortran90Builder.set_instruction_class_handler(
 )
 
 F90LibraryContainer.set_comment_class(F90CommentLine)
-F90RoutineContainer.set_comment_class(F90CommentLine)
+F90RoutineContainer.set_comment_class(None)
+F90KernelContainer.set_comment_class(None)
 Fortran90Builder.set_comment_class(None)
 Fortran90Builder.set_comment_class(F90CommentLine)
 Fortran90Builder.set_routinecall_class(F90RoutineCallContainer)
@@ -925,7 +927,7 @@ if __name__ == "__main__":
     print("-------------------------")
     print()
 
-    ext_routine = ExternalRoutine(my_library["foofoo_kernel"])
+    ext_routine = ExternalImport(my_library["foofoo_kernel"])
 
     test_context = Context()
     test_lib_container = LibraryContainer("example", context=test_context)
@@ -1387,5 +1389,7 @@ my_library.build_all()
 
 for indent, line in my_library.get_codelines():
     print(indent * "  " + line)
+
+print([lib.name for lib in my_library.get_dependencies(recursive=True)])
 
 sys.exit()

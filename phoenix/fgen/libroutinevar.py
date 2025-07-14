@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 01/07/2025, 13:23
-# Version:     0.0.827
+# Last Update: 14/07/2025, 17:27
+# Version:     0.0.829
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -477,7 +477,7 @@ class UniqueString(LibRoutineVariable):
         )
 
 
-class ExternalRoutine(LibRoutineVariable):
+class ExternalImport(LibRoutineVariable):
     """
     An import. Maybe part of the variable concept in a broader sense.
     When a routine, variable or macro is used that has to be imported,
@@ -487,15 +487,15 @@ class ExternalRoutine(LibRoutineVariable):
     _VAR_IDENTIFIER = "IMPORT"
     _CLASS_BASE = "imp"
 
-    def __init__(self, libroutine, *args, **kwargs):
+    def __init__(self, imported, *args, **kwargs):
         super().__init__(
             *args,
-            name=libroutine.name,
+            name=imported.name,
             **kwargs,
             status=LibRoutineVariable.STATUS_INPUT,
             enum_first=False,
         )
-        self._libroutine = libroutine
+        self._imported = imported
         self._call_name = None
 
     def set_call_name(self, name):
@@ -506,9 +506,9 @@ class ExternalRoutine(LibRoutineVariable):
     #     """yields the requirements used in the call"""
 
     @property
-    def libroutine(self):
+    def imported(self):
         """read-only access for libroutine"""
-        return self._libroutine
+        return self._imported
 
     @property
     def name(self):
@@ -518,12 +518,12 @@ class ExternalRoutine(LibRoutineVariable):
     @property
     def library(self):
         """read-only access for library"""
-        return self._libroutine.library
+        return self._imported.library
 
     # @property
     # def container(self):
     #     """read-only access for container"""
-    #     return self._libroutine.container
+    #     return self._imported.container
 
     @property
     def call_name(self):
@@ -534,9 +534,9 @@ class ExternalRoutine(LibRoutineVariable):
 
     def get_argument_assignments(self):
         """get the arguments and their assignments"""
-        yield from self.libroutine.get_argument_assignments()
-        # for variable in self.libroutine.get_arguments():
-        #     if isinstance(variable.assignment, LibRoutineMultiFrame):
+        yield from self.imported.get_argument_assignments()
+        # for variable in self.imported.get_arguments():
+        #     if isinstance(variable.assignment, importedMultiFrame):
         #         yield variable.assignment  # .recreate()
         #     else:
         #         yield variable.assignment

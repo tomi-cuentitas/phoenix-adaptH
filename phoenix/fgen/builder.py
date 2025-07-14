@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 14/07/2025, 12:51
-# Version:     0.0.1367
+# Last Update: 14/07/2025, 17:28
+# Version:     0.0.1370
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -28,7 +28,7 @@ from phoenix.fgen.libroutinevar import (
     LibRoutineVariable,
     Namespace,
     LibRoutineMultiFrame,
-    ExternalRoutine,
+    ExternalImport,
 )
 from phoenix.toolbox.logger import GLOBAL_LOGGER as log
 from phoenix.toolbox.logger import done, success, info, warn, error, debug
@@ -188,11 +188,11 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     _supp_instr_handler: Dict[type, Generator] = {}
     _excl_instr_classes: Set[type] = set()
 
-    _comment_cls = CommentLine
+    # _comment_cls = CommentLine
     _assignment_class = AssignmentLine
     _routinecall_class = RoutineCallContainer
     _kernelcall_class = KernelCallContainer
-    _extroutine_class = ExternalRoutine
+    _extimport_class = ExternalImport
     _mfcontainer_class = MultiFrameContainer
 
     def __init_subclass__(cls, **kwargs):
@@ -556,7 +556,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @log.wrap_call_gen
     def handle_routine_call_instruction(self, instruction, context, buildargs):
         """default handler for environment instruction"""
-        ext_routine = type(self)._extroutine_class(instruction.routine)
+        ext_routine = type(self)._extimport_class(instruction.routine)
         yield type(self)._routinecall_class(
             ext_routine, context=context, **buildargs
         )
@@ -564,7 +564,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @log.wrap_call_gen
     def handle_kernel_call_instruction(self, instruction, context, buildargs):
         """default handler for environment instruction"""
-        ext_routine = type(self)._extroutine_class(instruction.routine)
+        ext_routine = type(self)._extimport_class(instruction.routine)
         rep_layer = LoopCaptureContainer(
             type(self)._mfcontainer_class, context=context, **buildargs
         )
