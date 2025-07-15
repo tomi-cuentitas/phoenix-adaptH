@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 14/07/2025, 17:51
-# Version:     0.0.1132
+# Last Update: 15/07/2025, 17:41
+# Version:     0.0.1147
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -196,7 +196,7 @@ class F90Constant(F90LibRoutineVariable, LibRoutineConstant):
 
 
 class F90RoutineCallContainer(RoutineCallContainer):
-    """Plain Text version of a StatementLine"""
+    """F90 version of a RoutineCallContainer"""
 
     def get_call_string(self):
         """generate the call string"""
@@ -206,7 +206,7 @@ class F90RoutineCallContainer(RoutineCallContainer):
 
 
 class F90KernelCallContainer(KernelCallContainer):
-    """Plain Text version of a StatementLine"""
+    """F90 version of a KernelCallContainer"""
 
     def get_call_string(self):
         """generate the call string"""
@@ -220,11 +220,11 @@ class F90AssignmentLine(AssignmentLine):
 
 
 class F90CodeLine(CodeLine):
-    """Plain Text version of a StatementLine"""
+    """F90 version of CodeLine"""
 
 
 class F90CommentLine(CommentLine):
-    """Plain Text version of a CommentLine"""
+    """F90 version of CommentLine"""
 
     COMMENT_PREFIX = "! "
 
@@ -232,7 +232,7 @@ class F90CommentLine(CommentLine):
 
 
 class F90MultiFrameContainer(MultiFrameContainer):
-    """Plain Text version of a DefinitionContainer"""
+    """F90 version of MultiFrameContainer"""
 
     INDENT_BODY = True
     LOCAL_VARIABLE_CLASS = F90LocalVariable
@@ -250,14 +250,14 @@ class F90MultiFrameContainer(MultiFrameContainer):
             )
 
 
-class F90DefinitionContainer(DefinitionContainer):
-    """Plain Text version of a DefinitionContainer"""
+# class F90DefinitionContainer(DefinitionContainer):
+#     """F90 version of a DefinitionContainer"""
 
-    INDENT_BODY = False
+#     INDENT_BODY = False
 
 
 class F90RoutineContainer(RoutineContainer):
-    """Plain Text version of a RoutineDefinition"""
+    """F90 version of a RoutineContainer"""
 
     INDENT_BODY = True
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
@@ -276,7 +276,7 @@ class F90RoutineContainer(RoutineContainer):
 
 
 class F90KernelContainer(KernelContainer):
-    """Plain Text version of a RoutineDefinition"""
+    """F90 version of a KernelContainer"""
 
     INDENT_BODY = True
     INPUT_VARIABLE_CLASS = F90InputVariable
@@ -344,7 +344,7 @@ class F90ImportContainer(ImportContainer):
 
 
 class F90LibraryContainer(LibraryContainer):
-    """Plain Text version of a RoutineDefinition"""
+    """F90 version of a LibraryContainer"""
 
     INDENT_BODY = True
 
@@ -1194,7 +1194,7 @@ for indent, key, domain in system_keymap.tree():
 
 hamilton_keymap = KeyMap(name="hamiltonian")
 
-keymap_larmor = KeyMap(name=f"ham_larmor")
+keymap_larmor = KeyMap(name=f"ham_single")
 keymap_larmor.entry("x")
 keymap_larmor.entry("y")
 keymap_larmor.entry("z")
@@ -1214,6 +1214,9 @@ for number_tuple in all_spin_groups(2, NUM_SPINS):
     hamilton_keymap.link(number_tuple, keymap_dipdip)
 
 for indent, key, domain in system_keymap.tree():
+    print(indent * "  " + f"{str(key):<10} : {domain}")
+
+for indent, key, domain in hamilton_keymap.tree():
     print(indent * "  " + f"{str(key):<10} : {domain}")
 
 
@@ -1371,7 +1374,8 @@ for num, (template, cases) in enumerate(multiply_cases.items()):
         ),
         my_library,
         assignments,
-        routine_container=F90KernelContainer,
+        # routine_container=F90KernelContainer,
+        routine_container=F90RoutineContainer,
     )
     libroutines[lr_name] = libroutine
 
@@ -1390,6 +1394,6 @@ my_library.build_all()
 for indent, line in my_library.get_codelines():
     print(indent * "  " + line)
 
-print([lib.name for lib in my_library.get_dependencies(recursive=True)])
+# print([lib.name for lib in my_library.get_dependencies(recursive=True)])
 
 sys.exit()

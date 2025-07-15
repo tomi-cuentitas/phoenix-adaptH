@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 14/07/2025, 17:37
-# Version:     0.1.753
+# Last Update: 15/07/2025, 17:48
+# Version:     0.1.791
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -309,9 +309,9 @@ class CodeContainer:
             for content in self._container_body:
                 yield from content.get_codelines(indent=indent, **kwargs)
 
-    def get_indent(self, level: int = 0) -> str:
-        """convert the indent level into a string"""
-        return "  " * level
+    # def get_indent(self, level: int = 0) -> str:
+    #     """convert the indent level into a string"""
+    #     return "  " * level
 
     def append(self, content):
         """append to the container body"""
@@ -519,12 +519,8 @@ class PreambleContainer(CodeContainer):
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
-        yield from self.get_codelines_preamble(
-            indent + int(self.INDENT_BODY), **kwargs
-        )
-        yield from super().get_codelines(
-            indent + int(self.INDENT_BODY), **kwargs
-        )
+        yield from self.get_codelines_preamble(indent, **kwargs)
+        yield from super().get_codelines(indent, **kwargs)
 
     def generate_preamble_containers(self):
         """build the preamble section of the container"""
@@ -809,13 +805,14 @@ class MultiFrameContainer(EmbeddingContainer):
         self._max_value = variable.max_value
         self._min_value = variable.min_value
         if local_variable_class is None:
-            local_variable_class = self._loop_variable
+            local_variable_class = type(self).LOCAL_VARIABLE_CLASS
+            # self._loop_variable
         self._multiframe_variable.create_local_representative(
             context=self.context,
             prefix=prefix,
             dtype="i32",
             size=None,
-            local_variable_class=type(self).LOCAL_VARIABLE_CLASS,
+            local_variable_class=local_variable_class,
         )
         # print(
         #     "ASD",
@@ -1388,7 +1385,7 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
                 self._mfcontainer_class(context=self.context, **kwargs)
                 .set_multiframe_variable(
                     variable,
-                    prefix=f"cnt_l{self.level}_n{num}",
+                    prefix=f"cntr_l{self.level}_n{num}",
                 )
                 .build_all()
             )
@@ -1640,3 +1637,17 @@ if __name__ == "__main__":
 # maybe yield codelines as a call from the routine container.
 # Or maybe even better, the libroutine object, so it does not depend so much on the container.
 # Required metadata for the call has to be stored in the container, which we want anyways.
+
+
+# Some thoughts on simplifying codecontainers:
+# When the builder takes most of the work, I need to find a way to communicate information
+# inside the container that is decided during generation.
+# E.g., the arguments for a def line of a routine require, that the arguments are known.
+# They are raised during generation and caputured by a container hidden in the routinecontainer
+# If the builder does that, the def line is its own object and the information is fed
+# after the capture is evaluated. This however will require, that MFs are handled when
+# captured, and not during build, so the role of the MFs is clear (whether they appear)
+# in the def line as arguments in the first place. This however gives problems in a
+# CUDA kernel build, where the last 3 MFs are mapped to the kernel call parameters and
+# therefore treated individually in the kernel build. This kind of interaction is
+# complicated to maintain if an external builder instance manages the container.

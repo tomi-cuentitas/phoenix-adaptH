@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 14/07/2025, 17:28
-# Version:     0.0.1370
+# Last Update: 15/07/2025, 17:17
+# Version:     0.0.1373
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -61,6 +61,7 @@ from phoenix.fgen.codecontainer import (
     MultiFrameContainer,
     LoopCaptureContainer,
     # ObserveCaptureContainer,
+    EmptyLines,
 )
 
 # MODULE_LOGGER = Logger(None, loglevel=2, stdout=True)
@@ -724,6 +725,8 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 context,
                 buildargs,
             )
+
+        yield EmptyLines(context=context, **buildargs)
 
         # print("from_mapapply:", symbolic_environment)
         yield from self.containers_from_instruction(
