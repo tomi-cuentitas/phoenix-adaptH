@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 15/07/2025, 17:19
-# Version:     0.1.156
+# Last Update: 16/07/2025, 18:03
+# Version:     0.1.168
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -113,9 +113,7 @@ class LibRoutine(LibraryContent):
         dependencies=None,
         is_kernel=False,
     ):
-        super().__init__(
-            identifier, library=library, dependencies=dependencies
-        )
+        super().__init__(identifier, library=library, dependencies=dependencies)
         if arguments is None:
             arguments = []
         self._arguments = arguments
@@ -236,7 +234,7 @@ class Library:
     def get_codelines(self, indent=0):
         """get the codelines from the inner container object"""
         yield from self.get_codelines_head(indent=indent)
-        yield from self.get_codelines_prmb(indent=indent)
+        yield from self.get_codelines_prmb(indent=indent + 1)
         yield indent, ""
         for container in self.routine_containers:
             yield from container.get_codelines(indent=indent + 1)
@@ -247,9 +245,7 @@ class Library:
         yield from self._library_container.get_codelines_head(indent=indent)
 
     def get_codelines_prmb(self, indent=0):
-        yield from self._library_container.get_codelines_preamble(
-            indent=indent
-        )
+        yield from self._library_container.get_codelines_preamble(indent=indent)
 
     def get_codelines_foot(self, indent=0):
         yield from self._library_container.get_codelines_foot(indent=indent)
@@ -314,11 +310,14 @@ class Library:
         """generator-access to libroutines and other dependencies"""
         yield from self.get_dependencies(recursive=False)
 
-    def get_dependencies(self, recursive=False, _known=None):
+    def get_dependencies(self, recursive=False, _known=None, ignore_self=True):
         """gather dependencies, optionally recursive"""
         if _known is None:
             _known = set()
         for dependency in self._dependencies:
+            if ignore_self:
+                if dependency == self:
+                    continue
             if dependency not in _known:
                 _known.add(dependency)
                 yield dependency
@@ -348,11 +347,20 @@ class Library:
         # finally:
         self._status["ready"] = True
 
+    def _to_file(self):
+        with open(self.filename, "w") as file:
+            for indent, line in self.get_codelines():
+                file.write(indent * type(self).INDENTSTR + line + "\n")
+
     def create(self):
         """create the library, i.e. write to file(s)"""
         # create dependencies,
+        for dep in self.dependencies:
+            if not dep.created:
+                dep.create()
         # then create self.
-        # finally:
+        self._to_file()
+        # finally change the status to created=True
         self._status["created"] = True
 
     def get_meta(self, key=None):
@@ -360,3 +368,23 @@ class Library:
         if key is None:
             return dict(self._meta)
         return self._meta.get(key)
+
+    @property
+    def created(self):
+        """retrieve the created status from the status dictionary"""
+        return self._status["created"]
+
+    @property
+    def compiled(self):
+        """retrieve the compiled status from the status dictionary"""
+        return self._status["compiled"]
+
+    @property
+    def basepath(self):
+        """retrieve the basepath status from the status dictionary"""
+        return self._fileinfo["basepath"]
+
+    @property
+    def filename(self):
+        """retrieve the filename status from the status dictionary"""
+        return self._fileinfo["filename"]

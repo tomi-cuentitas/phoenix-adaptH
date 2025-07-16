@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 15/07/2025, 17:41
-# Version:     0.0.1147
+# Last Update: 16/07/2025, 17:43
+# Version:     0.0.1154
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -200,9 +200,7 @@ class F90RoutineCallContainer(RoutineCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return (
-            f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
-        )
+        return f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
 
 
 class F90KernelCallContainer(KernelCallContainer):
@@ -210,9 +208,7 @@ class F90KernelCallContainer(KernelCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return (
-            f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
-        )
+        return f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
 
 
 class F90AssignmentLine(AssignmentLine):
@@ -263,9 +259,7 @@ class F90RoutineContainer(RoutineContainer):
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -282,9 +276,7 @@ class F90KernelContainer(KernelContainer):
     INPUT_VARIABLE_CLASS = F90InputVariable
 
     def generate_head_containers(self, **_):
-        call_args = (
-            var.as_argument() for var in self.get_argument_variables()
-        )
+        call_args = (var.as_argument() for var in self.get_argument_variables())
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -336,7 +328,7 @@ class F90BilinearContainer(StatementLine):
 class F90ImportContainer(ImportContainer):
     """F90 version for imports"""
 
-    INDENT_BODY = True
+    INDENT_BODY = False
 
     def construct_code_lines(self, **_):
         """create the codelines required for the import"""
@@ -345,8 +337,6 @@ class F90ImportContainer(ImportContainer):
 
 class F90LibraryContainer(LibraryContainer):
     """F90 version of a LibraryContainer"""
-
-    INDENT_BODY = True
 
     def __init__(self, name, *, context, **buildargs):
         # print("f90lib init")
@@ -863,12 +853,8 @@ if __name__ == "__main__":
         print(indent * "  " + line)
 
     assignments = {
-        (VarInp, "real"): F90InputVariable(
-            VarInp, "real", "inp_real", size=99
-        ),
-        (VarInp, "imag"): F90InputVariable(
-            VarInp, "imag", "inp_imag", size=99
-        ),
+        (VarInp, "real"): F90InputVariable(VarInp, "real", "inp_real", size=99),
+        (VarInp, "imag"): F90InputVariable(VarInp, "imag", "inp_imag", size=99),
         (VarOut, "real"): F90OutputVariable(
             VarOut, "real", "out_real", size=99
         ),
@@ -1391,8 +1377,13 @@ libroutine_multiply = my_builder.instructions_to_libroutine(
 
 my_library.build_all()
 
-for indent, line in my_library.get_codelines():
-    print(indent * "  " + line)
+# with open("test.f90", "w") as file:
+#     for indent, line in my_library.get_codelines():
+#         print(indent * "  " + line)
+#         file.write(indent * "  " + line + "\n")
+
+my_library.create()
+print(my_library.filename)
 
 # print([lib.name for lib in my_library.get_dependencies(recursive=True)])
 

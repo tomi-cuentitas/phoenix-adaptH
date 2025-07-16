@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 15/07/2025, 17:48
-# Version:     0.1.791
+# Last Update: 16/07/2025, 18:04
+# Version:     0.1.861
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -356,7 +356,9 @@ class CodeContainer:
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
-        yield from self.get_codelines_body(indent, **kwargs)
+        yield from self.get_codelines_body(
+            indent + int(type(self).INDENT_BODY), **kwargs
+        )
 
     def reset_captured(self) -> None:
         """reset the provided requirements"""
@@ -450,9 +452,7 @@ class EmbeddingContainer(CodeContainer):
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
         yield from self.get_codelines_head(indent, **kwargs)
-        yield from super().get_codelines(
-            indent + int(self.INDENT_BODY), **kwargs
-        )
+        yield from super().get_codelines(indent, **kwargs)
         yield from self.get_codelines_foot(indent, **kwargs)
 
     def generate_head_containers(self):
@@ -503,6 +503,8 @@ class PreambleContainer(CodeContainer):
     preamble class inheritance reference must be before the EmbeddingContainer.
     """
 
+    INDENT_PRMB = True
+
     def __init__(self, *, context, **buildargs):
         super().__init__(context=context, **buildargs)
         self._container_prmb: list[CodeContainer] = []
@@ -519,7 +521,10 @@ class PreambleContainer(CodeContainer):
         self, indent: int = 0, **kwargs: Any
     ) -> Generator[str, None, None]:
         """get the codelines from the container"""
-        yield from self.get_codelines_preamble(indent, **kwargs)
+        # print(f"in preamble, indent={indent}", self._container_prmb)
+        yield from self.get_codelines_preamble(
+            indent + int(type(self).INDENT_PRMB), **kwargs
+        )
         yield from super().get_codelines(indent, **kwargs)
 
     def generate_preamble_containers(self):
@@ -542,6 +547,7 @@ class PreambleContainer(CodeContainer):
         for container in containers:
             if container is None:
                 continue
+            # print(f"append {container} to preamble of {self}")
             self._container_prmb.append(container)
 
     @property
@@ -888,9 +894,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -967,6 +971,7 @@ class DefinitionContainer(CaptureContainer, PreambleContainer):
     """
 
     INDENT_BODY = False
+    INDENT_PRMB = False
 
     def generate_preamble_containers(self, **kwargs):
         for variable in self.captured:
@@ -1083,8 +1088,7 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1178,8 +1182,7 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1281,7 +1284,9 @@ class KernelCallContainer(RoutineCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
+        return (
+            f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
 
 
 class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
@@ -1323,9 +1328,7 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
                         self.compose_call_name(routine, library)
                     )
                 else:
-                    routine.set_call_name(
-                        self.compose_call_name(routine, None)
-                    )
+                    routine.set_call_name(self.compose_call_name(routine, None))
             if routine_selection:
                 self._grouped_imports.append((library, routine_selection))
         print("OUT OF COLLECTION", self._grouped_imports)
@@ -1422,6 +1425,9 @@ class LibraryContainer(NamedContainer, EmbeddingContainer, PreambleContainer):
     The Library Container provides generalized routines to add
     libroutines, imports, constants, ... that can be called
     """
+
+    INDENT_BODY = True
+    INDENT_PRMB = True
 
     def __init__(
         self, name, *, context, import_line_class=ImportContainer, **buildargs
