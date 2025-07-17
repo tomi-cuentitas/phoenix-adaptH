@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 17/07/2025, 15:20
-# Version:     0.0.1167
+# Last Update: 17/07/2025, 18:48
+# Version:     0.0.1173
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -335,47 +335,34 @@ class F90ImportContainer(ImportContainer):
         yield f"use {self.library.name}"
 
 
-class F90LibraryContainer(LibraryContainer):
-    """F90 version of a LibraryContainer"""
+# class F90LibraryContainer(LibraryContainer):
+#     """F90 version of a LibraryContainer"""
 
-    def __init__(self, name, *, context, **buildargs):
-        # print("f90lib init")
-        super().__init__(
-            name,
-            context=context,
-            import_line_class=F90ImportContainer,
-            **buildargs,
-        )
+#     def __init__(self, name, *, context, **buildargs):
+#         # print("f90lib init")
+#         super().__init__(
+#             name,
+#             context=context,
+#             import_line_class=F90ImportContainer,
+#             **buildargs,
+#         )
 
-    def generate_head_containers(self, **_):
-        yield from self.codelines_from_text(f"MODULE {self.name}")
+#     def generate_head_containers(self, **_):
+#         yield from self.codelines_from_text(f"MODULE {self.name}")
 
-    def generate_foot_containers(self, **_):
-        yield from self.codelines_from_text(f"END MODULE {self.name}")
+#     def generate_foot_containers(self, **_):
+#         yield from self.codelines_from_text(f"END MODULE {self.name}")
 
-    def generate_preamble_containers(self, **_):
-        yield from self.codelines_from_text("")
-        yield self._imp_layer
-        yield from self.codelines_from_text("")
-        yield from self.codelines_from_text("IMPLICIT NONE")
-        yield from self.codelines_from_text("")
-        yield self._def_layer
-        yield from self.codelines_from_text("")
-        yield from self.codelines_from_text("CONTAINS")
-        yield from self.codelines_from_text("")
-
-
-class F90LibRoutine(LibRoutine):
-    """F90 Version of a LibRoutine, for consinstency"""
-
-
-class F90Library(Library):
-    """F90 Version of a Library"""
-
-    FILEENDING = "f90"
-    INDENTSTR = "  "
-    LIBRARY_CONTAINER = F90LibraryContainer
-    LIBROUTINE_CLASS = F90LibRoutine
+#     def generate_preamble_containers(self, **_):
+#         yield from self.codelines_from_text("")
+#         yield self._imp_layer
+#         yield from self.codelines_from_text("")
+#         yield from self.codelines_from_text("IMPLICIT NONE")
+#         yield from self.codelines_from_text("")
+#         yield self._def_layer
+#         yield from self.codelines_from_text("")
+#         yield from self.codelines_from_text("CONTAINS")
+#         yield from self.codelines_from_text("")
 
 
 ###############################################################################
@@ -397,7 +384,7 @@ my_fancy_var = F90InOutVariable(
 )
 
 
-class Fortran90Builder(Builder, identifier="FORTRAN90"):
+class F90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
     # ASSIGNMENT_CLASS = F90AssignmentLine
@@ -646,31 +633,80 @@ class Fortran90Builder(Builder, identifier="FORTRAN90"):
         )
 
 
-Fortran90Builder.set_instruction_class_handler(
-    AffineOperationInstruction, Fortran90Builder.handle_affine_instruction
+F90Builder.set_instruction_class_handler(
+    AffineOperationInstruction, F90Builder.handle_affine_instruction
 )
-Fortran90Builder.set_instruction_class_handler(
-    BiLinearOperationInstruction, Fortran90Builder.handle_bilinear_instruction
+F90Builder.set_instruction_class_handler(
+    BiLinearOperationInstruction, F90Builder.handle_bilinear_instruction
 )
 
-F90LibraryContainer.set_comment_class(F90CommentLine)
+# F90LibraryContainer.set_comment_class(F90CommentLine)
 F90RoutineContainer.set_comment_class(None)
 F90KernelContainer.set_comment_class(None)
-Fortran90Builder.set_comment_class(None)
-Fortran90Builder.set_comment_class(F90CommentLine)
-Fortran90Builder.set_routinecall_class(F90RoutineCallContainer)
-Fortran90Builder.set_kernelcall_class(F90KernelCallContainer)
-Fortran90Builder.set_mfcontainer_class(F90MultiFrameContainer)
+# F90Builder.set_comment_class(None)
+F90Builder.set_comment_class(F90CommentLine)
+F90Builder.set_routinecall_class(F90RoutineCallContainer)
+F90Builder.set_kernelcall_class(F90KernelCallContainer)
+F90Builder.set_mfcontainer_class(F90MultiFrameContainer)
 
-# Fortran90Builder.set_routine_class(F90RoutineContainer)
-# Fortran90Builder.set_routine_class(F90KernelContainer)
+# F90Builder.set_routine_class(F90RoutineContainer)
+# F90Builder.set_routine_class(F90KernelContainer)
+
+###############################################################################
+#
+# o       o  8
+# 8          8
+# 8      o8  8oPYo.  oPYo.  .oPYo.  oPYo.  o    o
+# 8       8  8    8  8  `'  .oooo8  8  `'  8    8
+# 8       8  8    8  8      8    8  8      8    8
+# 8oooo   8  `YooP'  8      `YooP8  8      `YooP8
+# ...... :.. :.....: ..:::: :.....: ..:::: :....8
+# :::::: ::: ::::::: :::::: ::::::: :::::: ::ooP'.
+# :::::: ::: ::::::: :::::: ::::::: :::::: ::...::
+###############################################################################
+
+
+class F90LibRoutine(LibRoutine):
+    """F90 Version of a LibRoutine, for consinstency"""
+
+
+class F90Library(Library):
+    """F90 Version of a Library"""
+
+    FILEENDING = "f90"
+    INDENTSTR = "  "
+    LIBROUTINE_CLASS = F90LibRoutine
+    IMPORTLINE_CLASS = F90ImportContainer
+    DEFAULT_BUILDER = F90Builder
+
+    def generate_head_containers(self, **_):
+        """make the enclosings for this container"""
+        yield from self.codelines_from_text(f"MODULE {self.name}")
+
+    def generate_foot_containers(self, **_):
+        yield from self.codelines_from_text(f"END MODULE {self.name}")
+
+    def generate_prmb_containers(self, **_):
+        yield from self.codelines_from_text("! IMPORTS")
+        yield self.import_capture
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("! CONSTANTS")
+        yield self.definition_capture
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("! ROUTINES")
+        yield from self.codelines_from_text("")
+
+    def generate_clsg_containers(self, **_):
+        return
+        yield
+
 
 from phoenix.fgen.builder import Context
 import sys
 from phoenix.fgen.instruction import GenericInstruction, InstructionGroup
 
 
-my_builder = Fortran90Builder("foobian")
+my_builder = F90Builder("foobian")
 
 test_chain = BuildChain(my_builder)
 
@@ -1383,7 +1419,8 @@ my_library.build()
 #         print(indent * "  " + line)
 #         file.write(indent * "  " + line + "\n")
 
-my_library.create()
+
+# my_library.create_files()
 print(my_library.filename)
 
 # print([lib.name for lib in my_library.get_dependencies(recursive=True)])

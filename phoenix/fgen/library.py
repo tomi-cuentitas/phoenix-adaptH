@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 17/07/2025, 15:21
-# Version:     0.1.294
+# Last Update: 17/07/2025, 18:56
+# Version:     0.1.390
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -418,7 +418,7 @@ class Library:
     INDENTSTR = "  "
 
     # also allow global libraries such as omp, cuda intrinsics, ...
-    LIBTYPE = "LOC"
+    # LIBTYPE = "LOC"
 
     LIBROUTINE_CLASS = LibRoutine
     IMPORTLINE_CLASS = ImportContainer
@@ -430,14 +430,14 @@ class Library:
         self._fileinfo = {
             "basepath": ".",
             "filename": f"{self.name}.{self.fileending}",
+            "docname": f"{self.name}_doc.txt",
         }
         self._meta = {
             "library_name": f"{self.name}",
         }
-        self._status = {
-            "created": False,
-            "compiled": False,
-        }
+        self._status = {}
+        self.reset_status()
+
         # other libraries that are required for this library
         self._dependencies = set()
         self._libcontent = {}
@@ -446,16 +446,18 @@ class Library:
 
         self._rout_containers = []
 
-        self._saf_layer = CaptureContainer(context=self._context)
-        self._imp_layer = ImportSectionContainer(
-            context=self._saf_layer.context,
+        self._saf_capture = CaptureContainer(context=self._context)
+        self._imp_capture = ImportSectionContainer(
+            context=self._saf_capture.context,
             import_line_class=type(self).IMPORTLINE_CLASS,
         )
-        self._def_layer = DefinitionContainer(context=self._imp_layer.context)
+        self._def_capture = DefinitionContainer(
+            context=self._imp_capture.context
+        )
 
-        self._saf_layer.add_capture_trigger(lambda x: True)
-        self._imp_layer.add_capture_trigger(ExternalImport)
-        self._def_layer.add_capture_trigger(LibRoutineConstant)
+        self._saf_capture.add_capture_trigger(lambda x: True)
+        self._imp_capture.add_capture_trigger(ExternalImport)
+        self._def_capture.add_capture_trigger(LibRoutineConstant)
 
     def codelines_from_text(self, text: str, context=None) -> CodeContainer:
         """generate a plain codeline from text"""
@@ -477,16 +479,19 @@ class Library:
 
     @property
     def safety_capture(self):
-        return self._def_capture
+        return self._saf_capture
 
     @property
     def context(self):
-        return self._def_layer._context
+        return self.definition_capture._context
 
-    def build(self, **kwargs):
-        self._def_layer.build(**kwargs)
-        self._saf_layer.build(**kwargs)
-        self._imp_layer.build(**kwargs)
+    def prepare_sections(self, **kwargs):
+        """build the sections"""
+        self.definition_capture.build(**kwargs)
+        self.import_capture.build(**kwargs)
+        self.safety_capture.build(**kwargs)
+        assert self.check()
+        return self
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""
@@ -497,10 +502,10 @@ class Library:
 
     def generate_prmb_containers(self, **_):
         yield from self.codelines_from_text("# IMPORTS")
-        yield self._imp_layer
+        yield self.import_capture
         yield from self.codelines_from_text("")
         yield from self.codelines_from_text("# CONSTANTS")
-        yield self._def_layer
+        yield self.definition_capture
         yield from self.codelines_from_text("")
         yield from self.codelines_from_text("# ROUTINES")
         yield from self.codelines_from_text("")
@@ -561,7 +566,7 @@ class Library:
             raise ValueError("No container class provided")
 
         if builder is None:
-            builder = type(self).DEFAULT_BUILDER
+            builder = type(self).DEFAULT_BUILDER(f"default:lib{name}")
 
         routine_container = builder.instruction_to_routine_container(
             name,
@@ -599,6 +604,12 @@ class Library:
         self._libcontent[libroutine.name] = libroutine
         if (lib := libroutine.library) is not None:
             self._dependencies.add(lib)
+
+    def check(self):
+        lost = list(self.safety_capture.captured)
+        if lost:
+            raise RuntimeError(f"safety capture caught variables: {lost}")
+        return True
 
     @property
     def fileending(self):
@@ -651,29 +662,133 @@ class Library:
     def __getitem__(self, key):
         return self._libcontent.get(key)
 
-    def compile(self):
-        """compile the library"""
-        if not self._status["created"]:
-            self.create()
-        # compile dependencies, then compile self.
-        # finally:
-        self._status["ready"] = True
+    def reset_status(self):
+        self._status["built"] = False
+        self._status["compiled"] = False
+        self._status["written"] = False
+        self._status["prepared"] = False
 
-    def _to_file(self):
+    def perform_compilation(self, makefile):
+        return
+
+    def write_all_files(self):
+        self.write_code()
+        self.write_docs()
+
+    def write_code(self):
         with open(self.filename, "w") as file:
             for indent, line in self.get_codelines():
                 file.write(indent * type(self).INDENTSTR + line + "\n")
 
-    def create(self):
-        """create the library, i.e. write to file(s)"""
-        # create dependencies,
+    def write_docs(self):
+        with open(self.docname, "w") as file:
+            for routine_name, libroutine in self.content:
+                args_str = ", ".join(
+                    (
+                        f"{arg.dtype}{f'({arg.size})' if arg.size is not None else ''} {arg.name}"
+                        for arg in libroutine.get_arguments()
+                    )
+                )
+                file.write(f"provides {routine_name}({args_str})\n")
+
+    def prepare(self, force=False):
+        """
+        prepare the library object, especially its sections
+        """
+        # make sure library is built
+        if self._status["prepared"] and (not force):
+            return
+        self._status["built"] = False
+        self._status["compiled"] = False
+        self._status["written"] = False
+        self._status["prepared"] = False
+
+        try:
+            self.prepare_sections()
+        except Exception as exc:
+            return False, exc
+
+        self._status["prepared"] = True
+        return True, None
+
+    def write(self, force=False):
+        if self._status["written"] and (not force):
+            return
+        self._status["built"] = False
+        self._status["compiled"] = False
+        self._status["written"] = False
+        if not self._status["prepared"]:
+            raise ValueError("cannot write unprepared library")
+
+        try:
+            self.write_all_files()
+        except Exception as exc:
+            return False, exc
+
+        self._status["written"] = True
+        return True, None
+
+    def compile(self, makefile=None, force=False):
+        """compile the library"""
+        if self._status["compiled"] and (not force):
+            return
+        self._status["built"] = False
+        self._status["compiled"] = False
+        if not self._status["written"]:
+            raise ValueError("cannot compile when library is not written")
+
+        try:
+            self.perform_compilation(makefile)
+        except Exception as exc:
+            return False, exc
+
+        self._status["compiled"] = True
+        return True, None
+
+    def build(self, makefile=None, force=False):
+        """build the actual library objects, i.e. write to file(s), and compile.
+        Wait, fileS?
+        The source file is rather obvious, however, header files might be required
+        and it could be useful to output a documentatory summary.
+        """
+        # do I have to do that??
+        if self._status["built"] and (not force):
+            return
+        # first, make sure all dependencies are created as well
         for dep in self.dependencies:
             if not dep.created:
-                dep.create()
-        # then create self.
-        self._to_file()
-        # finally change the status to created=True
-        self._status["created"] = True
+                dep.build()
+        # launch the built chain:
+
+        # make sure library is prepared
+        success, exc = self.prepare(force=force)
+        if not success:
+            raise RuntimeError(
+                "Error during prep phase in build:", str(exc)
+            ) from exc
+
+        # write all relevant files
+        success, exc = self.write(force=force)
+        if not success:
+            raise RuntimeError(
+                "Error during write phase in build:", str(exc)
+            ) from exc
+
+        # launch the compilation
+        success, exc = self.compile(force=force, makefile=makefile)
+        if not success:
+            raise RuntimeError(
+                "Error during compile phase in build:", str(exc)
+            ) from exc
+
+    def construct_makefile_targets(self):
+        """
+        create the targets for this library, that can be attached to a makefile.
+        If any dependencies are involved, the associated targets will be yielded here as well so
+        that one can pipe that into a makefile directly.
+        """
+        return
+        yield
 
     def get_meta(self, key=None):
         """return meta information on the library"""
@@ -681,22 +796,37 @@ class Library:
             return dict(self._meta)
         return self._meta.get(key)
 
-    @property
-    def created(self):
-        """retrieve the created status from the status dictionary"""
-        return self._status["created"]
+    # @property
+    # def built(self):
+    #     """retrieve the created status from the status dictionary"""
+    #     return self._status["built"]
 
-    @property
-    def compiled(self):
-        """retrieve the compiled status from the status dictionary"""
-        return self._status["compiled"]
+    # @property
+    # def compiled(self):
+    #     """retrieve the compiled status from the status dictionary"""
+    #     return self._status["compiled"]
+
+    # @property
+    # def written(self):
+    #     """retrieve the written status from the status dictionary"""
+    #     return self._status["written"]
+
+    # @property
+    # def prepared(self):
+    #     """retrieve the prepared status from the status dictionary"""
+    #     return self._status["prepared"]
 
     @property
     def basepath(self):
-        """retrieve the basepath status from the status dictionary"""
+        """retrieve the basepath value from the fileinfo dictionary"""
         return self._fileinfo["basepath"]
 
     @property
     def filename(self):
-        """retrieve the filename status from the status dictionary"""
+        """retrieve the filename value from the fileinfo dictionary"""
         return self._fileinfo["filename"]
+
+    @property
+    def docname(self):
+        """retrieve the docname value from the fileinfo dictionary"""
+        return self._fileinfo["docname"]
