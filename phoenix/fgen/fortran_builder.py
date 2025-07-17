@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 16/07/2025, 17:43
-# Version:     0.0.1154
+# Last Update: 17/07/2025, 15:20
+# Version:     0.0.1167
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -829,28 +829,28 @@ if __name__ == "__main__":
         F90OutputVariable(VarOut, "imag", "output_imag", size=999),
     )
 
-    lib_container = F90LibraryContainer("test_library23", context=ctxt)
+    # lib_container = F90LibraryContainer("test_library23", context=ctxt)
 
-    # lib_container.add_capture_trigger(lambda x: True)
+    # # lib_container.add_capture_trigger(lambda x: True)
 
-    # container_tree = a.create_routine_container(
-    #     "foo", largegroup, context=lib_container.context
+    # # container_tree = a.create_routine_container(
+    # #     "foo", largegroup, context=lib_container.context
+    # # )
+
+    # container_tree = my_builder.create_routine_container(
+    #     # container_tree = my_builder.build(
+    #     "foohoo",
+    #     largegroup,
+    #     context=lib_container.context,
+    #     # container_class=F90KernelContainer,
+    #     container_class=F90RoutineContainer,
     # )
 
-    container_tree = my_builder.create_routine_container(
-        # container_tree = my_builder.build(
-        "foohoo",
-        largegroup,
-        context=lib_container.context,
-        # routine_container=F90KernelContainer,
-        routine_container=F90RoutineContainer,
-    )
+    # lib_container.append(container_tree)
+    # lib_container.build_all()
 
-    lib_container.append(container_tree)
-    lib_container.build_all()
-
-    for indent, line in lib_container.get_codelines():
-        print(indent * "  " + line)
+    # for indent, line in lib_container.get_codelines():
+    #     print(indent * "  " + line)
 
     assignments = {
         (VarInp, "real"): F90InputVariable(VarInp, "real", "inp_real", size=99),
@@ -863,37 +863,37 @@ if __name__ == "__main__":
         ),
     }
 
-    libroutine1 = my_builder.instructions_to_libroutine(
+    libroutine1 = my_library.libroutine_from_instruction(
         "foofoo",
         largegroup,
-        my_library,
-        assignments,
-        routine_container=F90RoutineContainer,
+        assignments=assignments,
+        builder=my_builder,
+        container_class=F90RoutineContainer,
     )
 
-    libroutine2 = my_builder.instructions_to_libroutine(
+    libroutine2 = my_library.libroutine_from_instruction(
         "foofoo",
         largegroup,
-        my_library,
-        assignments,
-        routine_container=F90RoutineContainer,
+        assignments=assignments,
+        builder=my_builder,
+        container_class=F90RoutineContainer,
     )
 
-    libroutine3 = my_builder.instructions_to_libroutine(
+    libroutine3 = my_library.libroutine_from_instruction(
         "foofoo_kernel",
         largegroup,
-        my_library,
-        assignments,
-        routine_container=F90KernelContainer,
-        # routine_container=F90RoutineContainer,
+        assignments=assignments,
+        builder=my_builder,
+        container_class=F90KernelContainer,
+        # container_class=F90RoutineContainer,
     )
 
     print(libroutine1.name)
     print(libroutine2.name)
 
-    print(my_library._library_container)
+    # print(my_library._library_container)
 
-    my_library.build_all()
+    my_library.build()
 
     for indent, line in my_library.get_codelines():
         print(indent * "  " + line)
@@ -961,7 +961,7 @@ if __name__ == "__main__":
     for indent, line in test_lib_container.get_codelines():
         print(indent * "  " + line)
 
-    for container in my_library._routine_containers:
+    for container in my_library.routine_containers:
         if isinstance(container, RoutineContainer):
             print(container.name)
             print(list(container.get_argument_variables()))
@@ -1352,30 +1352,31 @@ for num, (template, cases) in enumerate(multiply_cases.items()):
         )
 
     lr_name = f"multiply_{num:03d}"
-    libroutine = my_builder.instructions_to_libroutine(
+
+    libroutine = my_library.libroutine_from_instruction(
         lr_name,
         MapApplyInstruction(
             content=instruction_groups[template],
             environments=environments,
         ),
-        my_library,
-        assignments,
-        # routine_container=F90KernelContainer,
-        routine_container=F90RoutineContainer,
+        builder=my_builder,
+        assignments=assignments,
+        # container_class=F90KernelContainer,
+        container_class=F90RoutineContainer,
     )
     libroutines[lr_name] = libroutine
 
-libroutine_multiply = my_builder.instructions_to_libroutine(
+libroutine_multiply = my_library.libroutine_from_instruction(
     "multiply",
     InstructionGroup(
         [CallInstruction(lr) for lr in libroutines.values()],
     ),
-    my_library,
-    assignments,
-    routine_container=F90RoutineContainer,
+    builder=my_builder,
+    assignments=assignments,
+    container_class=F90RoutineContainer,
 )
 
-my_library.build_all()
+my_library.build()
 
 # with open("test.f90", "w") as file:
 #     for indent, line in my_library.get_codelines():

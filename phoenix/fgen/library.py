@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 16/07/2025, 18:03
-# Version:     0.1.168
+# Last Update: 17/07/2025, 15:21
+# Version:     0.1.294
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,10 +35,21 @@ from phoenix.fgen.codecontainer import (
     GroupContainer,
     RoutineContainer,
     KernelContainer,
+    DefinitionContainer,
+    ImportSectionContainer,
+    ImportContainer,
+    CaptureContainer,
+    CodeContainer,
+    CodeLine,
 )
 from phoenix.fgen.context import Context
+from phoenix.fgen.builder import Builder
 
-from phoenix.fgen.libroutinevar import LibRoutineMultiFrame
+from phoenix.fgen.libroutinevar import (
+    LibRoutineMultiFrame,
+    ExternalImport,
+    LibRoutineConstant,
+)
 
 
 class LibraryContent:
@@ -112,14 +123,18 @@ class LibRoutine(LibraryContent):
         arguments=None,
         dependencies=None,
         is_kernel=False,
+        container=None,
     ):
-        super().__init__(identifier, library=library, dependencies=dependencies)
+        super().__init__(
+            identifier, library=library, dependencies=dependencies
+        )
         if arguments is None:
             arguments = []
         self._arguments = arguments
         # self._container = container
-        self._input_variables = []
+        # self._input_variables = []
         self._is_kernel = is_kernel
+        self._container = container
 
     # @property
     # def container(self):
@@ -178,7 +193,7 @@ class LibRoutine(LibraryContent):
         return self._identifier
 
 
-class Library:
+class LibraryOld:
     """
     Library class description.
 
@@ -219,8 +234,8 @@ class Library:
 
     def initialize_library_containers(self):
         """initialize the library container"""
+        # this is the root context
         context = Context(name=self.name, _library=self)
-
         self._library_container = type(self).LIBRARY_CONTAINER(
             self.name, context=context
         )
@@ -245,7 +260,9 @@ class Library:
         yield from self._library_container.get_codelines_head(indent=indent)
 
     def get_codelines_prmb(self, indent=0):
-        yield from self._library_container.get_codelines_preamble(indent=indent)
+        yield from self._library_container.get_codelines_preamble(
+            indent=indent
+        )
 
     def get_codelines_foot(self, indent=0):
         yield from self._library_container.get_codelines_foot(indent=indent)
@@ -287,6 +304,301 @@ class Library:
             self._dependencies.add(lib)
         # for dep in libroutine.dependencies:
         #     self._dependencies.add(dep)
+
+    @property
+    def fileending(self):
+        """file type ending"""
+        return self.FILEENDING
+
+    @property
+    def name(self):
+        """read-only access to property name"""
+        if self._build_hash is None:
+            return self._libname
+        return self._libname + f"_{self._build_hash}"
+
+    @property
+    def content(self):
+        """generator-access to libroutines and other content"""
+        yield from self._libcontent.items()
+
+    @property
+    def dependencies(self):
+        """generator-access to libroutines and other dependencies"""
+        yield from self.get_dependencies(recursive=False)
+
+    def get_dependencies(self, recursive=False, _known=None, ignore_self=True):
+        """gather dependencies, optionally recursive"""
+        if _known is None:
+            _known = set()
+        for dependency in self._dependencies:
+            if ignore_self:
+                if dependency == self:
+                    continue
+            if dependency not in _known:
+                _known.add(dependency)
+                yield dependency
+                if recursive:
+                    yield from dependency.get_dependencies(
+                        recursive=True, _known=_known
+                    )
+
+    # def append(self, libroutine, exception_existing=False):
+    #     """append a routine to the library"""
+    #     if libroutine.key in self._libcontent:
+    #         if exception_existing:
+    #             raise KeyError(
+    #                 f"Routine '{libroutine.name}' already exists in library"
+    #             )
+    #         return
+    #     self.register_libroutine(libroutine)
+
+    def __getitem__(self, key):
+        return self._libcontent.get(key)
+
+    def compile(self):
+        """compile the library"""
+        if not self._status["created"]:
+            self.create()
+        # compile dependencies, then compile self.
+        # finally:
+        self._status["ready"] = True
+
+    def _to_file(self):
+        with open(self.filename, "w") as file:
+            for indent, line in self.get_codelines():
+                file.write(indent * type(self).INDENTSTR + line + "\n")
+
+    def create(self):
+        """create the library, i.e. write to file(s)"""
+        # create dependencies,
+        for dep in self.dependencies:
+            if not dep.created:
+                dep.create()
+        # then create self.
+        self._to_file()
+        # finally change the status to created=True
+        self._status["created"] = True
+
+    def get_meta(self, key=None):
+        """return meta information on the library"""
+        if key is None:
+            return dict(self._meta)
+        return self._meta.get(key)
+
+    @property
+    def created(self):
+        """retrieve the created status from the status dictionary"""
+        return self._status["created"]
+
+    @property
+    def compiled(self):
+        """retrieve the compiled status from the status dictionary"""
+        return self._status["compiled"]
+
+    @property
+    def basepath(self):
+        """retrieve the basepath status from the status dictionary"""
+        return self._fileinfo["basepath"]
+
+    @property
+    def filename(self):
+        """retrieve the filename status from the status dictionary"""
+        return self._fileinfo["filename"]
+
+
+class Library:
+    """
+    Library class description.
+
+    Used to create, manage, adapt and compile libraries.
+    """
+
+    FILEENDING = "txt"
+    INDENTSTR = "  "
+
+    # also allow global libraries such as omp, cuda intrinsics, ...
+    LIBTYPE = "LOC"
+
+    LIBROUTINE_CLASS = LibRoutine
+    IMPORTLINE_CLASS = ImportContainer
+    DEFAULT_BUILDER = Builder
+
+    def __init__(self, libname, build_hash=None):
+        self._build_hash = build_hash
+        self._libname = libname
+        self._fileinfo = {
+            "basepath": ".",
+            "filename": f"{self.name}.{self.fileending}",
+        }
+        self._meta = {
+            "library_name": f"{self.name}",
+        }
+        self._status = {
+            "created": False,
+            "compiled": False,
+        }
+        # other libraries that are required for this library
+        self._dependencies = set()
+        self._libcontent = {}
+
+        self._context = Context(name=self.name, _library=self)
+
+        self._rout_containers = []
+
+        self._saf_layer = CaptureContainer(context=self._context)
+        self._imp_layer = ImportSectionContainer(
+            context=self._saf_layer.context,
+            import_line_class=type(self).IMPORTLINE_CLASS,
+        )
+        self._def_layer = DefinitionContainer(context=self._imp_layer.context)
+
+        self._saf_layer.add_capture_trigger(lambda x: True)
+        self._imp_layer.add_capture_trigger(ExternalImport)
+        self._def_layer.add_capture_trigger(LibRoutineConstant)
+
+    def codelines_from_text(self, text: str, context=None) -> CodeContainer:
+        """generate a plain codeline from text"""
+        if context is None:
+            context = self.context
+        for line in text.split("\n"):
+            yield CodeLine(
+                line=text,
+                context=context,
+            )
+
+    @property
+    def import_capture(self):
+        return self._imp_capture
+
+    @property
+    def definition_capture(self):
+        return self._def_capture
+
+    @property
+    def safety_capture(self):
+        return self._def_capture
+
+    @property
+    def context(self):
+        return self._def_layer._context
+
+    def build(self, **kwargs):
+        self._def_layer.build(**kwargs)
+        self._saf_layer.build(**kwargs)
+        self._imp_layer.build(**kwargs)
+
+    def generate_head_containers(self, **_):
+        """make the enclosings for this container"""
+        yield from self.codelines_from_text(f"LIBRARY {self.name}")
+
+    def generate_foot_containers(self, **_):
+        yield from self.codelines_from_text(f"END LIBRARY {self.name}")
+
+    def generate_prmb_containers(self, **_):
+        yield from self.codelines_from_text("# IMPORTS")
+        yield self._imp_layer
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("# CONSTANTS")
+        yield self._def_layer
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("# ROUTINES")
+        yield from self.codelines_from_text("")
+
+    def generate_clsg_containers(self, **_):
+        return
+        yield
+
+    def get_codelines(self, indent=0):
+        """get the codelines from the inner container object"""
+        yield from self.get_codelines_head(indent=indent)
+        yield from self.get_codelines_prmb(indent=indent + 1)
+        yield indent, ""
+        for routine_container in self.routine_containers:
+            yield from routine_container.get_codelines(indent=indent + 1)
+            yield indent, ""
+        yield from self.get_codelines_clsg(indent=indent + 1)
+        yield from self.get_codelines_foot(indent=indent)
+
+    def get_codelines_head(self, indent=0):
+        for container in self.generate_head_containers():
+            yield from container.get_codelines(indent=indent)
+
+    def get_codelines_foot(self, indent=0):
+        for container in self.generate_foot_containers():
+            yield from container.get_codelines(indent=indent)
+
+    def get_codelines_prmb(self, indent=0):
+        for container in self.generate_prmb_containers():
+            yield from container.get_codelines(indent=indent)
+
+    def get_codelines_clsg(self, indent=0):
+        for container in self.generate_clsg_containers():
+            yield from container.get_codelines(indent=indent)
+
+    @property
+    def routine_containers(self):
+        """access the container where to put new stuff"""
+        return self._rout_containers
+
+    def create_assignments(self, variables):
+        """create the assignments"""
+        assignments = {}
+        # TODO!
+        return assignments
+
+    def libroutine_from_instruction(
+        self,
+        name,
+        instruction,
+        builder=None,
+        assignments=None,
+        container_class=None,
+        **buildargs,
+    ):
+        """add a new libroutine from a container"""
+        if container_class is None:
+            raise ValueError("No container class provided")
+
+        if builder is None:
+            builder = type(self).DEFAULT_BUILDER
+
+        routine_container = builder.instruction_to_routine_container(
+            name,
+            instruction,
+            context=self.context,
+            assignments=assignments,
+            container_class=container_class,
+            **buildargs,
+        )
+
+        routine_container.build_all()
+        self.routine_containers.append(routine_container)
+
+        libroutine = self.create_libroutine_entry(
+            name=name,
+            arguments=list(routine_container.get_argument_variables()),
+            is_kernel=isinstance(routine_container, KernelContainer),
+            container=routine_container,
+        )
+        return libroutine
+
+    def create_libroutine_entry(self, name, arguments, is_kernel, container):
+        libroutine = LibRoutine(
+            name,
+            library=self,
+            arguments=arguments,
+            is_kernel=is_kernel,
+            container=container,
+        )
+        self.append_libroutine(libroutine)
+        return libroutine
+
+    def append_libroutine(self, libroutine):
+        """add the libroutine to the known libroutines"""
+        self._libcontent[libroutine.name] = libroutine
+        if (lib := libroutine.library) is not None:
+            self._dependencies.add(lib)
 
     @property
     def fileending(self):

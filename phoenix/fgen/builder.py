@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 15/07/2025, 17:17
-# Version:     0.0.1373
+# Last Update: 17/07/2025, 15:19
+# Version:     0.0.1390
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -17,7 +17,7 @@
 from typing import Dict, Set, List, Any, Generator
 from phoenix.fgen.instructionvar import InstructionEnvironment
 
-from phoenix.fgen.library import Library
+# from phoenix.fgen.library import Library
 
 # from phoenix.fgen.libroutine import LibRoutine
 
@@ -373,77 +373,35 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         # to implement that lazy as well.
 
     @log.wrap_call
-    def instructions_to_libroutine(
+    def instruction_to_routine_container(
         self,
         name,
-        instructions,
-        library,
+        instruction,
+        context,
         assignments,
-        routine_container=None,
+        container_class=None,
         **buildargs,
     ):
         """generate a libroutine in a library from instructions"""
-        routine_context = library.context.inherit()
+        if container_class is None:
+            raise ValueError("No container class provided")
+
+        routine_context = context.inherit()
 
         for (source, key), assignment in assignments.items():
             routine_context.namespace.assign(source, key, assignment)
 
-        routine_container = self.create_routine_container(
-            name,
-            instructions,
-            context=routine_context,
-            routine_container=routine_container,
-            **buildargs,
+        routine_container = container_class(
+            name, context=routine_context, **buildargs
         )
-        libroutine = library.new_libroutine_from_container(
-            name=routine_container.name,
-            container=routine_container,
-        )
-        # self.append_to_makefile(libroutine)
 
-        return libroutine
-
-    @log.wrap_call
-    def create_routine_container(
-        self, name, instructions, context, routine_container=None, **buildargs
-    ):
-        """generate the container tree from instruction"""
-        if routine_container is None:
-            raise ValueError("routine_container is required")
-        routine_container = routine_container(
-            name, context=context, **buildargs
-        )
-        # self.prepare_routine_container(
-        #     name, context, routine_class=routine_class, **buildargs
-        # )
         for container in self.containers_from_instruction(
-            instructions,
+            instruction,
             context=routine_container.context,
             **buildargs,
         ):
             routine_container.append(container)
-        info("reached end of routine build")
-        return routine_container  # .reset_all().build_all()
-
-    # @log.wrap_call
-    # def prepare_routine_container(
-    #     self, name, context, routine_class=None, **buildargs
-    # ):
-    #     """
-    #     Create a routine body.
-    #     This method is only here that creating new builders
-    #     on other containers is more straight forward, i.e. this routine
-    #     can be called from another builder, but in here.
-    #     """
-    #     if routine_class is None:
-    #         return type(self)._routine_cls(name, context=context, **buildargs)
-    #     return routine_class(name, context=context, **buildargs)
-
-    # @classmethod
-    # @log.wrap_call
-    # def set_routine_class(cls, routine_gen):
-    #     """set the routine generator"""
-    #     cls._routine_cls = routine_gen
+        return routine_container
 
     @classmethod
     @log.wrap_call
