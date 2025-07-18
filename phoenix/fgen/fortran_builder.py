@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 17/07/2025, 18:48
-# Version:     0.0.1173
+# Last Update: 18/07/2025, 14:11
+# Version:     0.0.1181
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -200,7 +200,9 @@ class F90RoutineCallContainer(RoutineCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
+        return (
+            f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
 
 
 class F90KernelCallContainer(KernelCallContainer):
@@ -208,7 +210,9 @@ class F90KernelCallContainer(KernelCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
+        return (
+            f"call {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
 
 
 class F90AssignmentLine(AssignmentLine):
@@ -259,7 +263,9 @@ class F90RoutineContainer(RoutineContainer):
     DEFAULT_MULTIFRAME_CLASS = F90MultiFrameContainer
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Subroutine: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -276,7 +282,9 @@ class F90KernelContainer(KernelContainer):
     INPUT_VARIABLE_CLASS = F90InputVariable
 
     def generate_head_containers(self, **_):
-        call_args = (var.as_argument() for var in self.get_argument_variables())
+        call_args = (
+            var.as_argument() for var in self.get_argument_variables()
+        )
         yield F90CommentLine(f"Kernel: {self.name}", context=self.context)
         yield from self.codelines_from_text(
             f"SUBROUTINE {self.name}({', '.join(call_args)})"
@@ -315,7 +323,7 @@ class F90BilinearContainer(StatementLine):
                 "y_expression": y.at(*yo),
                 "u_expression": u.at(*uo),
                 "v_expression": v.at(*vo),
-                "a_value": a,
+                "a_value": str(a) if a > 0 else f"({a})",
             },
             context=context,
             **params,
@@ -527,6 +535,8 @@ class F90Builder(Builder, identifier="FORTRAN90"):
         a_real = alpha.real
         a_imag = alpha.imag
 
+        include_all = False
+
         hook = HookContainer(context=context)
 
         hook.requires(u_var_real)
@@ -536,87 +546,93 @@ class F90Builder(Builder, identifier="FORTRAN90"):
         hook.requires(y_var_real)
         hook.requires(y_var_imag)
 
-        yield F90BilinearContainer(
-            y_var_real,
-            y_var_offs,
-            a_real,
-            u_var_real,
-            u_var_offs,
-            v_var_real,
-            v_var_offs,
-            context=context,
-        )
-        yield F90BilinearContainer(
-            y_var_real,
-            y_var_offs,
-            -a_real,
-            u_var_imag,
-            u_var_offs,
-            v_var_imag,
-            v_var_offs,
-            context=context,
-        )
-        yield F90BilinearContainer(
-            y_var_real,
-            y_var_offs,
-            -a_imag,
-            u_var_imag,
-            u_var_offs,
-            v_var_real,
-            v_var_offs,
-            context=context,
-        )
-        yield F90BilinearContainer(
-            y_var_real,
-            y_var_offs,
-            -a_imag,
-            u_var_real,
-            u_var_offs,
-            v_var_imag,
-            v_var_offs,
-            context=context,
-        )
+        if abs(a_real) > 1e-12 or include_all:
+            yield F90BilinearContainer(
+                y_var_real,
+                y_var_offs,
+                a_real,
+                u_var_real,
+                u_var_offs,
+                v_var_real,
+                v_var_offs,
+                context=context,
+            )
+            yield F90BilinearContainer(
+                y_var_real,
+                y_var_offs,
+                -a_real,
+                u_var_imag,
+                u_var_offs,
+                v_var_imag,
+                v_var_offs,
+                context=context,
+            )
 
-        yield F90BilinearContainer(
-            y_var_imag,
-            y_var_offs,
-            a_real,
-            u_var_imag,
-            u_var_offs,
-            v_var_real,
-            v_var_offs,
-            context=context,
-        )
-        yield F90BilinearContainer(
-            y_var_imag,
-            y_var_offs,
-            a_real,
-            u_var_real,
-            u_var_offs,
-            v_var_imag,
-            v_var_offs,
-            context=context,
-        )
-        yield F90BilinearContainer(
-            y_var_imag,
-            y_var_offs,
-            a_imag,
-            u_var_real,
-            u_var_offs,
-            v_var_real,
-            v_var_offs,
-            context=context,
-        )
-        yield F90BilinearContainer(
-            y_var_imag,
-            y_var_offs,
-            -a_imag,
-            u_var_imag,
-            u_var_offs,
-            v_var_imag,
-            v_var_offs,
-            context=context,
-        )
+        if abs(a_imag) > 1e-12 or include_all:
+            yield F90BilinearContainer(
+                y_var_real,
+                y_var_offs,
+                -a_imag,
+                u_var_imag,
+                u_var_offs,
+                v_var_real,
+                v_var_offs,
+                context=context,
+            )
+            yield F90BilinearContainer(
+                y_var_real,
+                y_var_offs,
+                -a_imag,
+                u_var_real,
+                u_var_offs,
+                v_var_imag,
+                v_var_offs,
+                context=context,
+            )
+
+        if abs(a_real) > 1e-12 or include_all:
+            yield F90BilinearContainer(
+                y_var_imag,
+                y_var_offs,
+                a_real,
+                u_var_imag,
+                u_var_offs,
+                v_var_real,
+                v_var_offs,
+                context=context,
+            )
+            yield F90BilinearContainer(
+                y_var_imag,
+                y_var_offs,
+                a_real,
+                u_var_real,
+                u_var_offs,
+                v_var_imag,
+                v_var_offs,
+                context=context,
+            )
+
+        if abs(a_imag) > 1e-12 or include_all:
+            yield F90BilinearContainer(
+                y_var_imag,
+                y_var_offs,
+                a_imag,
+                u_var_real,
+                u_var_offs,
+                v_var_real,
+                v_var_offs,
+                context=context,
+            )
+            yield F90BilinearContainer(
+                y_var_imag,
+                y_var_offs,
+                -a_imag,
+                u_var_imag,
+                u_var_offs,
+                v_var_imag,
+                v_var_offs,
+                context=context,
+            )
         yield CodeLine("", context=context)
 
     def create_external_array(
@@ -889,8 +905,12 @@ if __name__ == "__main__":
     #     print(indent * "  " + line)
 
     assignments = {
-        (VarInp, "real"): F90InputVariable(VarInp, "real", "inp_real", size=99),
-        (VarInp, "imag"): F90InputVariable(VarInp, "imag", "inp_imag", size=99),
+        (VarInp, "real"): F90InputVariable(
+            VarInp, "real", "inp_real", size=99
+        ),
+        (VarInp, "imag"): F90InputVariable(
+            VarInp, "imag", "inp_imag", size=99
+        ),
         (VarOut, "real"): F90OutputVariable(
             VarOut, "real", "out_real", size=99
         ),

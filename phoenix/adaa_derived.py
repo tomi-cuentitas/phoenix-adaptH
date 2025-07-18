@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 07/07/2025, 15:41
-# Version:     0.0.59
+# Last Update: 14/07/2025, 16:54
+# Version:     0.0.60
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -23,6 +23,7 @@ from phoenix.coeffbackend_derived import PyCudaCoeffBackend
 
 
 # CA for complex array
+
 
 class RawPyCA(
     ComplexArrayADAA, backend=RawPyCoeffBackend(), identifier="RAWPYTHON"
@@ -73,15 +74,3 @@ print(a.data)
 print(a.real, type)
 print(a.identifier)
 print(a.unpack())
-
-
-{static} __init_subclass__()
-{static} allclose()
-{static} basic_linop()
-{static} set_keymap()
-{static} fix_size()
-{static} mul()
-{static} div()
-{static} add()
-{static} sub()
-{static} neg()
