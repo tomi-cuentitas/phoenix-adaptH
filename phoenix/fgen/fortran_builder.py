@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 18/07/2025, 14:11
-# Version:     0.0.1181
+# Last Update: 18/07/2025, 15:25
+# Version:     0.0.1191
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -706,8 +706,12 @@ class F90Library(Library):
         yield from self.codelines_from_text("! IMPORTS")
         yield self.import_capture
         yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("IMPLICIT NONE")
+        yield from self.codelines_from_text("")
         yield from self.codelines_from_text("! CONSTANTS")
         yield self.definition_capture
+        yield from self.codelines_from_text("")
+        yield from self.codelines_from_text("CONTAINS")
         yield from self.codelines_from_text("")
         yield from self.codelines_from_text("! ROUTINES")
         yield from self.codelines_from_text("")
@@ -1207,7 +1211,7 @@ print(len(all_groups))
 
 
 MAX_SIZE = 2
-NUM_SPINS = 5
+NUM_SPINS = 2
 
 inner_keymaps_system = {}
 inner_keymaps_hamilt = {}
@@ -1241,19 +1245,19 @@ keymap_larmor.entry("x")
 keymap_larmor.entry("y")
 keymap_larmor.entry("z")
 
-keymap_dipdip = KeyMap(name="dipdip")
-keymap_dipdip.entry("xx")
-keymap_dipdip.entry("yy")
-keymap_dipdip.entry("zz")
+# keymap_dipdip = KeyMap(name="dipdip")
+# keymap_dipdip.entry("xx")
+# keymap_dipdip.entry("yy")
+# keymap_dipdip.entry("zz")
 
 inner_keymaps_hamilt[1] = keymap_larmor
-inner_keymaps_hamilt[2] = keymap_dipdip
+inner_keymaps_hamilt[2] = None  # keymap_dipdip
 
 for number_tuple in all_spin_groups(1, NUM_SPINS):
     hamilton_keymap.link(number_tuple, keymap_larmor)
 
-for number_tuple in all_spin_groups(2, NUM_SPINS):
-    hamilton_keymap.link(number_tuple, keymap_dipdip)
+# for number_tuple in all_spin_groups(2, NUM_SPINS):
+#     hamilton_keymap.link(number_tuple, keymap_dipdip)
 
 for indent, key, domain in system_keymap.tree():
     print(indent * "  " + f"{str(key):<10} : {domain}")
