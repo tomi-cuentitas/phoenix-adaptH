@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 24/06/2025, 13:02
-# Version:     0.0.576
+# Last Update: 21/07/2025, 15:44
+# Version:     0.0.586
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -282,30 +282,38 @@ class MakeFileTarget:
         return
         yield
 
-    def summarize_contributions(self):
-        """generate the include dirs, lib dirs and the line for dependencies required"""
-        loclibs = []
-        extlibs = []
-        scfiles = []
-        obfiles = []
-        hdfiles = []
-        incdirs = []
-        libdirs = []
+    def filter_dependencies(self, *target_classes):
+        """get all dependencies from one or more target classes. Not recursive!"""
+        collect = set()
         for dep in self.dependencies:
-            loclibs.extend(list(dep.get_loclib_contributions()))
-            extlibs.extend(list(dep.get_extlib_contributions()))
-            scfiles.extend(list(dep.get_scfile_contributions()))
-            obfiles.extend(list(dep.get_obfile_contributions()))
-            hdfiles.extend(list(dep.get_hdfile_contributions()))
-            incdirs.extend(list(dep.get_incdir_contributions()))
-            libdirs.extend(list(dep.get_libdir_contributions()))
-        loclibs = no_duplicates(loclibs)
-        extlibs = no_duplicates(extlibs)
-        scfiles = no_duplicates(scfiles)
-        obfiles = no_duplicates(obfiles)
-        hdfiles = no_duplicates(hdfiles)
-        incdirs = no_duplicates(incdirs)
-        libdirs = no_duplicates(libdirs)
+            if isinstance(dep, target_classes):
+                collect.add(dep)
+        return collect
+
+    def get_dependency_summary(self):
+        """generate the include dirs, lib dirs and the line for dependencies required"""
+        loclibs = set()
+        extlibs = set()
+        scfiles = set()
+        obfiles = set()
+        hdfiles = set()
+        incdirs = set()
+        libdirs = set()
+        for dep in self.dependencies:
+            loclibs.update(set(dep.get_loclib_contributions()))
+            extlibs.update(set(dep.get_extlib_contributions()))
+            scfiles.update(set(dep.get_scfile_contributions()))
+            obfiles.update(set(dep.get_obfile_contributions()))
+            hdfiles.update(set(dep.get_hdfile_contributions()))
+            incdirs.update(set(dep.get_incdir_contributions()))
+            libdirs.update(set(dep.get_libdir_contributions()))
+        # loclibs = no_duplicates(loclibs)
+        # extlibs = no_duplicates(extlibs)
+        # scfiles = no_duplicates(scfiles)
+        # obfiles = no_duplicates(obfiles)
+        # hdfiles = no_duplicates(hdfiles)
+        # incdirs = no_duplicates(incdirs)
+        # libdirs = no_duplicates(libdirs)
         return {
             "loclibs": loclibs,
             "extlibs": extlibs,

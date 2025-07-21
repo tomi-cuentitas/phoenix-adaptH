@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   09/12/2024
-# Last Update: 24/06/2025, 15:19
-# Version:     0.0.450
+# Last Update: 21/07/2025, 15:44
+# Version:     0.0.452
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -58,7 +58,7 @@ class MFTF2Py(MFTSpecial):
     def generate(self, *flags):
         flags = list(flags)
         # TODO: some flags go to f2py, some go to f90comp
-        contribs = self.summarize_contributions()
+        contribs = self.get_dependency_summary()
         yield self.CLINE.format(
             compiler="f2py3",
             cflags=" ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
@@ -95,7 +95,7 @@ class MFTF90PreProcessor(MFTPreProcessor, MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        contribs = self.summarize_contributions()
+        contribs = self.get_dependency_summary()
         content = {
             "tgtname": self.target_name(),
             "compiler": self.COMPILER,
@@ -147,13 +147,13 @@ class MFTF90Object(MFTObject, MFTFortran):
         return f"{self.name}.o"
 
     def get_obfile_contributions(self):
-        yield self.include_as()
         for dep in self.dependencies:
             yield from dep.get_obfile_contributions()
+        yield self.include_as()
 
     def generate(self, *flags):
         flags = list(flags)
-        contribs = self.summarize_contributions()
+        contribs = self.get_dependency_summary()
         yield self.CLINE.format(
             compiler=self.COMPILER,
             cflags=" ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
@@ -201,7 +201,7 @@ class MFTF90SharedLibrary(MFTSharedLibrary, MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        contribs = self.summarize_contributions()
+        contribs = self.get_dependency_summary()
         yield self.CLINE.format(
             compiler=self.COMPILER,
             cflags=" ".join(no_duplicates(self.CFLAGS + GCFLAGS + flags)),
@@ -231,7 +231,7 @@ class MFTF90StaticLibrary(MFTStaticLibrary, MFTFortran):
 
     def generate(self, *flags):
         flags = list(flags)
-        contribs = self.summarize_contributions()
+        contribs = self.get_dependency_summary()
         if "loclibs" in contribs or "scfiles" in contribs:
             warnings.warn(
                 "only object files are considered for a static library"
