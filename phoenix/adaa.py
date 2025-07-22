@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 06/02/2025, 13:43
-# Version:     0.0.1977
+# Last Update: 22/07/2025, 14:18
+# Version:     0.0.1984
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -100,7 +100,8 @@ class GenericADAA:
                 if size != self._KEYMAP.size:
                     raise ValueError(f"Size is fixed by keymap {self._KEYMAP}")
         assert size is not None
-        self.reinit(size)
+        self._size = size
+        self.initialize()
         if init_zeros:
             self.to_zero()  # should probably be forced anyways.
 
@@ -123,10 +124,10 @@ class GenericADAA:
     @classmethod
     def datatypes(cls):
         """access the data type pattern"""
-        yield from [
+        yield from (
             (identifier, thisdtype)
             for identifier, thisdtype in cls._DATATYPES.items()
-        ]
+        )
 
     def unpack(self):
         """unpack the references and the size"""
@@ -163,23 +164,22 @@ class GenericADAA:
                 self._data[identifier], size=self.size, dtype=thisdtype
             )
 
-    def _reinit(self, size=None):
-        """Reinitialize the data for a certain size"""
-        if size is None:
-            size = self.size
-        else:
-            if size == self.size:
-                return
-        self.reinit(size)
+    # def _initialize(self, size=None):
+    #     """initializeialize the data for a certain size"""
+    #     if size is None:
+    #         size = self.size
+    #     else:
+    #         if size == self.size:
+    #             return
+    #     self.initialize(size)
 
-    def reinit(self, size):
-        """Actual reinitialization. Forced."""
+    def initialize(self):
+        """Forced data initialization."""
         self.free_memory()
         for identifier, thisdtype in self._DATATYPES.items():
             self._data[identifier] = self._BACKEND.coeff_new_array(
-                size, dtype=thisdtype
+                self.size, dtype=thisdtype
             )
-        self._size = size
 
     def __init_subclass__(
         cls, backend=None, identifier=None, keymap=None, size=None
@@ -249,7 +249,7 @@ class GenericADAA:
     def fix_size(cls, size: int) -> Type[GenericADAA]:
         """derive a fixed size type"""
         if cls._KEYMAP:
-            raise ValueError("Cannot derive fixed size when keymap is given.")
+            raise ValueError("Cannot fix size directly when keymap is given.")
         if cls._FIXED_SIZE:
             raise ValueError(f"Fixed size {cls._FIXED_SIZE} already set.")
 
@@ -353,10 +353,21 @@ class GenericADAA:
         return self.size > 0
 
     def __eq__(self, other):
-        return self.__class__.allclose(self, other)  # , rtol=1e-08, atol=1e-12)
+        return self.__class__.allclose(
+            self, other
+        )  # , rtol=1e-08, atol=1e-12)
 
     def __del__(self):
         self.free_memory()
+
+    @classmethod
+    def from_numpy(cls, arr: np.ndarray) -> ComplexArrayADAA:
+        """Import data from numpy array."""
+        raise NotImplementedError("Must be implemented in subclass")
+
+    def to_numpy(self) -> np.ndarray:
+        """Export data as numpy array."""
+        raise NotImplementedError("Must be implemented in subclass")
 
 
 ###############################################################################
@@ -418,8 +429,12 @@ class ComplexArrayADAA(
         else:
             sbr, sbi = (complex(sc_b).real, complex(sc_b).imag)
 
-        aux_r = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["real"])
-        aux_i = cls._BACKEND.coeff_new_array(size, dtype=cls._DATATYPES["imag"])
+        aux_r = cls._BACKEND.coeff_new_array(
+            size, dtype=cls._DATATYPES["real"]
+        )
+        aux_i = cls._BACKEND.coeff_new_array(
+            size, dtype=cls._DATATYPES["imag"]
+        )
 
         # sbr * ocr - sbi * oci -> aux_r
         cls._BACKEND.coeff_linop(
