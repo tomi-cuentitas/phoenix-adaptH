@@ -2,8 +2,8 @@
 set -e
 
 # ===== Configuration =====
-MODULE_NAME=paulilib
-F90_SOURCE=pauli_library.f90
+MODULE_NAME=$2
+F90_SOURCE=$1
 BUILD_DIR=f2py_build
 BUILD_SUBDIR=bbdir
 VENV_PYTHON="$VIRTUAL_ENV/bin/python3"
@@ -21,7 +21,7 @@ echo "🔧 Generating pyf and wrapper by triggering minimal f2py compile..."
 
 # This generates the .pyf and wrapper, but may fail linking (that’s okay)
 echo "🔧 Generating pyf and wrapper by triggering minimal f2py compile..."
-f2py -m paulilib -h $BUILD_DIR/paulilib.pyf pauli_library.f90 --overwrite-signature 
+f2py -m $MODULE_NAME -h $BUILD_DIR/$MODULE_NAME.pyf $F90_SOURCE --overwrite-signature 
 f2py -m $MODULE_NAME -c $F90_SOURCE --build-dir $BUILD_DIR 1>/dev/null 2>&1 || true
 
 echo "📝 Writing meson.build..."
