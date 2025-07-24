@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 16/07/2025, 18:04
-# Version:     0.1.861
+# Last Update: 24/07/2025, 17:06
+# Version:     0.1.864
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -894,7 +894,9 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
+        raise ValueError(
+            f"Invalid filter arg {capture}. Must be str|callable."
+        )
 
     @property
     def captured(self):
@@ -1088,7 +1090,8 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1182,7 +1185,8 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument() for variable in self.get_argument_variables()
+            variable.as_argument()
+            for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1284,9 +1288,7 @@ class KernelCallContainer(RoutineCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return (
-            f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
-        )
+        return f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
 
 
 class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
@@ -1328,14 +1330,15 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
                         self.compose_call_name(routine, library)
                     )
                 else:
-                    routine.set_call_name(self.compose_call_name(routine, None))
+                    routine.set_call_name(
+                        self.compose_call_name(routine, None)
+                    )
             if routine_selection:
                 self._grouped_imports.append((library, routine_selection))
-        print("OUT OF COLLECTION", self._grouped_imports)
 
     def check_import_required(self, library, routine):
         """filter the imports whether they are required or not"""
-        print("compare", library, self.context.library)
+        # print("compare", library, self.context.library)
         if library == self.context.library:
             return False
         return True

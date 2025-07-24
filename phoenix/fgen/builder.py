@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 17/07/2025, 15:19
-# Version:     0.0.1390
+# Last Update: 24/07/2025, 16:26
+# Version:     0.0.1399
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -22,6 +22,7 @@ from phoenix.fgen.instructionvar import InstructionEnvironment
 # from phoenix.fgen.libroutine import LibRoutine
 
 from phoenix.fgen.context import Context
+
 
 from phoenix.fgen.instruction import Instruction
 from phoenix.fgen.libroutinevar import (
@@ -46,8 +47,6 @@ from phoenix.fgen.instruction import (
     LinkVariableEnvironmentInstruction,
     OffsetEnvironmentInstruction,
 )
-
-from phoenix.fgen.makefile import MakeFileManager
 
 from phoenix.fgen.instructionvar import SymbolicOffset
 
@@ -913,9 +912,3 @@ if __name__ == "__main__":
 
     success()
     info("moin!")
-
-
-# a = {}
-# foo = Library("asd")
-# a[foo] = "bar"
-# print(a[foo])

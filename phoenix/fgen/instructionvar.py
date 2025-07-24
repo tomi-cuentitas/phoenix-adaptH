@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 01/07/2025, 13:49
-# Version:     0.0.1220
+# Last Update: 24/07/2025, 12:48
+# Version:     0.0.1222
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -105,7 +105,12 @@ class _Chainable:
 
 
 class InstructionVariable(_Chainable):
-    """Instruction Variable is a chainable"""
+    """
+    The Instruction Variable represents input and output variables on the instruction level.
+    Use myvariable = InstructionVariable.new(name) to create a new one and then
+    myvariable(5) or myvariable("key") to refer to that variable at the location 5 or key,
+    respectively.
+    """
 
     _name = "DEFAULT"
     _offset_handle = "AUTO"
