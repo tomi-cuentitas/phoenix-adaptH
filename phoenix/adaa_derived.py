@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 14/07/2025, 16:54
-# Version:     0.0.60
+# Last Update: 06/08/2025, 16:47
+# Version:     0.0.76
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -59,18 +59,26 @@ class PyCudaCA(
     """OpenCL based data layer"""
 
 
-print(ComplexArrayADAA._IDENTIFIER)
-print(ComplexArrayADAA._IDENTIFIER)
-print(RawPyCA._DATATYPES)
+for Array in [
+    RawPyCA,
+    NumPyCA,
+    FortranCA,
+    CupyCA,
+    # OpenClCA,
+    # PyCudaCA,
+]:
+    print("----------------------------------------------------")
+    print(Array._IDENTIFIER)
 
-MyType = RawPyCA.fix_size(24)
+    print("before fix_size")
 
-print(RawPyCA)
+    print("Array", Array)
+    print("Array(12).real", Array(12, init_zeros=False).real)
 
-print(RawPyCA(12).datatypes())
-
-a = MyType()
-print(a.data)
-print(a.real, type)
-print(a.identifier)
-print(a.unpack())
+    MyType = Array.fix_size(2)
+    print("after fix_size")
+    a = MyType(init_zeros=False)
+    print(a.data)
+    print(a.real, type)
+    print(a.identifier)
+    print(list(a.unpack()))

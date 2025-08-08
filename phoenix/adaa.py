@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 22/07/2025, 14:18
-# Version:     0.0.1984
+# Last Update: 06/08/2025, 16:20
+# Version:     0.0.1989
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -253,7 +253,13 @@ class GenericADAA:
         if cls._FIXED_SIZE:
             raise ValueError(f"Fixed size {cls._FIXED_SIZE} already set.")
 
-        return type(cls._IDENTIFIER + f"[{size}]", (cls,), {}, size=size)
+        return type(
+            cls._IDENTIFIER + f"[{size}]",
+            (cls,),
+            {},
+            size=size,
+            identifier=f"FIXEDSIZE[{size}]",
+        )
 
     @classmethod
     def mul(cls, first, other, target=None, **_kwargs):
