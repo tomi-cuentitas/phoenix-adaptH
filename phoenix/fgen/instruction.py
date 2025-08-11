@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 11/08/2025, 14:01
-# Version:     0.0.3080
+# Last Update: 11/08/2025, 14:43
+# Version:     0.0.3082
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -674,11 +674,17 @@ class InstructionGroup(Instruction, ftype="group"):
     # varied in the implementation step. A single operation parallelization
     # could have a higher level, that we only enable on GPUs.
 
-    def __init__(self, instructions, itype=None):
+    def __init__(self, instructions, itype=None, loop_safe=True):
         self._instructions = list(instructions)
         if itype is None:
             itype = InstructionGroup._get_itype_common_root(self._instructions)
+        self._loop_safe = loop_safe
         super().__init__(itype=itype)
+
+    @property
+    def loop_safe(self):
+        """check if the group is loop safe, which will wrap it in a loop capture"""
+        return self._loop_safe
 
     def __len__(self):
         return sum(len(instr) for instr in self.instructions)

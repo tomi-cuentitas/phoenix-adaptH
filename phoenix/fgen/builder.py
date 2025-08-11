@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 24/07/2025, 16:26
-# Version:     0.0.1399
+# Last Update: 11/08/2025, 14:51
+# Version:     0.0.1407
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -433,12 +433,26 @@ class Builder(BuilderSegment, identifier="GENERIC"):
     @log.wrap_call_gen
     def handle_group_instruction(self, instruction, context, buildargs):
         """default handler for group instruction"""
-        for child in instruction.instructions:
-            yield from self.containers_from_instruction(
-                child,
-                context=context,
-                **buildargs,
+        if instruction.loop_safe:
+            loop_container = LoopCaptureContainer(
+                type(self)._mfcontainer_class, context=context, **buildargs
             )
+            for child in instruction.instructions:
+                for cont in self.containers_from_instruction(
+                    child,
+                    context=loop_container.context,
+                    **buildargs,
+                ):
+                    loop_container.append(cont)
+            yield loop_container
+            yield EmptyLines(1, context=context)
+        else:
+            for child in instruction.instructions:
+                yield from self.containers_from_instruction(
+                    child,
+                    context=context,
+                    **buildargs,
+                )
 
     @log.wrap_call_gen
     def handle_content_instruction(self, instruction, context, buildargs):

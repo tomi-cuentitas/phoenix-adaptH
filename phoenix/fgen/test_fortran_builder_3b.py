@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 11/08/2025, 14:10
-# Version:     0.0.396
+# Last Update: 11/08/2025, 14:50
+# Version:     0.0.398
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -512,9 +512,13 @@ for num, (t_pattern, cases) in enumerate(multiply_cases.items()):
     # we now want all the instruction environments being applied to the same instruction group (that
     # takes care of the component operations). And that's it! That's everything we need to do to
     # cover one of the t_patterns in our KeyMap configurations
-    these_instructions = MapApplyInstruction(
-        content=instruction_groups[t_pattern],
-        environments=environments,
+    these_instructions = InstructionGroup(
+        [
+            MapApplyInstruction(
+                content=instruction_groups[t_pattern],
+                environments=environments,
+            )
+        ]
     )
 
     # having collected all the environments, we can put it into a routine and give it a telling name
@@ -541,7 +545,7 @@ for num, (t_pattern, cases) in enumerate(multiply_cases.items()):
 
 
 # first we group all the calls into one group
-call_collection = InstructionGroup(all_instructions).flatten().sorted()
+call_collection = InstructionGroup(all_instructions)  # .flatten().sorted()
 
 libroutine_multiply = my_library.libroutine_from_instruction(
     "multiply",
