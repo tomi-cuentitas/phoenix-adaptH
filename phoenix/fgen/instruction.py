@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 11/08/2025, 14:43
-# Version:     0.0.3082
+# Last Update: 11/08/2025, 14:59
+# Version:     0.0.3096
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -650,6 +650,8 @@ class LeafInstruction(GenericInstruction, ftype="leaf"):
 # GROUP PARENT CLASS
 # ==================
 
+from types import GeneratorType
+
 
 class InstructionGroup(Instruction, ftype="group"):
     """Base class for instruction groups"""
@@ -674,8 +676,13 @@ class InstructionGroup(Instruction, ftype="group"):
     # varied in the implementation step. A single operation parallelization
     # could have a higher level, that we only enable on GPUs.
 
-    def __init__(self, instructions, itype=None, loop_safe=True):
-        self._instructions = list(instructions)
+    def __init__(self, *instructions, itype=None, loop_safe=True):
+        self._instructions = []
+        for instr in instructions:
+            if isinstance(instr, Instruction):
+                self._instructions.append(instr)
+            elif isinstance(instr, (list, GeneratorType)):
+                self._instructions.append(InstructionGroup(*instr))
         if itype is None:
             itype = InstructionGroup._get_itype_common_root(self._instructions)
         self._loop_safe = loop_safe
