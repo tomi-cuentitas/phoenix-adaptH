@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 11/08/2025, 13:25
-# Version:     0.0.354
+# Last Update: 11/08/2025, 13:33
+# Version:     0.0.366
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -50,12 +50,12 @@ from phoenix.fgen.fortran_builder import (
 # ===============
 
 # Some parameters that define the subspace
-MAX_SIZE = 3
-NUM_SPINS = 3
-NUM_SPINS_EXPLORE = 3
+MAX_SIZE = 4
+NUM_SPINS = 4
+NUM_SPINS_EXPLORE = 4
 
 # Extended output will generate lots of text, but might be helpful
-SHOW_EXTENDED_OUTPUT = False
+SHOW_EXTENDED_OUTPUT = True
 
 print(
     """
@@ -388,7 +388,7 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
                 multiply_cases[t_pattern].add((nums_a, nums_b, nums_c))
 
 
-my_library = F90Library("pauli_library_eff")
+my_library = F90Library("pauli_library_eff4")
 
 assignments = {
     (VarRho, "real"): F90InputVariable(
@@ -556,24 +556,24 @@ print(
     ""
 )
 
-pauli_library_eff = None
+pauli_library_eff4 = None
 
 RECOMPILE = False
 
 try:
     if not RECOMPILE:
         print("attempt to import... ")
-        from eplib import pauli_library_eff
+        from eplib import pauli_library_eff4
 
 except ImportError as exc:
     print("import failed, probably not compiled yet.")
 
-if not pauli_library_eff:
+if not pauli_library_eff4:
     try:
         print("attempt to compile...")
 
         ret = subprocess.run(
-            "f2py -m eplib -c pauli_library_eff.f90 --f90flags='-ffree-line-length-none'",
+            "f2py -m eplib -c pauli_library_eff4.f90 --f90flags='-ffree-line-length-none'",
             shell=True,
             stderr=subprocess.DEVNULL,
             stdout=subprocess.DEVNULL,
@@ -590,7 +590,7 @@ if not pauli_library_eff:
         print(exc)
         print("try to compile manually via")
         print(
-            "  f2py -m eplib -c pauli_library_eff.f90 --f90flags='-ffree-line-length-none'"
+            "  f2py -m eplib -c pauli_library_eff4.f90 --f90flags='-ffree-line-length-none'"
         )
         sys.exit(1)
 
@@ -602,12 +602,12 @@ if not pauli_library_eff:
     except ImportError as exc:
         print("import failed again Try to compile manually via")
         print(
-            "  f2py -m eplib -c pauli_library_eff.f90 --f90flags='-ffree-line-length-none'"
+            "  f2py -m eplib -c pauli_library_eff4.f90 --f90flags='-ffree-line-length-none'"
         )
         print("and try running it again.")
         sys.exit(1)
 
-assert pauli_library_eff is not None
+assert pauli_library_eff4 is not None
 
 print(
     "Using f2py, we can now import the fortran library back into python and see whats in it:"
@@ -679,7 +679,7 @@ ham_real[idx_ham_12xx] = 1
 # x0 * xx should give 0x
 # z0 * xx should give i yx
 
-res_real, res_imag = pauli_library_eff.multiply(
+res_real, res_imag = pauli_library_eff4.multiply(
     rho_real, rho_imag, ham_real, ham_imag
 )
 
@@ -712,78 +712,80 @@ operators = {}
 for spin_a in ["0", "x", "y", "z"]:
     for spin_b in ["0", "x", "y", "z"]:
         for spin_c in ["0", "x", "y", "z"]:
-            operators[spin_a + spin_b + spin_c] = np.kron(
-                paulis[spin_a], np.kron(paulis[spin_b], paulis[spin_c])
-            )
+            for spin_d in ["0", "x", "y", "z"]:
+                operators[spin_a + spin_b + spin_c + spin_d] = np.kron(
+                    np.kron(paulis[spin_a], paulis[spin_b]),
+                    np.kron(paulis[spin_c], paulis[spin_d]),
+                )
 
 rho_real = np.zeros(len(system_keymap))
 rho_imag = np.zeros(len(system_keymap))
 ham_real = np.zeros(len(hamilton_keymap))
 ham_imag = np.zeros(len(hamilton_keymap))
 
-for key_left, op_left in operators.items():
-    for key_right, op_right in operators.items():
-        reference_result = np.dot(op_left, op_right)
+# for key_left, op_left in operators.items():
+#     for key_right, op_right in operators.items():
+#         reference_result = np.dot(op_left, op_right)
 
-        string_left, nums_left = simplify_pauli_string(key_left)
-        string_right, nums_right = simplify_pauli_string(key_right)
+#         string_left, nums_left = simplify_pauli_string(key_left)
+#         string_right, nums_right = simplify_pauli_string(key_right)
 
-        entry_index_left = system_keymap.key2off(nums_left, string_left)
-        try:
-            entry_index_right = hamilton_keymap.key2off(
-                nums_right, string_right
-            )
+#         entry_index_left = system_keymap.key2off(nums_left, string_left)
+#         try:
+#             entry_index_right = hamilton_keymap.key2off(
+#                 nums_right, string_right
+#             )
 
-        except KeyError as exc:
-            continue
+#         except KeyError as exc:
+#             continue
 
-        rho_real *= 0
-        rho_real[entry_index_left] = 1
+#         rho_real *= 0
+#         rho_real[entry_index_left] = 1
 
-        ham_real *= 0
-        ham_real[entry_index_right] = 1
+#         ham_real *= 0
+#         ham_real[entry_index_right] = 1
 
-        res_real, res_imag = pauli_library_eff.multiply(
-            rho_real, rho_imag, ham_real, ham_imag
-        )
+#         res_real, res_imag = pauli_library_eff4.multiply(
+#             rho_real, rho_imag, ham_real, ham_imag
+#         )
 
-        result = 0
-        # for num, key in enumerate(system_keymap.keys(recursive=True)):
-        #     assert system_keymap.key2off(*key.labels) == num
+#         result = 0
+#         # for num, key in enumerate(system_keymap.keys(recursive=True)):
+#         #     assert system_keymap.key2off(*key.labels) == num
 
-        targets = []
+#         targets = []
 
-        for coeff_real, coeff_imag, key in zip(
-            res_real, res_imag, system_keymap.keys(recursive=True)
-        ):
-            nums_target, string_target = key.labels
-            target_string = pad_pauli_string(string_target, nums_target, 3)
-            result += (coeff_real + 1j * coeff_imag) * operators[target_string]
-            if abs(coeff_real + 1j * coeff_imag) > 1e-12:
-                targets.append(
-                    (complex(coeff_real + 1j * coeff_imag), target_string)
-                )
+#         for coeff_real, coeff_imag, key in zip(
+#             res_real, res_imag, system_keymap.keys(recursive=True)
+#         ):
+#             nums_target, string_target = key.labels
+#             target_string = pad_pauli_string(string_target, nums_target, 4)
+#             result += (coeff_real + 1j * coeff_imag) * operators[target_string]
+#             if abs(coeff_real + 1j * coeff_imag) > 1e-12:
+#                 targets.append(
+#                     (complex(coeff_real + 1j * coeff_imag), target_string)
+#                 )
 
-        error = np.sum(np.abs(result - reference_result))
-        assert error < 1e-12
-        assert len(targets) == 1
+#         error = np.sum(np.abs(result - reference_result))
+#         assert error < 1e-12
+#         assert len(targets) == 1
 
-        if SHOW_EXTENDED_OUTPUT:
-            print(
-                key_left,
-                "⋅",
-                key_right,
-                "->",
-                " ⋅ ".join(map(str, targets[0])),
-                end=", ",
-            )
-print("\ndone.")
+#         if SHOW_EXTENDED_OUTPUT:
+#             print(
+#                 key_left,
+#                 "⋅",
+#                 key_right,
+#                 "->",
+#                 " ⋅ ".join(map(str, targets[0])),
+#                 end=", ",
+#             )
+# print("\ndone.")
 
 
 from timeit import timeit
 
-op_left = np.random.random((8, 8)) + 1j * np.random.random((8, 8))
-op_right = np.random.random((8, 8)) + 1j * np.random.random((8, 8))
+op_left = np.random.random((16, 16)) + 1j * np.random.random((16, 16))
+op_right = np.random.random((16, 16)) + 1j * np.random.random((16, 16))
 
 time_ref = timeit(
     "np.dot(op_left, op_right)",
@@ -791,7 +793,7 @@ time_ref = timeit(
     globals=globals(),
 )
 time_lib = timeit(
-    "pauli_library_eff.multiply(rho_real, rho_imag, ham_real, ham_imag)",
+    "pauli_library_eff4.multiply(rho_real, rho_imag, ham_real, ham_imag)",
     number=100_000,
     globals=globals(),
 )

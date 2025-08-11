@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 30/06/2025, 16:46
-# Version:     0.1.9
+# Last Update: 11/08/2025, 14:03
+# Version:     0.1.11
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -275,6 +275,12 @@ class Key:
     def __hash__(self) -> int:
         """As _KeySegments are hashable, so are tuples made from them."""
         return hash((self.labels, self.parents))
+
+    def __gt__(self, other: Any) -> bool:
+        print("ASDHASDJFHGASJHF")
+
+    def __eq__(self, other: Any) -> bool:
+        print("ASDHASDJFHGASJHF")
 
     def __eq__(self, other: Any) -> bool:
         """

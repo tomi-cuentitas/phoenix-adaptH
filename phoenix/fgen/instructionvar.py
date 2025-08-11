@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 24/07/2025, 12:48
-# Version:     0.0.1222
+# Last Update: 11/08/2025, 14:07
+# Version:     0.0.1236
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -270,6 +270,30 @@ class InstructionVariable(_Chainable):
 
     def __or__(self, other):
         return self.merge(other)
+
+    def __gt__(self, other):
+        if not isinstance(other, self.__class__):
+            raise TypeError(
+                f"Cannot compare InstructionVariable {self} with {type(other)}"
+            )
+        if len(self.offsets) != len(other.offsets):
+            raise ValueError("Incompatible offsets cannot be compared")
+        for off1, off2 in zip(self.offsets, other.offsets):
+            if off1 > off2:
+                return True
+            if off1 < off2:
+                return False
+        return False
+
+    def __eq__(self, other):
+        if not isinstance(other, self.__class__):
+            return False
+        if len(self.offsets) != len(other.offsets):
+            return False
+        for off1, off2 in zip(self.offsets, other.offsets):
+            if off1 != off2:
+                return False
+        return True
 
 
 class InstructionVariableOffset(_Chainable):

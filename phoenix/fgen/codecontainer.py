@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 24/07/2025, 17:06
-# Version:     0.1.864
+# Last Update: 11/08/2025, 13:51
+# Version:     0.1.865
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1387,6 +1387,7 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
 
     def manage_captured(self, **kwargs):
         for num, variable in enumerate(self.captured):
+            print("ASD, I have caputerd", variable)
             self._repeat_containers.append(
                 self._mfcontainer_class(context=self.context, **kwargs)
                 .set_multiframe_variable(
