@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 24/07/2025, 17:26
-# Version:     0.0.226
+# Last Update: 13/08/2025, 13:21
+# Version:     0.0.228
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -790,11 +790,11 @@ for num, (t_pattern, cases) in enumerate(multiply_cases.items()):
     # this is the crucial step: We create a libroutine (that is now in a specific target language)
     # from the instructions we have now created. We can reuse the same instructions in another
     # library and even in another language backend.
-    libroutine = my_library.libroutine_from_instruction(
+    libroutine = my_library.libroutine_from_instructions(
         lr_name,
         these_instructions,
         builder=my_builder,
-        assignments=assignments,
+        lrv_assignments=assignments,
         # container_class=F90KernelContainer,
         container_class=F90RoutineContainer,
     )
@@ -815,11 +815,11 @@ that calls all the auxiliary routines. We will add the routine to the same libra
 >      [CallInstruction(lr) for lr in libroutines.values()],
 >  )
 
->  libroutine_multiply = my_library.libroutine_from_instruction(
+>  libroutine_multiply = my_library.libroutine_from_instructions(
 >      "multiply",
 >      call_collection,
 >      builder=my_builder,
->      assignments=assignments,
+>      lrv_assignments=assignments,
 >      container_class=F90RoutineContainer,
 >  )
 
@@ -832,11 +832,11 @@ call_collection = InstructionGroup(
     [CallInstruction(lr) for lr in libroutines.values()],
 )
 
-libroutine_multiply = my_library.libroutine_from_instruction(
+libroutine_multiply = my_library.libroutine_from_instructions(
     "multiply",
     call_collection,
     builder=my_builder,
-    assignments=assignments,
+    lrv_assignments=assignments,
     container_class=F90RoutineContainer,
 )
 print(

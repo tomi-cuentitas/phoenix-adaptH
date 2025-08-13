@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 11/08/2025, 14:44
-# Version:     0.1.869
+# Last Update: 12/08/2025, 12:27
+# Version:     0.1.872
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1387,7 +1387,6 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
 
     def manage_captured(self, **kwargs):
         for num, variable in enumerate(self.captured):
-            print("ASD, I have caputerd", variable)
             self._repeat_containers.append(
                 self._mfcontainer_class(context=self.context, **kwargs)
                 .set_multiframe_variable(
@@ -1403,14 +1402,14 @@ class LoopCaptureContainer(CaptureContainer, EmbeddingContainer):
                 indent + num * int(self.INDENT_BODY), **kwargs
             )
 
-    def get_codelines_foot(self, indent: int, **kwargs):
+    def get_codelines_foot(self, indent: int, **kwargs: Any):
         reversed_containers = list(enumerate(self._repeat_containers))[::-1]
         for num, container in reversed_containers:
             yield from container.get_codelines_foot(
                 indent + num * int(self.INDENT_BODY), **kwargs
             )
 
-    def get_codelines(self, indent: int, **kwargs):
+    def get_codelines(self, indent: int, **kwargs: Any):
         yield from self.get_codelines_head(indent, **kwargs)
         yield from self.get_codelines_body(
             indent + int(self.INDENT_BODY) * len(self._repeat_containers),

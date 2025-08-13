@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 11/08/2025, 14:51
-# Version:     0.0.1407
+# Last Update: 13/08/2025, 13:22
+# Version:     0.0.1409
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -372,10 +372,10 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         # to implement that lazy as well.
 
     @log.wrap_call
-    def instruction_to_routine_container(
+    def instructions_to_routine_container(
         self,
         name,
-        instruction,
+        instructions,
         context,
         assignments,
         container_class=None,
@@ -387,6 +387,12 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
         routine_context = context.inherit()
 
+        # for source, (adaa, state) in assignments.items():
+        #     for key, datatype in adaa.datatypes():
+        #         if state && 3 == 1:
+        #             libroutinevar = Input
+        #         routine_context.namespace.assign(source, key, assignment)
+
         for (source, key), assignment in assignments.items():
             routine_context.namespace.assign(source, key, assignment)
 
@@ -394,12 +400,13 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             name, context=routine_context, **buildargs
         )
 
-        for container in self.containers_from_instruction(
-            instruction,
-            context=routine_container.context,
-            **buildargs,
-        ):
-            routine_container.append(container)
+        for instruction in instructions:
+            for container in self.containers_from_instruction(
+                instruction,
+                context=routine_container.context,
+                **buildargs,
+            ):
+                routine_container.append(container)
         return routine_container
 
     @classmethod

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 11/08/2025, 14:50
-# Version:     0.0.398
+# Last Update: 13/08/2025, 13:23
+# Version:     0.0.412
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -55,7 +55,7 @@ NUM_SPINS = 3
 NUM_SPINS_EXPLORE = 3
 
 # Extended output will generate lots of text, but might be helpful
-SHOW_EXTENDED_OUTPUT = True
+SHOW_EXTENDED_OUTPUT = False
 
 print(
     """
@@ -390,6 +390,17 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
 
 my_library = F90Library("pauli_library_eff3b")
 
+from phoenix.adaa_derived import FortranCA
+
+System_ADAA = FortranCA.set_keymap(system_keymap)
+Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
+
+# future_assignments = {
+#     VarRho: (System_ADAA, 1),
+#     VarRes: (System_ADAA, 3),
+#     VarHam: (Hamilton_ADAA, 1),
+# }
+
 assignments = {
     (VarRho, "real"): F90InputVariable(
         VarRho, "real", "rho_real", size=system_keymap.size
@@ -527,11 +538,11 @@ for num, (t_pattern, cases) in enumerate(multiply_cases.items()):
     # this is the crucial step: We create a libroutine (that is now in a specific target language)
     # from the instructions we have now created. We can reuse the same instructions in another
     # library and even in another language backend.
-    # libroutine = my_library.libroutine_from_instruction(
+    # libroutine = my_library.libroutine_from_instructions(
     #     lr_name,
     #     InstructionGroup(these_instructions.unpack()),
     #     builder=my_builder,
-    #     assignments=assignments,
+    #     lrv_assignments=assignments,
     #     # container_class=F90KernelContainer,
     #     container_class=F90RoutineContainer,
     # )
@@ -547,11 +558,11 @@ for num, (t_pattern, cases) in enumerate(multiply_cases.items()):
 # first we group all the calls into one group
 call_collection = InstructionGroup(all_instructions)  # .flatten().sorted()
 
-libroutine_multiply = my_library.libroutine_from_instruction(
+libroutine_multiply = my_library.libroutine_from_instructions(
     "multiply",
-    call_collection,
+    *all_instructions,
     builder=my_builder,
-    assignments=assignments,
+    lrv_assignments=assignments,
     container_class=F90RoutineContainer,
 )
 
