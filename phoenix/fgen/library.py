@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 13/08/2025, 13:20
-# Version:     0.1.407
+# Last Update: 14/08/2025, 13:18
+# Version:     0.1.416
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -551,6 +551,7 @@ class Library:
         name,
         *instructions,
         builder=None,
+        daa_assignments=None,
         lrv_assignments=None,
         container_class=None,
         **buildargs,
@@ -562,13 +563,16 @@ class Library:
         if builder is None:
             builder = type(self).DEFAULT_BUILDER(f"default:lib{name}")
 
-        assert lrv_assignments is not None
+        all_assignments = builder.handle_assignments(
+            daa_assignments=daa_assignments,
+            lrv_assignments=lrv_assignments,
+        )
 
         routine_container = builder.instructions_to_routine_container(
             name,
             instructions,
             context=self.context,
-            assignments=lrv_assignments,
+            assignments=all_assignments,
             container_class=container_class,
             **buildargs,
         )

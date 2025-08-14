@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 13/08/2025, 13:22
-# Version:     0.0.1409
+# Last Update: 14/08/2025, 13:16
+# Version:     0.0.1424
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -252,6 +252,32 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             yield f"forbidden ({len(forbidden)}):"
             for instruction_type in forbidden:
                 yield f"  - {instruction_type}"
+
+    def handle_assignments(
+        self, daa_assignments, lrv_assignments=None, contribute=None
+    ):
+        if contribute is None:
+            contribute = {}
+
+        if daa_assignments is not None:
+            for instr_var, (adaa, status) in daa_assignments.items():
+                for key, dtype in adaa.datatypes():
+                    lrv = self.create_libroutine_variable(
+                        name=f"{instr_var._name}_{key}",
+                        dtype=dtype,
+                        size=adaa.size,
+                        status=status,
+                    )
+                    contribute[instr_var, key] = lrv
+        if lrv_assignments is not None:
+            for (instr_var, key), lrv in lrv_assignments.items():
+                contribute[instr_var, key] = lrv
+        return contribute
+
+    def create_libroutine_variable(
+        self, *, name, dtype, status, size, **kwargs
+    ):
+        raise NotImplementedError("must be implemented in subclass")
 
     def add_supported_instruction_class(self, instruction_class, handler):
         """add a supported instruction class and its handler"""

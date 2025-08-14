@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 24/07/2025, 16:24
-# Version:     0.0.1206
+# Last Update: 14/08/2025, 13:09
+# Version:     0.0.1217
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -332,13 +332,32 @@ class F90ImportContainer(ImportContainer):
 ###############################################################################
 
 
-my_fancy_var = F90InOutVariable(
-    None, None, name="my_fancy_var", dtype="f64", size=20
-)
+my_fancy_var = F90InOutVariable(name="my_fancy_var", dtype="f64", size=20)
 
 
 class F90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
+
+    def create_libroutine_variable(
+        self, *, name, dtype, status, size, assignment=None, **kwargs
+    ):
+        status = status & 3
+        if status == LibRoutineVariable.STATUS_INPUT:
+            return F90InputVariable(
+                name=name, dtype=dtype, size=size, assignment=assignment
+            )
+        elif status == LibRoutineVariable.STATUS_OUTPUT:
+            return F90OutputVariable(
+                name=name, dtype=dtype, size=size, assignment=assignment
+            )
+        elif status == LibRoutineVariable.STATUS_INOUT:
+            return F90InOutVariable(
+                name=name, dtype=dtype, size=size, assignment=assignment
+            )
+        else:
+            return super().create_libroutine_variable(
+                name=name, dtype=dtype, status=status, size=size
+            )
 
     def handle_environment_instruction(self, instruction, context, buildargs):
         yield from super().handle_environment_instruction(

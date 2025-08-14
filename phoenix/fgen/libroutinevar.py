@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 14/07/2025, 17:27
-# Version:     0.0.829
+# Last Update: 14/08/2025, 13:09
+# Version:     0.0.871
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -109,9 +109,7 @@ class Namespace:
             raise KeyError(f"variable {name} not found")
         return None
 
-    def find_assignment_dict(
-        self, ivariable_type, exception_not_existing=True
-    ):
+    def find_assignment_dict(self, ivariable_type, exception_not_existing=True):
         """find a variable dict in the namespace"""
         if ivariable_type in self._assigned:
             return self._assigned[ivariable_type]
@@ -125,9 +123,7 @@ class Namespace:
             )
         return None
 
-    def find_assignment(
-        self, ivariable_type, key, exception_not_existing=True
-    ):
+    def find_assignment(self, ivariable_type, key, exception_not_existing=True):
         """find a variable in the namespace"""
         assignment_dict = self.find_assignment_dict(
             ivariable_type, exception_not_existing=exception_not_existing
@@ -293,9 +289,7 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(
-            self
-        ).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""
@@ -580,12 +574,11 @@ class LibRoutineAssignedVariable(LibRoutineVariable):
 
     def __init__(
         self,
-        *args,
-        assignment,
+        assignment=None,
         status=LibRoutineVariable.STATUS_INOUT,
         **kwargs,
     ):
-        super().__init__(*args, status=status, **kwargs)
+        super().__init__(status=status, **kwargs)
         # keep a reference to the thing that the variable is assigned to
         self._assignment = assignment
 
@@ -606,14 +599,20 @@ class LibRoutineInputVariable(LibRoutineAssignedVariable):
 
     def __init__(
         self,
-        assigned_variable,
-        key,
-        *args,
+        *,
+        name=None,
+        assignment=None,
         **kwargs,
     ):
+        if assignment is not None:
+            assigned_variable, _ = assignment
+        if name is None:
+            if assigned_variable is None:
+                raise ValueError("Either assignment or name must be provided!")
+            name = assigned_variable._name
         super().__init__(
-            *args,
-            assignment=(assigned_variable, key),
+            name=name,
+            assignment=assignment,
             status=LibRoutineVariable.STATUS_INPUT,
             enum_first=False,
             **kwargs,
@@ -631,14 +630,20 @@ class LibRoutineOutputVariable(LibRoutineAssignedVariable):
 
     def __init__(
         self,
-        assigned_variable,
-        key,
-        *args,
+        *,
+        name=None,
+        assignment=None,
         **kwargs,
     ):
+        if assignment is not None:
+            assigned_variable, _ = assignment
+        if name is None:
+            if assigned_variable is None:
+                raise ValueError("Either assignment or name must be provided!")
+            name = assigned_variable._name
         super().__init__(
-            *args,
-            assignment=(assigned_variable, key),
+            name=name,
+            assignment=assignment,
             status=LibRoutineVariable.STATUS_OUTPUT,
             enum_first=False,
             **kwargs,
@@ -656,14 +661,20 @@ class LibRoutineInOutVariable(LibRoutineAssignedVariable):
 
     def __init__(
         self,
-        assigned_variable,
-        key,
-        *args,
+        *,
+        name=None,
+        assignment=None,
         **kwargs,
     ):
+        if assignment is not None:
+            assigned_variable, _ = assignment
+        if name is None:
+            if assigned_variable is None:
+                raise ValueError("Either assignment or name must be provided!")
+            name = assigned_variable._name
         super().__init__(
-            *args,
-            assignment=(assigned_variable, key),
+            name=name,
+            assignment=assignment,
             status=LibRoutineVariable.STATUS_INOUT,
             enum_first=False,
             **kwargs,
@@ -1001,7 +1012,7 @@ if __name__ == "__main__":
         len(LibRoutineLocalVariable._class_namespace),
         othernamespace,
     )
-    b = LibRoutineInputVariable(None, None, name="foo", size=42)
+    b = LibRoutineInputVariable(name="foo", size=42)
     print(
         "\t".join(map(lambda x: f"{str(x):^10s}", [a, b, c, d])),
         "\t:\t",
