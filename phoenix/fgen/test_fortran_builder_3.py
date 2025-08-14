@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 13/08/2025, 13:21
-# Version:     0.0.370
+# Last Update: 14/08/2025, 13:17
+# Version:     0.0.375
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -390,24 +390,24 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
 
 my_library = F90Library("pauli_library_eff4")
 
-assignments = {
+lrv_assignments = {
     (VarRho, "real"): F90InputVariable(
-        VarRho, "real", "rho_real", size=system_keymap.size
+        assignment=(VarRho, "real"), name="rho_real", size=system_keymap.size
     ),
     (VarRho, "imag"): F90InputVariable(
-        VarRho, "imag", "rho_imag", size=system_keymap.size
+        assignment=(VarRho, "imag"), name="rho_imag", size=system_keymap.size
     ),
     (VarHam, "real"): F90InputVariable(
-        VarHam, "real", "ham_real", size=hamilton_keymap.size
+        assignment=(VarHam, "real"), name="ham_real", size=hamilton_keymap.size
     ),
     (VarHam, "imag"): F90InputVariable(
-        VarHam, "imag", "ham_imag", size=hamilton_keymap.size
+        assignment=(VarHam, "imag"), name="ham_imag", size=hamilton_keymap.size
     ),
     (VarRes, "real"): F90OutputVariable(
-        VarRes, "real", "res_real", size=system_keymap.size
+        assignment=(VarRes, "real"), name="res_real", size=system_keymap.size
     ),
     (VarRes, "imag"): F90OutputVariable(
-        VarRes, "imag", "res_imag", size=system_keymap.size
+        assignment=(VarRes, "imag"), name="res_imag", size=system_keymap.size
     ),
 }
 
@@ -524,7 +524,7 @@ for num, (t_pattern, cases) in enumerate(multiply_cases.items()):
         lr_name,
         these_instructions,
         builder=my_builder,
-        lrv_assignments=assignments,
+        lrv_assignments=lrv_assignments,
         # container_class=F90KernelContainer,
         container_class=F90RoutineContainer,
     )
@@ -543,7 +543,7 @@ libroutine_multiply = my_library.libroutine_from_instructions(
     "multiply",
     *call_collection,
     builder=my_builder,
-    lrv_assignments=assignments,
+    lrv_assignments=lrv_assignments,
     container_class=F90RoutineContainer,
 )
 

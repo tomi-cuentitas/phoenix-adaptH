@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 13/08/2025, 13:21
-# Version:     0.0.228
+# Last Update: 14/08/2025, 13:15
+# Version:     0.0.230
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -593,22 +593,22 @@ my_library = F90Library("pauli_library")
 
 assignments = {
     (VarRho, "real"): F90InputVariable(
-        VarRho, "real", "rho_real", size=system_keymap.size
+        assignment=(VarRho, "real"), size=system_keymap.size
     ),
     (VarRho, "imag"): F90InputVariable(
-        VarRho, "imag", "rho_imag", size=system_keymap.size
+        assignment=(VarRho, "imag"), size=system_keymap.size
     ),
     (VarHam, "real"): F90InputVariable(
-        VarHam, "real", "ham_real", size=hamilton_keymap.size
+        assignment=(VarHam, "real"), size=hamilton_keymap.size
     ),
     (VarHam, "imag"): F90InputVariable(
-        VarHam, "imag", "ham_imag", size=hamilton_keymap.size
+        assignment=(VarHam, "imag"), size=hamilton_keymap.size
     ),
     (VarRes, "real"): F90OutputVariable(
-        VarRes, "real", "res_real", size=system_keymap.size
+        assignment=(VarRes, "real"), size=system_keymap.size
     ),
     (VarRes, "imag"): F90OutputVariable(
-        VarRes, "imag", "res_imag", size=system_keymap.size
+        assignment=(VarRes, "imag"), size=system_keymap.size
     ),
 }
 

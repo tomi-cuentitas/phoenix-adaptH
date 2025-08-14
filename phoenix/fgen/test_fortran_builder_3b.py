@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 13/08/2025, 13:23
-# Version:     0.0.412
+# Last Update: 14/08/2025, 13:18
+# Version:     0.0.434
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -390,35 +390,37 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
 
 my_library = F90Library("pauli_library_eff3b")
 
+
 from phoenix.adaa_derived import FortranCA
+from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 System_ADAA = FortranCA.set_keymap(system_keymap)
 Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
 
-# future_assignments = {
-#     VarRho: (System_ADAA, 1),
-#     VarRes: (System_ADAA, 3),
-#     VarHam: (Hamilton_ADAA, 1),
-# }
+daa_assignments = {
+    VarRho: (System_ADAA, LibRoutineVariable.STATUS_INPUT),
+    VarRes: (System_ADAA, LibRoutineVariable.STATUS_OUTPUT),
+    VarHam: (Hamilton_ADAA, LibRoutineVariable.STATUS_INPUT),
+}
 
-assignments = {
+lrv_assignments = {
     (VarRho, "real"): F90InputVariable(
-        VarRho, "real", "rho_real", size=system_keymap.size
+        assignment=(VarRho, "real"), name="rho_real", size=system_keymap.size
     ),
     (VarRho, "imag"): F90InputVariable(
-        VarRho, "imag", "rho_imag", size=system_keymap.size
+        assignment=(VarRho, "imag"), name="rho_imag", size=system_keymap.size
     ),
     (VarHam, "real"): F90InputVariable(
-        VarHam, "real", "ham_real", size=hamilton_keymap.size
+        assignment=(VarHam, "real"), name="ham_real", size=hamilton_keymap.size
     ),
     (VarHam, "imag"): F90InputVariable(
-        VarHam, "imag", "ham_imag", size=hamilton_keymap.size
+        assignment=(VarHam, "imag"), name="ham_imag", size=hamilton_keymap.size
     ),
     (VarRes, "real"): F90OutputVariable(
-        VarRes, "real", "res_real", size=system_keymap.size
+        assignment=(VarRes, "real"), name="res_real", size=system_keymap.size
     ),
     (VarRes, "imag"): F90OutputVariable(
-        VarRes, "imag", "res_imag", size=system_keymap.size
+        assignment=(VarRes, "imag"), name="res_imag", size=system_keymap.size
     ),
 }
 
@@ -562,7 +564,8 @@ libroutine_multiply = my_library.libroutine_from_instructions(
     "multiply",
     *all_instructions,
     builder=my_builder,
-    lrv_assignments=assignments,
+    daa_assignments=daa_assignments,
+    # lrv_assignments=lrv_assignments,
     container_class=F90RoutineContainer,
 )
 
