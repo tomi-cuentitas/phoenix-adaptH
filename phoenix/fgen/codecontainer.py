@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 12/08/2025, 12:27
-# Version:     0.1.872
+# Last Update: 14/08/2025, 15:40
+# Version:     0.1.873
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1242,6 +1242,8 @@ class RoutineCallContainer(CodeLine):
         for assignment in imported_routine.get_argument_assignments():
             source, key = assignment
             if isinstance(source, LibRoutineMultiFrame):
+                # if there is a multiframe among the variables, recreate and
+                # require them
                 local = source.recreate(namespace=context.namespace)
                 self.requires(local)
             else:

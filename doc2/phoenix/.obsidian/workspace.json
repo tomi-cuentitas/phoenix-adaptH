@@ -11,87 +11,10 @@
             "id": "e3377ccbd3dd226e",
             "type": "leaf",
             "state": {
-              "type": "markdown",
-              "state": {
-                "file": "keymap.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "keymap"
-            }
-          },
-          {
-            "id": "c2daf45d2a514ab0",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "builder.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "builder"
-            }
-          },
-          {
-            "id": "26d0f5d8128140b2",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "libroutine.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "libroutine"
-            }
-          },
-          {
-            "id": "e1eadb9970e00a6c",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "adaa.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "adaa"
-            }
-          },
-          {
-            "id": "f9bce0610e52db8e",
-            "type": "leaf",
-            "state": {
-              "type": "markdown",
-              "state": {
-                "file": "code container.md",
-                "mode": "source",
-                "source": false
-              },
-              "icon": "lucide-file",
-              "title": "code container"
-            }
-          }
-        ],
-        "currentTab": 4
-      },
-      {
-        "id": "d361cb6405072b83",
-        "type": "tabs",
-        "children": [
-          {
-            "id": "aa75ed2fb5ce2972",
-            "type": "leaf",
-            "state": {
-              "type": "graph",
+              "type": "3d_graph_view",
               "state": {},
-              "icon": "lucide-git-fork",
-              "title": "Graph view"
+              "icon": "lucide-file",
+              "title": "3D-Graph"
             }
           }
         ]
@@ -235,33 +158,36 @@
       "canvas:Create new canvas": false,
       "daily-notes:Open today's daily note": false,
       "templates:Insert template": false,
-      "command-palette:Open command palette": false
+      "command-palette:Open command palette": false,
+      "publish:Publish changes...": false,
+      "3d-graph:3D Graph": false,
+      "new-3d-graph:Open 3d graph": false
     }
   },
-  "active": "aa75ed2fb5ce2972",
+  "active": "e3377ccbd3dd226e",
   "lastOpenFiles": [
-    "code container.md",
     "builder.md",
-    "instruction.md",
-    "backend.md",
-    "adaa.md",
     "libroutine.md",
+    "adaa.md",
+    "code container.md",
+    "environment.md",
+    "background.md",
+    "backend.md",
+    "example instructions.md",
+    "example scripts.md",
+    "library.md",
+    "new instructions.md",
+    "paulimul example.md",
+    "tutorial.md",
+    "keymap.md",
+    "instruction.md",
     "libroutine variable.md",
     "code generation.md",
-    "environment.md",
     "context.md",
-    "example scripts.md",
     "instruction variable.md",
     "key.md",
-    "keymap.md",
-    "library.md",
-    "background.md",
-    "new instructions.md",
     "new target language.md",
-    "tutorial.md",
-    "paulimul example.md",
     "example hermiteanmul.md",
-    "example instructions.md",
     "example keymaps.md",
     "[code.md",
     "example.md",

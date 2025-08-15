@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 14/08/2025, 17:25
-# Version:     0.0.83
+# Last Update: 15/08/2025, 14:19
+# Version:     0.0.135
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -597,17 +597,20 @@ if not pauli_library_comm:
 assert pauli_library_comm is not None
 
 import numpy as np
+from matplotlib import pyplot as plt
 
 size_ham = len(hamilton_keymap)
 size_rho = len(system_keymap)
-size_res = len(system_keymap)
 
 rho_real = np.zeros(size_rho)
 rho_imag = np.zeros(size_rho)
+drh_real = np.zeros(size_rho)
+drh_imag = np.zeros(size_rho)
+res_real = np.zeros(size_rho)
+res_imag = np.zeros(size_rho)
+
 ham_real = np.zeros(size_ham)
 ham_imag = np.zeros(size_ham)
-res_real = np.zeros(size_res)
-res_imag = np.zeros(size_res)
 
 ids_z = []
 
@@ -636,30 +639,64 @@ for num_spin_a in range(NUM_SPINS):
 
 rho_real[ids_z[0]] = 1.0
 
-NUM_STEPS = 200
-result_spin_z = np.zeros((NUM_STEPS, NUM_SPINS))
+NUM_STEPS_MAX = 2000
+NUM_STEPS_AT_ONCE = 200
+EVO_ORDER = 4
+
+result_spin_z = [np.zeros(NUM_STEPS_AT_ONCE) for _ in range(NUM_SPINS)]
+summed = np.zeros(NUM_STEPS_AT_ONCE)
 
 
-for num_step in range(NUM_STEPS):
-    print(num_step)
+plt.ion()
 
+plt.ylim(-0.5, 1.1)
+plt.xlim(0, NUM_STEPS_AT_ONCE + 10)
+
+graph_sumd = plt.plot(summed)[0]
+graph_data = [plt.plot(result_spin_z[k])[0] for k in range(NUM_SPINS)]
+
+for num_step in range(NUM_STEPS_MAX):
     for num_substep in range(10):
-        res_real, res_imag = pauli_library_comm.commutate(
-            rho_real, rho_imag, ham_real, ham_imag
-        )
+        drh_real = rho_real * 1.0
+        drh_imag = rho_imag * 1.0
 
-        rho_real += dtime * res_imag
-        rho_imag += dtime * res_real
+        for evo_order in range(1, EVO_ORDER + 1):
+            res_real *= 0.0
+            res_imag *= 0.0
 
-        res_real *= 0.0
-        res_imag *= 0.0
+            res_real, res_imag = pauli_library_comm.commutate(
+                drh_real, drh_imag, ham_real, ham_imag
+            )
 
-    for spin_id in range(NUM_SPINS):
-        result_spin_z[num_step, spin_id] = rho_real[ids_z[spin_id]]
+            drh_real = -dtime * res_imag / (evo_order)
+            drh_imag = dtime * res_real / (evo_order)
 
+            rho_real += drh_real
+            rho_imag += drh_imag
 
-from matplotlib import pyplot as plt
+    if num_step >= NUM_STEPS_AT_ONCE:
+        summed[:-1] = summed[1:]
+        summed[-1] = 0
+        for spin_id in range(NUM_SPINS):
+            result_spin_z[spin_id][:-1] = result_spin_z[spin_id][1:]
+            value = rho_real[ids_z[spin_id]]
+            result_spin_z[spin_id][-1] = value
+            summed[-1] += value
+            graph_data[spin_id].set_ydata(result_spin_z[spin_id])
+            graph_data[spin_id].set_xdata(
+                range(num_step - NUM_STEPS_AT_ONCE, num_step)
+            )
+        graph_sumd.set_xdata(range(num_step - NUM_STEPS_AT_ONCE, num_step))
+        graph_sumd.set_ydata(summed)
+        plt.xlim(num_step - NUM_STEPS_AT_ONCE, num_step + 10)
 
-plt.plot(result_spin_z)
-plt.plot(np.sum(result_spin_z, axis=1))
+    else:
+        for spin_id in range(NUM_SPINS):
+            value = rho_real[ids_z[spin_id]]
+            result_spin_z[spin_id][num_step] = value
+            summed[num_step] += value
+            graph_data[spin_id].set_ydata(result_spin_z[spin_id])
+        graph_sumd.set_ydata(summed)
+
+    plt.pause(0.0001)
 plt.show()
