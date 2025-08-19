@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 14/08/2025, 15:40
-# Version:     0.1.873
+# Last Update: 19/08/2025, 14:30
+# Version:     0.1.876
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1240,6 +1240,8 @@ class RoutineCallContainer(CodeLine):
         # assert isinstance(imported_routine.imported, LibRoutine)
         self._call_args = []
         for assignment in imported_routine.get_argument_assignments():
+            if assignment is None:
+                raise ValueError("Assignment not set, this should not happen")
             source, key = assignment
             if isinstance(source, LibRoutineMultiFrame):
                 # if there is a multiframe among the variables, recreate and

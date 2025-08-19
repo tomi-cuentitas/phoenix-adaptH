@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 14/08/2025, 15:43
-# Version:     0.0.1425
+# Last Update: 19/08/2025, 14:29
+# Version:     0.0.1428
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -265,8 +265,9 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                     lrv = self.create_libroutine_variable(
                         name=f"{instr_var._name}_{key}",
                         dtype=dtype,
-                        size=adaa.size,
+                        size=adaa.get_fixed_size(),
                         status=status,
+                        assignment=(instr_var, key),
                     )
                     contribute[instr_var, key] = lrv
         if lrv_assignments is not None:

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 06/08/2025, 16:20
-# Version:     0.0.1989
+# Last Update: 19/08/2025, 15:57
+# Version:     0.0.2029
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -122,6 +122,13 @@ class GenericADAA:
         return self._data
 
     @classmethod
+    def get_fixed_size(cls) -> int:
+        """extract the fixed size information, raise Exception if not set"""
+        if cls._FIXED_SIZE is None:
+            raise ValueError("Fixed size not set!")
+        return cls._FIXED_SIZE
+
+    @classmethod
     def datatypes(cls):
         """access the data type pattern"""
         yield from (
@@ -203,6 +210,7 @@ class GenericADAA:
             raise ValueError("Size and keymap cannot be set simultaneously.")
         if keymap is not None:
             cls._KEYMAP = keymap  # get default
+            cls._FIXED_SIZE = keymap.size
         if size is not None:
             if size >= 0:
                 cls._FIXED_SIZE = size
@@ -243,7 +251,13 @@ class GenericADAA:
             raise ValueError("Cannot set keymap when fixed size is given.")
         if cls._KEYMAP is not None:
             raise ValueError(f"KeyMap {cls._KEYMAP} already set.")
-        return type(cls._IDENTIFIER + f"<{keymap}>", (cls,), {}, keymap=keymap)
+        size = keymap.size
+        return type(
+            cls._IDENTIFIER + f"<{keymap}>",
+            (cls,),
+            {},
+            keymap=keymap,
+        )
 
     @classmethod
     def fix_size(cls, size: int) -> Type[GenericADAA]:
@@ -262,15 +276,18 @@ class GenericADAA:
         )
 
     @classmethod
-    def mul(cls, first, other, target=None, **_kwargs):
+    def mul(cls, first, other, target=None, **kwargs):
         """multiplication slot routine"""
+        if isinstance(first, GenericADAA) and isinstance(other, GenericADAA):
+            raise ValueError("Multiplication of operators is not supported")
         if isinstance(other, GenericADAA):
-            raise ValueError(
-                "Multiplication by other operator is not supported"
-            )
+            return cls.mul(other, first, target=target, **kwargs)
+
         if target is None:
             target = cls(first.size)
-        cls.basic_linop(target, op_a=None, sc_b=other, op_c=first)
+
+        if isinstance(first, GenericADAA):
+            cls.basic_linop(target, op_a=None, sc_b=other, op_c=first)
         return target
 
     @classmethod
@@ -394,7 +411,7 @@ class ComplexArrayADAA(
     @real.setter
     def real(self, arr):
         """Set the data for real part."""
-        # self._set_data(real=arr)
+        # self._set_data("real", arr)
         raise ValueError("Real part of the data cannot be set directly.")
 
     @property
@@ -405,7 +422,7 @@ class ComplexArrayADAA(
     @imag.setter
     def imag(self, arr):
         """Set the data for imag part."""
-        # self._set_data(imag=arr)
+        # self._set_data("imag", arr)
         raise ValueError("Imag part of the data cannot be set directly.")
 
     @classmethod

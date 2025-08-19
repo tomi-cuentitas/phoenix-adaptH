@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 15/08/2025, 14:19
-# Version:     0.0.135
+# Last Update: 19/08/2025, 16:00
+# Version:     0.0.207
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,12 +43,16 @@ from phoenix.fgen.fortran_builder import (
 )
 
 
+from phoenix.adaa_derived import FortranCA
+from phoenix.fgen.libroutinevar import LibRoutineVariable
+
+
 # USEFUL SETTINGS
 # ===============
 
 # Some parameters that define the subspace
 MAX_SIZE = 4
-NUM_SPINS = 10
+NUM_SPINS = 4
 NUM_SPINS_EXPLORE = MAX_SIZE + MAX_SIZE // 2
 
 
@@ -390,26 +394,36 @@ for nums_a_key, nums_a_entry in system_keymap.items():
 
 my_library = F90Library("pauli_library_comm")
 
-lrv_assignments = {
-    (VarRho, "real"): F90InputVariable(
-        assignment=(VarRho, "real"), name="rho_real", size=system_keymap.size
-    ),
-    (VarRho, "imag"): F90InputVariable(
-        assignment=(VarRho, "imag"), name="rho_imag", size=system_keymap.size
-    ),
-    (VarHam, "real"): F90InputVariable(
-        assignment=(VarHam, "real"), name="ham_real", size=hamilton_keymap.size
-    ),
-    (VarHam, "imag"): F90InputVariable(
-        assignment=(VarHam, "imag"), name="ham_imag", size=hamilton_keymap.size
-    ),
-    (VarRes, "real"): F90OutputVariable(
-        assignment=(VarRes, "real"), name="res_real", size=system_keymap.size
-    ),
-    (VarRes, "imag"): F90OutputVariable(
-        assignment=(VarRes, "imag"), name="res_imag", size=system_keymap.size
-    ),
+System_ADAA = FortranCA.set_keymap(system_keymap)
+Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
+
+daa_assignments = {
+    VarRho: (System_ADAA, LibRoutineVariable.STATUS_INPUT),
+    VarRes: (System_ADAA, LibRoutineVariable.STATUS_INOUT),
+    VarHam: (Hamilton_ADAA, LibRoutineVariable.STATUS_INPUT),
 }
+
+
+# lrv_assignments = {
+#     (VarRho, "real"): F90InputVariable(
+#         assignment=(VarRho, "real"), name="rho_real", size=system_keymap.size
+#     ),
+#     (VarRho, "imag"): F90InputVariable(
+#         assignment=(VarRho, "imag"), name="rho_imag", size=system_keymap.size
+#     ),
+#     (VarHam, "real"): F90InputVariable(
+#         assignment=(VarHam, "real"), name="ham_real", size=hamilton_keymap.size
+#     ),
+#     (VarHam, "imag"): F90InputVariable(
+#         assignment=(VarHam, "imag"), name="ham_imag", size=hamilton_keymap.size
+#     ),
+#     (VarRes, "real"): F90OutputVariable(
+#         assignment=(VarRes, "real"), name="res_real", size=system_keymap.size
+#     ),
+#     (VarRes, "imag"): F90OutputVariable(
+#         assignment=(VarRes, "imag"), name="res_imag", size=system_keymap.size
+#     ),
+# }
 
 
 VarInpRInner = {}
@@ -513,7 +527,8 @@ for num, (t_pattern, cases) in enumerate(commutate_cases.items()):
         lr_name,
         these_instructions,
         builder=my_builder,
-        lrv_assignments=lrv_assignments,
+        daa_assignments=daa_assignments,
+        # lrv_assignments=lrv_assignments,
         # container_class=F90KernelContainer,
         container_class=F90RoutineContainer,
     )
@@ -532,7 +547,8 @@ libroutine_commutate = my_library.libroutine_from_instructions(
     "commutate",
     *call_collection,
     builder=my_builder,
-    lrv_assignments=lrv_assignments,
+    daa_assignments=daa_assignments,
+    # lrv_assignments=lrv_assignments,
     container_class=F90RoutineContainer,
 )
 
@@ -602,15 +618,35 @@ from matplotlib import pyplot as plt
 size_ham = len(hamilton_keymap)
 size_rho = len(system_keymap)
 
-rho_real = np.zeros(size_rho)
-rho_imag = np.zeros(size_rho)
-drh_real = np.zeros(size_rho)
-drh_imag = np.zeros(size_rho)
-res_real = np.zeros(size_rho)
-res_imag = np.zeros(size_rho)
+# rho_real = np.zeros(size_rho)
+# rho_imag = np.zeros(size_rho)
+# drh_real = np.zeros(size_rho)
+# drh_imag = np.zeros(size_rho)
+# res_real = np.zeros(size_rho)
+# res_imag = np.zeros(size_rho)
 
-ham_real = np.zeros(size_ham)
-ham_imag = np.zeros(size_ham)
+# ham_real = np.zeros(size_ham)
+# ham_imag = np.zeros(size_ham)
+
+
+rho_adaa = System_ADAA()
+drh_adaa = System_ADAA()
+res_adaa = System_ADAA()
+ham_adaa = Hamilton_ADAA()
+
+
+def comm_wrapper(rho, ham):
+    res = System_ADAA()
+    pauli_library_comm.commutate(
+        rho.real,
+        rho.imag,
+        ham.real,
+        ham.imag,
+        res.real,
+        res.imag,
+    )
+    return res
+
 
 ids_z = []
 
@@ -622,22 +658,22 @@ dtime = 0.0025
 for num_spin_a in range(NUM_SPINS):
     for num_spin_b in range(num_spin_a, NUM_SPINS):
         if num_spin_a == num_spin_b:
-            ham_real[hamilton_keymap.key2off((num_spin_a,), "z")] = (
+            ham_adaa.real[hamilton_keymap.key2off((num_spin_a,), "z")] = (
                 6.28 * omega
             )
             ids_z.append(system_keymap.key2off((num_spin_a,), "z"))
         else:
-            ham_real[
+            ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "xx")
             ] = (6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
-            ham_real[
+            ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "yy")
             ] = (6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
-            ham_real[
+            ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "zz")
             ] = (-2 * 6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
 
-rho_real[ids_z[0]] = 1.0
+rho_adaa.real[ids_z[0]] = 1.0
 
 NUM_STEPS_MAX = 2000
 NUM_STEPS_AT_ONCE = 200
@@ -645,6 +681,12 @@ EVO_ORDER = 4
 
 result_spin_z = [np.zeros(NUM_STEPS_AT_ONCE) for _ in range(NUM_SPINS)]
 summed = np.zeros(NUM_STEPS_AT_ONCE)
+
+# rho_real += rho_adaa.real
+# rho_imag += rho_adaa.imag
+
+# ham_real += ham_adaa.real
+# ham_imag += ham_adaa.imag
 
 
 plt.ion()
@@ -657,29 +699,39 @@ graph_data = [plt.plot(result_spin_z[k])[0] for k in range(NUM_SPINS)]
 
 for num_step in range(NUM_STEPS_MAX):
     for num_substep in range(10):
-        drh_real = rho_real * 1.0
-        drh_imag = rho_imag * 1.0
+        drh_adaa = rho_adaa.copy()
+        #
+        # drh_real = rho_real * 1.0
+        # drh_imag = rho_imag * 1.0
 
         for evo_order in range(1, EVO_ORDER + 1):
-            res_real *= 0.0
-            res_imag *= 0.0
+            #
+            # res_real *= 0.0
+            # res_imag *= 0.0
 
-            res_real, res_imag = pauli_library_comm.commutate(
-                drh_real, drh_imag, ham_real, ham_imag
-            )
+            res_adaa = comm_wrapper(rho_adaa, ham_adaa)
+            #
+            # pauli_library_comm.commutate(
+            #     drh_real, drh_imag, ham_real, ham_imag, res_real, res_imag
+            # )
 
-            drh_real = -dtime * res_imag / (evo_order)
-            drh_imag = dtime * res_real / (evo_order)
+            drh_adaa = (-1j * dtime / evo_order) * res_adaa
+            #
+            # drh_real = -dtime * res_imag / (evo_order)
+            # drh_imag = dtime * res_real / (evo_order)
 
-            rho_real += drh_real
-            rho_imag += drh_imag
+            rho_adaa += drh_adaa
+            #
+            # rho_real += drh_real
+            # rho_imag += drh_imag
 
     if num_step >= NUM_STEPS_AT_ONCE:
         summed[:-1] = summed[1:]
         summed[-1] = 0
         for spin_id in range(NUM_SPINS):
             result_spin_z[spin_id][:-1] = result_spin_z[spin_id][1:]
-            value = rho_real[ids_z[spin_id]]
+            value = rho_adaa.real[ids_z[spin_id]]
+            # value = rho_real[ids_z[spin_id]]
             result_spin_z[spin_id][-1] = value
             summed[-1] += value
             graph_data[spin_id].set_ydata(result_spin_z[spin_id])
@@ -692,7 +744,8 @@ for num_step in range(NUM_STEPS_MAX):
 
     else:
         for spin_id in range(NUM_SPINS):
-            value = rho_real[ids_z[spin_id]]
+            value = rho_adaa.real[ids_z[spin_id]]
+            # value = rho_real[ids_z[spin_id]]
             result_spin_z[spin_id][num_step] = value
             summed[num_step] += value
             graph_data[spin_id].set_ydata(result_spin_z[spin_id])

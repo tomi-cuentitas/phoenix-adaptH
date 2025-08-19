@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 14/08/2025, 13:18
-# Version:     0.0.434
+# Last Update: 19/08/2025, 14:22
+# Version:     0.0.439
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -579,7 +579,7 @@ print(
 
 pauli_library_eff3b = None
 
-RECOMPILE = False
+RECOMPILE = True
 
 try:
     if not RECOMPILE:
@@ -594,10 +594,10 @@ if not pauli_library_eff3b:
         print("attempt to compile...")
 
         ret = subprocess.run(
-            "f2py -m eplib -c pauli_library_eff3b.f90 --f90flags='-ffree-line-length-none'",
+            "/home/matthias/VENV/default/bin/f2py -m eplib -c pauli_library_eff3b.f90 --f90flags='-ffree-line-length-none'",
             shell=True,
-            stderr=subprocess.DEVNULL,
-            stdout=subprocess.DEVNULL,
+            # stderr=subprocess.DEVNULL,
+            # stdout=subprocess.DEVNULL,
         )
         if ret.returncode != 0:
             raise RuntimeError(
@@ -618,7 +618,7 @@ if not pauli_library_eff3b:
     # let's try the import again.
     try:
         print("attempt to import (again)... ")
-        from plib import pauli_library
+        from eplib import pauli_library_eff3b
 
     except ImportError as exc:
         print("import failed again Try to compile manually via")
