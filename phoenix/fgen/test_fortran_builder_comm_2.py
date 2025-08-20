@@ -6,7 +6,7 @@
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
 # Last Update: 20/08/2025, 11:49
-# Version:     0.0.208
+# Version:     0.0.209
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -618,15 +618,15 @@ from matplotlib import pyplot as plt
 size_ham = len(hamilton_keymap)
 size_rho = len(system_keymap)
 
-rho_real = np.zeros(size_rho)
-rho_imag = np.zeros(size_rho)
-drh_real = np.zeros(size_rho)
-drh_imag = np.zeros(size_rho)
-res_real = np.zeros(size_rho)
-res_imag = np.zeros(size_rho)
+# rho_real = np.zeros(size_rho)
+# rho_imag = np.zeros(size_rho)
+# drh_real = np.zeros(size_rho)
+# drh_imag = np.zeros(size_rho)
+# res_real = np.zeros(size_rho)
+# res_imag = np.zeros(size_rho)
 
-ham_real = np.zeros(size_ham)
-ham_imag = np.zeros(size_ham)
+# ham_real = np.zeros(size_ham)
+# ham_imag = np.zeros(size_ham)
 
 
 rho_adaa = System_ADAA()
@@ -635,8 +635,9 @@ res_adaa = System_ADAA()
 ham_adaa = Hamilton_ADAA()
 
 
-def comm_wrapper(rho, ham):
-    res = System_ADAA()
+def comm_wrapper(rho, ham, res=None):
+    if res is None:
+        res = System_ADAA()
     pauli_library_comm.commutate(
         rho.real,
         rho.imag,
@@ -658,22 +659,22 @@ dtime = 0.0025
 for num_spin_a in range(NUM_SPINS):
     for num_spin_b in range(num_spin_a, NUM_SPINS):
         if num_spin_a == num_spin_b:
-            ham_real[hamilton_keymap.key2off((num_spin_a,), "z")] = (
+            ham_adaa.real[hamilton_keymap.key2off((num_spin_a,), "z")] = (
                 6.28 * omega
             )
             ids_z.append(system_keymap.key2off((num_spin_a,), "z"))
         else:
-            ham_real[
+            ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "xx")
             ] = (6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
-            ham_real[
+            ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "yy")
             ] = (6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
-            ham_real[
+            ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "zz")
             ] = (-2 * 6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
 
-rho_real[ids_z[0]] = 1.0
+rho_adaa.real[ids_z[0]] = 1.0
 
 NUM_STEPS_MAX = 2000
 NUM_STEPS_AT_ONCE = 200
@@ -681,7 +682,6 @@ EVO_ORDER = 4
 
 result_spin_z = [np.zeros(NUM_STEPS_AT_ONCE) for _ in range(NUM_SPINS)]
 summed = np.zeros(NUM_STEPS_AT_ONCE)
-
 
 plt.ion()
 
@@ -693,29 +693,20 @@ graph_data = [plt.plot(result_spin_z[k])[0] for k in range(NUM_SPINS)]
 
 for num_step in range(NUM_STEPS_MAX):
     for num_substep in range(10):
-        drh_real = rho_real * 1.0
-        drh_imag = rho_imag * 1.0
+        drh_adaa = rho_adaa.copy()
 
         for evo_order in range(1, EVO_ORDER + 1):
-            res_real *= 0.0
-            res_imag *= 0.0
-
-            pauli_library_comm.commutate(
-                drh_real, drh_imag, ham_real, ham_imag, res_real, res_imag
-            )
-
-            drh_real = -dtime * res_imag / (evo_order)
-            drh_imag = dtime * res_real / (evo_order)
-
-            rho_real += drh_real
-            rho_imag += drh_imag
+            res_adaa = comm_wrapper(rho_adaa, ham_adaa)
+            drh_adaa = (-1j * dtime / evo_order) * res_adaa
+            rho_adaa += drh_adaa
 
     if num_step >= NUM_STEPS_AT_ONCE:
         summed[:-1] = summed[1:]
         summed[-1] = 0
         for spin_id in range(NUM_SPINS):
             result_spin_z[spin_id][:-1] = result_spin_z[spin_id][1:]
-            value = rho_real[ids_z[spin_id]]
+            value = rho_adaa.real[ids_z[spin_id]]
+            # value = rho_real[ids_z[spin_id]]
             result_spin_z[spin_id][-1] = value
             summed[-1] += value
             graph_data[spin_id].set_ydata(result_spin_z[spin_id])
@@ -728,7 +719,8 @@ for num_step in range(NUM_STEPS_MAX):
 
     else:
         for spin_id in range(NUM_SPINS):
-            value = rho_real[ids_z[spin_id]]
+            value = rho_adaa.real[ids_z[spin_id]]
+            # value = rho_real[ids_z[spin_id]]
             result_spin_z[spin_id][num_step] = value
             summed[num_step] += value
             graph_data[spin_id].set_ydata(result_spin_z[spin_id])
