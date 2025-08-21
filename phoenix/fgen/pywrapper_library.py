@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2025
-# Last Update: 21/08/2025, 12:29
-# Version:     0.0.14
+# Last Update: 21/08/2025, 14:44
+# Version:     0.0.29
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -25,7 +25,7 @@ class PyWrapperLibrary(Library):
 
     def __init__(self, wrapped_library, build_hash=None):
         wrapped_lib_name = (
-            wrapped_library.name
+            wrapped_library.libname
         )  # will include its own build hash
         super().__init__("py_" + wrapped_lib_name, build_hash=build_hash)
         self._wrapped_library = wrapped_library
@@ -33,5 +33,5 @@ class PyWrapperLibrary(Library):
         for dependency in wrapped_library.get_dependencies(recursive=True):
             self._dependencies.add(dependency)
 
-        for routine in self._wrapped_library.routines
-
+        for name, routine in self._wrapped_library.content:
+            print(name, routine.name, list(routine.get_arguments()))

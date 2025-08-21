@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2025, 12:34
-# Version:     0.1.450
+# Last Update: 21/08/2025, 15:10
+# Version:     0.1.466
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -270,7 +270,9 @@ class Library:
         self.definition_capture.build(**kwargs)
         self.import_capture.build(**kwargs)
         self.safety_capture.build(**kwargs)
-        assert self.perform_checks()
+        for imp in self.import_capture.captured:
+            self._dependencies.add(imp.library)
+        assert self.perform_safety_checks()
         return self
 
     def generate_head_containers(self, **_):
@@ -334,6 +336,7 @@ class Library:
         daa_assignments=None,
         lrv_assignments=None,
         container_class=None,
+        namespace=None,
         **buildargs,
     ):
         """add a new libroutine from a container"""
@@ -343,9 +346,13 @@ class Library:
         if builder is None:
             builder = type(self).DEFAULT_BUILDER(f"default:lib{name}")
 
+        if namespace is None:
+            namespace = self.context.namespace
+
         all_assignments = builder.handle_assignments(
             daa_assignments=daa_assignments,
             lrv_assignments=lrv_assignments,
+            namespace=namespace,
         )
 
         routine_container = builder.instructions_to_routine_container(
@@ -369,7 +376,7 @@ class Library:
         return libroutine
 
     def create_libroutine_entry(self, name, arguments, is_kernel, container):
-        libroutine = LibRoutine(
+        libroutine = type(self).LIBROUTINE_CLASS(
             name,
             library=self,
             arguments=arguments,
@@ -380,12 +387,12 @@ class Library:
         return libroutine
 
     def append_libroutine(self, libroutine):
-        """add the libroutine to the known libroutines"""
+        """add the libroutine to the known libroutines. Also include dependencies"""
         self._libcontent[libroutine.name] = libroutine
         if (lib := libroutine.library) is not None:
             self._dependencies.add(lib)
 
-    def perform_checks(self):
+    def perform_safety_checks(self):
         """perform some safety checks"""
         # the safety capture should be empty
         lost = list(self.safety_capture.captured)

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   04/02/2025
-# Last Update: 14/08/2025, 13:09
-# Version:     0.0.871
+# Last Update: 21/08/2025, 15:05
+# Version:     0.0.881
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -109,7 +109,9 @@ class Namespace:
             raise KeyError(f"variable {name} not found")
         return None
 
-    def find_assignment_dict(self, ivariable_type, exception_not_existing=True):
+    def find_assignment_dict(
+        self, ivariable_type, exception_not_existing=True
+    ):
         """find a variable dict in the namespace"""
         if ivariable_type in self._assigned:
             return self._assigned[ivariable_type]
@@ -123,7 +125,9 @@ class Namespace:
             )
         return None
 
-    def find_assignment(self, ivariable_type, key, exception_not_existing=True):
+    def find_assignment(
+        self, ivariable_type, key, exception_not_existing=True
+    ):
         """find a variable in the namespace"""
         assignment_dict = self.find_assignment_dict(
             ivariable_type, exception_not_existing=exception_not_existing
@@ -289,7 +293,9 @@ class LibRoutineVariable:
 
     def use_as_output(self):
         """use the variable as an output"""
-        self._status |= type(self).STATUS_OUTPUT  # set the second bit in status
+        self._status |= type(
+            self
+        ).STATUS_OUTPUT  # set the second bit in status
 
     def release(self):
         """release the variable, which means that is can be used somewhere else"""

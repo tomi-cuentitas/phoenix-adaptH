@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 19/08/2025, 14:29
-# Version:     0.0.1428
+# Last Update: 21/08/2025, 15:01
+# Version:     0.0.1432
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -254,7 +254,11 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                 yield f"  - {instruction_type}"
 
     def handle_assignments(
-        self, daa_assignments, lrv_assignments=None, contribute=None
+        self,
+        daa_assignments,
+        lrv_assignments=None,
+        contribute=None,
+        namespace=None,
     ):
         if contribute is None:
             contribute = {}
@@ -268,6 +272,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
                         size=adaa.get_fixed_size(),
                         status=status,
                         assignment=(instr_var, key),
+                        namespace=namespace,
                     )
                     contribute[instr_var, key] = lrv
         if lrv_assignments is not None:
@@ -276,7 +281,7 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         return contribute
 
     def create_libroutine_variable(
-        self, *, name, dtype, status, size, **kwargs
+        self, *, name, dtype, status, size, namespace=None, **kwargs
     ):
         raise NotImplementedError("must be implemented in subclass")
 

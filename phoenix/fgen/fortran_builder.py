@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 21/08/2025, 12:31
-# Version:     0.0.1218
+# Last Update: 21/08/2025, 15:01
+# Version:     0.0.1220
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -339,24 +339,48 @@ class F90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
     def create_libroutine_variable(
-        self, *, name, dtype, status, size, assignment=None, **kwargs
+        self,
+        *,
+        name,
+        dtype,
+        status,
+        size,
+        assignment=None,
+        namespace=None,
+        **kwargs,
     ):
         status = status & 3
         if status == LibRoutineVariable.STATUS_INPUT:
             return F90InputVariable(
-                name=name, dtype=dtype, size=size, assignment=assignment
+                name=name,
+                dtype=dtype,
+                size=size,
+                assignment=assignment,
+                namespace=namespace,
             )
         elif status == LibRoutineVariable.STATUS_OUTPUT:
             return F90OutputVariable(
-                name=name, dtype=dtype, size=size, assignment=assignment
+                name=name,
+                dtype=dtype,
+                size=size,
+                assignment=assignment,
+                namespace=namespace,
             )
         elif status == LibRoutineVariable.STATUS_INOUT:
             return F90InOutVariable(
-                name=name, dtype=dtype, size=size, assignment=assignment
+                name=name,
+                dtype=dtype,
+                size=size,
+                assignment=assignment,
+                namespace=namespace,
             )
         else:
             return super().create_libroutine_variable(
-                name=name, dtype=dtype, status=status, size=size
+                name=name,
+                dtype=dtype,
+                status=status,
+                size=size,
+                namespace=namespace,
             )
 
     def handle_environment_instruction(self, instruction, context, buildargs):
