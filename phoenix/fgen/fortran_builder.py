@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 14/08/2025, 13:09
-# Version:     0.0.1217
+# Last Update: 21/08/2025, 12:31
+# Version:     0.0.1218
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -620,10 +620,10 @@ class F90Library(Library):
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""
-        yield from self.codelines_from_text(f"MODULE {self.name}")
+        yield from self.codelines_from_text(f"MODULE {self.libname}")
 
     def generate_foot_containers(self, **_):
-        yield from self.codelines_from_text(f"END MODULE {self.name}")
+        yield from self.codelines_from_text(f"END MODULE {self.libname}")
 
     def generate_prmb_containers(self, **_):
         yield from self.codelines_from_text("! IMPORTS")
