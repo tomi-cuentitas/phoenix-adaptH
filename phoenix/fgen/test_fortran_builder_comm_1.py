@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 21/08/2025, 14:41
-# Version:     0.0.213
+# Last Update: 22/08/2025, 13:06
+# Version:     0.0.223
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -650,13 +650,6 @@ def comm_wrapper(rho, ham):
 
 ids_z = []
 
-
-from phoenix.fgen.pywrapper_library import PyWrapperLibrary
-
-foo = PyWrapperLibrary(my_library)
-
-
-sys.exit()
 
 coupl = 0.1
 omega = 1.0

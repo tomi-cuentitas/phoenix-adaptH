@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 21/08/2025, 15:10
-# Version:     0.1.466
+# Last Update: 22/08/2025, 12:22
+# Version:     0.1.475
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -124,6 +124,7 @@ class LibRoutine(LibraryContent):
         dependencies=None,
         is_kernel=False,
         container=None,
+        assignments=None,
     ):
         super().__init__(
             identifier, library=library, dependencies=dependencies
@@ -135,6 +136,7 @@ class LibRoutine(LibraryContent):
         # self._input_variables = []
         self._is_kernel = is_kernel
         self._container = container
+        self._assignments = assignments
 
     @property
     def key(self):
@@ -145,6 +147,11 @@ class LibRoutine(LibraryContent):
     def is_kernel(self):
         """read-only access to attribute identifier"""
         return self._is_kernel
+
+    @property
+    def assignments(self):
+        """access read-only attribute assignments"""
+        yield from self._assignments.items()
 
     def get_meta(self):
         """return meta information on the library"""
@@ -263,7 +270,7 @@ class Library:
     @property
     def context(self):
         """access read-only forwarded attribute context"""
-        return self.definition_capture.context  # ._context
+        return self.definition_capture.context
 
     def prepare_sections(self, **kwargs):
         """build the sections"""
@@ -273,7 +280,7 @@ class Library:
         for imp in self.import_capture.captured:
             self._dependencies.add(imp.library)
         assert self.perform_safety_checks()
-        return self
+        return True
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""
@@ -372,16 +379,20 @@ class Library:
             arguments=list(routine_container.get_argument_variables()),
             is_kernel=isinstance(routine_container, KernelContainer),
             container=routine_container,
+            assignments=all_assignments,
         )
         return libroutine
 
-    def create_libroutine_entry(self, name, arguments, is_kernel, container):
+    def create_libroutine_entry(
+        self, name, arguments, is_kernel, container, assignments
+    ):
         libroutine = type(self).LIBROUTINE_CLASS(
             name,
             library=self,
             arguments=arguments,
             is_kernel=is_kernel,
             container=container,
+            assignments=assignments,
         )
         self.append_libroutine(libroutine)
         return libroutine
@@ -450,11 +461,12 @@ class Library:
         self._status["prepared"] = False
 
     def perform_compilation(self, makefile=None):
-        return
+        return True
 
     def write_all_files(self):
         self.write_code()
         self.write_docs()
+        return True
 
     def write_code(self):
         with open(self.filename, "w") as file:
@@ -479,53 +491,53 @@ class Library:
         # make sure library is built
         if self._status["prepared"] and (not force):
             return True, None
-        # self._status["built"] = False
         self._status["compiled"] = False
         self._status["written"] = False
         self._status["prepared"] = False
 
+        ret = False
         try:
-            self.prepare_sections()
+            ret = self.prepare_sections()
         except Exception as exc:
             return False, exc
 
         self._status["prepared"] = True
-        return True, None
+        return ret, None
 
     def write(self, force=False):
         """write to file"""
         if self._status["written"] and (not force):
             return True, None
-        # self._status["built"] = False
         self._status["compiled"] = False
         self._status["written"] = False
         if not self._status["prepared"]:
             raise ValueError("cannot write unprepared library")
 
+        ret = False
         try:
-            self.write_all_files()
+            ret = self.write_all_files()
         except Exception as exc:
             return False, exc
 
-        self._status["written"] = True
-        return True, None
+        self._status["written"] = ret
+        return ret, None
 
     def compile(self, makefile=None, force=False):
         """compile the library"""
         if self._status["compiled"] and (not force):
             return True, None
-        # self._status["built"] = False
         self._status["compiled"] = False
         if not self._status["written"]:
             raise ValueError("cannot compile when library is not written")
 
+        ret = False
         try:
-            self.perform_compilation(makefile)
+            ret = self.perform_compilation(makefile)
         except Exception as exc:
             return False, exc
 
-        self._status["compiled"] = True
-        return True, None
+        self._status["compiled"] = ret
+        return ret, None
 
     def build(self, makefile=None, force=False):
         """build the actual library objects, i.e. write to file(s), and compile.
@@ -569,15 +581,6 @@ class Library:
                 "Error during compile phase in build:", str(exc)
             ) from exc
 
-    # def construct_makefile_targets(self):
-    #     """
-    #     create the targets for this library, that can be attached to a makefile.
-    #     If any dependencies are involved, the associated targets will be yielded here as well so
-    #     that one can pipe that into a makefile directly.
-    #     """
-    #     return
-    #     yield
-
     def get_meta(self, key=None):
         """return meta information on the library"""
         if key is None:
@@ -620,3 +623,22 @@ class Library:
     def docname(self):
         """generate the docname value"""
         return f"{self.libname}_doc.txt"
+
+    # def construct_makefile_targets(self):
+    #     """
+    #     create the targets for this library, that can be attached to a makefile.
+    #     If any dependencies are involved, the associated targets will be yielded here as well so
+    #     that one can pipe that into a makefile directly.
+    #     """
+    #     return
+    #     yield
+
+    def get_library_target(self):
+        pass
+
+    def get_codefile_target(self):
+        pass
+
+
+# TODO
+# need ability to request targets from library, such as object, sharedlib, staticlib, ...

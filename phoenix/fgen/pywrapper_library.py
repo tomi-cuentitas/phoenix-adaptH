@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2025
-# Last Update: 21/08/2025, 14:44
-# Version:     0.0.29
+# Last Update: 22/08/2025, 13:06
+# Version:     0.0.81
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -14,7 +14,8 @@
 """
 
 
-from phoenix.fgen.library import Library
+from phoenix.fgen.library import Library, LibRoutine
+from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 
 class PyWrapperLibrary(Library):
@@ -23,7 +24,7 @@ class PyWrapperLibrary(Library):
     and provides python wrappers to access them
     """
 
-    def __init__(self, wrapped_library, build_hash=None):
+    def __init__(self, wrapped_library, wrapper_lib=None, build_hash=None):
         wrapped_lib_name = (
             wrapped_library.libname
         )  # will include its own build hash
@@ -32,6 +33,68 @@ class PyWrapperLibrary(Library):
         self._dependencies.add(wrapped_library)
         for dependency in wrapped_library.get_dependencies(recursive=True):
             self._dependencies.add(dependency)
+        self._wrapper_lib = wrapper_lib
 
-        for name, routine in self._wrapped_library.content:
-            print(name, routine.name, list(routine.get_arguments()))
+    def create_wrapper(self, libroutine_name, daa_assignments=None):
+        """wrap a libroutine in the library"""
+        if daa_assignments is None:
+            daa_assignments = {}
+        libroutine = self._wrapped_library[libroutine_name]
+        if not isinstance(libroutine, LibRoutine):
+            raise TypeError("can only wrap libroutine")
+
+        internally_call_with = []
+        requires = {}
+        returns = {}
+
+        for arg in libroutine.get_arguments():
+            if arg.assignment is not None:
+                src, key = arg.assignment
+                if src in daa_assignments:
+                    adaa, status = daa_assignments[src]
+                    name = src().name
+                    if status & LibRoutineVariable.STATUS_OUTPUT:
+                        if name in returns:
+                            assert returns[name] == adaa
+                        else:
+                            returns[name] = adaa
+                    else:
+                        if name in requires:
+                            assert requires[name] == status
+                        else:
+                            requires[name] = status
+                    internally_call_with.append((name, key, status))
+                else:
+                    raise ValueError(f"DAA assignment for {src} not found")
+
+        def wrapper(**kwargs):
+            rets = {}
+            for name, adaa in returns.items():
+                rets[name] = adaa()
+                rets[name].to_zero()
+            variable_list = []
+            for name, key, status in internally_call_with:
+                if status & LibRoutineVariable.STATUS_OUTPUT:
+                    variable_list.append(rets[name].data[key])
+                else:
+                    variable_list.append(kwargs[name].data[key])
+            routine = getattr(self._wrapper_lib, libroutine_name)
+            routine(*variable_list)
+            if len(rets) > 1:
+                return tuple(rets.values())
+            if len(rets) == 1:
+                return list(rets.values())[0]
+            return True
+
+        wrapper.__doc__ = f"""
+            wrapper {libroutine_name}({", ".join(requires.keys())})
+
+            returns: {", ".join(returns.keys())}
+            """.replace(
+            "            ", ""
+        )
+        return wrapper
+
+        # for (src, key), lrv in libroutine.assignments:
+        #     if lrv == arg:
+        #         print(src, key, lrv, libroutine)

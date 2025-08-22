@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 19/08/2025, 15:57
-# Version:     0.0.2029
+# Last Update: 22/08/2025, 12:36
+# Version:     0.0.2037
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -74,6 +74,7 @@ class GenericADAA:
     """
 
     _IDENTIFIER = ""
+    _NAME = ""
     _BACKEND: CoeffBackend
     _KEYMAP: KeyMap | None = None
     _FIXED_SIZE = None
@@ -206,6 +207,7 @@ class GenericADAA:
                 cls._IDENTIFIER = cls._IDENTIFIER + "." + identifier
             else:
                 cls._IDENTIFIER = identifier
+            cls._NAME = identifier
         if size is not None and keymap is not None:
             raise ValueError("Size and keymap cannot be set simultaneously.")
         if keymap is not None:
@@ -257,6 +259,7 @@ class GenericADAA:
             (cls,),
             {},
             keymap=keymap,
+            identifier=f"KM[{keymap}]",
         )
 
     @classmethod

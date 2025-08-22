@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 20/08/2025, 11:49
-# Version:     0.0.209
+# Last Update: 22/08/2025, 13:07
+# Version:     0.0.212
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -635,18 +635,30 @@ res_adaa = System_ADAA()
 ham_adaa = Hamilton_ADAA()
 
 
-def comm_wrapper(rho, ham, res=None):
-    if res is None:
-        res = System_ADAA()
-    pauli_library_comm.commutate(
-        rho.real,
-        rho.imag,
-        ham.real,
-        ham.imag,
-        res.real,
-        res.imag,
-    )
-    return res
+# def comm_wrapper(rho, ham, res=None):
+#     if res is None:
+#         res = System_ADAA()
+#     pauli_library_comm.commutate(
+#         rho.real,
+#         rho.imag,
+#         ham.real,
+#         ham.imag,
+#         res.real,
+#         res.imag,
+#     )
+#     return res
+
+
+from phoenix.fgen.pywrapper_library import PyWrapperLibrary
+
+foo = PyWrapperLibrary(my_library, wrapper_lib=pauli_library_comm)
+
+wrapper = foo.create_wrapper("commutate", daa_assignments=daa_assignments)
+
+print(wrapper(rho=rho_adaa, ham=ham_adaa))
+
+print(help(wrapper))
+print(wrapper.__doc__)
 
 
 ids_z = []
@@ -696,7 +708,7 @@ for num_step in range(NUM_STEPS_MAX):
         drh_adaa = rho_adaa.copy()
 
         for evo_order in range(1, EVO_ORDER + 1):
-            res_adaa = comm_wrapper(rho_adaa, ham_adaa)
+            res_adaa = wrapper(rho=rho_adaa, ham=ham_adaa)
             drh_adaa = (-1j * dtime / evo_order) * res_adaa
             rho_adaa += drh_adaa
 
