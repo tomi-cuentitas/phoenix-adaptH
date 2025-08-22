@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 22/08/2025, 14:26
-# Version:     0.0.1239
+# Last Update: 22/08/2025, 14:38
+# Version:     0.0.1242
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -394,8 +394,8 @@ class F90Builder(Builder, identifier="FORTRAN90"):
             if isinstance(var, LibRoutineVariable):
                 remember.append(var)
                 continue
-            # if abs(var) < 1e-12:
-            #     return False
+            if abs(var) < 1e-12:
+                return False
         if hook is not None:
             for var in remember:
                 hook.requires(var)

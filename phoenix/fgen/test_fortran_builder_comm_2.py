@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 22/08/2025, 14:28
-# Version:     0.0.219
+# Last Update: 22/08/2025, 14:45
+# Version:     0.0.236
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -52,9 +52,9 @@ from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 # Some parameters that define the subspace
 MAX_SIZE = 4
-NUM_SPINS = 4
+NUM_SPINS = 15
 NUM_SPINS_EXPLORE = MAX_SIZE + MAX_SIZE // 2
-
+REAL_ONLY = True
 
 my_builder = F90Builder("my_f90_builder")
 
@@ -387,15 +387,20 @@ for nums_a_key, nums_a_entry in system_keymap.items():
 
         print(nums_a, nums_b)
         for nums_c, t_pattern in get_target_variations(nums_a, nums_b):
-            print("->", t_pattern, nums_c)
             if t_pattern in commutate_cases:
+                print("->", t_pattern, nums_c)
                 commutate_cases[t_pattern].add((nums_a, nums_b, nums_c))
+                assert len(nums_c) <= MAX_SIZE:
 
 
 my_library = F90Library("pauli_library_comm")
 
-System_ADAA = FortranRA.set_keymap(system_keymap)
-Hamilton_ADAA = FortranRA.set_keymap(hamilton_keymap)
+if REAL_ONLY:
+    System_ADAA = FortranRA.set_keymap(system_keymap)
+    Hamilton_ADAA = FortranRA.set_keymap(hamilton_keymap)
+else:
+    System_ADAA = FortranCA.set_keymap(system_keymap)
+    Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
 
 daa_assignments = {
     VarRho: (System_ADAA, LibRoutineVariable.STATUS_INPUT),
@@ -666,7 +671,7 @@ ids_z = []
 
 coupl = 0.1
 omega = 1.0
-dtime = 0.0025
+dtime = 0.00125
 
 for num_spin_a in range(NUM_SPINS):
     for num_spin_b in range(num_spin_a, NUM_SPINS):
@@ -690,7 +695,7 @@ rho_adaa.real[ids_z[0]] = 1.0
 
 NUM_STEPS_MAX = 2000
 NUM_STEPS_AT_ONCE = 200
-EVO_ORDER = 4
+EVO_ORDER = 6
 
 result_spin_z = [np.zeros(NUM_STEPS_AT_ONCE) for _ in range(NUM_SPINS)]
 summed = np.zeros(NUM_STEPS_AT_ONCE)

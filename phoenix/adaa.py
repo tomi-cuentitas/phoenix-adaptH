@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 22/08/2025, 14:30
-# Version:     0.0.2047
+# Last Update: 22/08/2025, 14:34
+# Version:     0.0.2051
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -445,7 +445,13 @@ class ComplexArrayADAA(
         """evaluates operator_r += operator_a + scalar_b * operator_c"""
 
         assert op_c is not None
+        assert "imag" in op_c.data
+
         assert op_r is not None
+        assert "imag" in op_r.data
+
+        if op_a is not None:
+            assert "imag" in op_a.data
 
         if size is not None:
             if size != op_r.size:
