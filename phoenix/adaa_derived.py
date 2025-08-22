@@ -5,15 +5,15 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 13/08/2025, 13:03
-# Version:     0.0.77
+# Last Update: 22/08/2025, 14:23
+# Version:     0.0.79
 #
 #################################################end#of#autoheader#do#not#modify
 
 
 """
 
-from phoenix.adaa import ComplexArrayADAA
+from phoenix.adaa import ComplexArrayADAA, RealArrayADAA
 from phoenix.coeffbackend_derived import RawPyCoeffBackend
 from phoenix.coeffbackend_derived import NumPyCoeffBackend
 from phoenix.coeffbackend_derived import FortranCoeffBackend
@@ -55,6 +55,38 @@ class OpenClCA(
 
 class PyCudaCA(
     ComplexArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
+):
+    """OpenCL based data layer"""
+
+
+class RawPyRA(
+    RealArrayADAA, backend=RawPyCoeffBackend(), identifier="RAWPYTHON"
+):
+    """Raw Python data layer"""
+
+
+class NumPyRA(RealArrayADAA, backend=NumPyCoeffBackend(), identifier="NUMPY"):
+    """NumPy based data layer"""
+
+
+class FortranRA(
+    RealArrayADAA, backend=FortranCoeffBackend(), identifier="FORTRAN"
+):
+    """FORTRAN based data layer (implemented via NumPy)"""
+
+
+class CupyRA(RealArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
+    """CuPy based data layer"""
+
+
+class OpenClRA(
+    RealArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
+):
+    """OpenCL based data layer"""
+
+
+class PyCudaRA(
+    RealArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
 ):
     """OpenCL based data layer"""
 

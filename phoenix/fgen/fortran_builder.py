@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 21/08/2025, 15:01
-# Version:     0.0.1220
+# Last Update: 22/08/2025, 14:26
+# Version:     0.0.1239
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -332,9 +332,6 @@ class F90ImportContainer(ImportContainer):
 ###############################################################################
 
 
-my_fancy_var = F90InOutVariable(name="my_fancy_var", dtype="f64", size=20)
-
-
 class F90Builder(Builder, identifier="FORTRAN90"):
     """F90 Builder"""
 
@@ -388,6 +385,22 @@ class F90Builder(Builder, identifier="FORTRAN90"):
             instruction, context, buildargs
         )
 
+    def check_relevance(self, *variables, hook=None):
+        """check the relevance of variable combination. Require if positive"""
+        remember = []
+        for var in variables:
+            if var is None:
+                return False
+            if isinstance(var, LibRoutineVariable):
+                remember.append(var)
+                continue
+            # if abs(var) < 1e-12:
+            #     return False
+        if hook is not None:
+            for var in remember:
+                hook.requires(var)
+        return True
+
     def handle_affine_instruction(self, instruction, context, buildargs):
         instruction_dict = instruction.apply_environment(
             context.environment
@@ -403,62 +416,80 @@ class F90Builder(Builder, identifier="FORTRAN90"):
         yield F90CommentLine(f"src0={src0.name} @ {osrc}", context=context)
         yield F90CommentLine(f"alpha = {alpha}", context=context)
         yield F90CommentLine(f"beta  = {beta}", context=context)
-        x_var_real = context.namespace.find_assignment(type(src0), "real")
-        x_var_imag = context.namespace.find_assignment(type(src0), "imag")
-        y_var_real = context.namespace.find_assignment(type(tgt0), "real")
-        y_var_imag = context.namespace.find_assignment(type(tgt0), "imag")
+        x_var_real = context.namespace.find_assignment(
+            type(src0), "real", exception_not_existing=False
+        )
+        x_var_imag = context.namespace.find_assignment(
+            type(src0), "imag", exception_not_existing=False
+        )
+        y_var_real = context.namespace.find_assignment(
+            type(tgt0), "real", exception_not_existing=False
+        )
+        y_var_imag = context.namespace.find_assignment(
+            type(tgt0), "imag", exception_not_existing=False
+        )
         # print("find assignment", x_var_real, y_var_real)
         # print(context.environment)
         x_var_offs = src0.offsets
         y_var_offs = tgt0.offsets
-        a_real = alpha.real
-        a_imag = alpha.imag
-        b_real = beta.real
-        b_imag = beta.imag
+        a_real = alpha.real * 1
+        a_imag = alpha.imag * 1
+        b_real = beta.real * 1
+        b_imag = beta.imag * 1
 
         hook = HookContainer(context=context)
 
-        hook.requires(x_var_real)
-        hook.requires(x_var_imag)
-        hook.requires(y_var_real)
-        hook.requires(y_var_imag)
+        # hook.requires(x_var_real)
+        # hook.requires(x_var_imag)
+        # hook.requires(y_var_real)
+        # hook.requires(y_var_imag)
 
-        yield F90AffineContainer(
-            y_var_real,
-            y_var_offs,
-            a_real,
-            x_var_real,
-            x_var_offs,
-            0.0,
-            context=context,
-        )
-        yield F90AffineContainer(
-            y_var_real,
-            y_var_offs,
-            -a_imag,
-            x_var_imag,
-            x_var_offs,
-            b_real,
-            context=context,
-        )
-        yield F90AffineContainer(
-            y_var_imag,
-            y_var_offs,
-            a_real,
-            x_var_imag,
-            x_var_offs,
-            0.0,
-            context=context,
-        )
-        yield F90AffineContainer(
-            y_var_imag,
-            y_var_offs,
-            a_imag,
-            x_var_real,
-            x_var_offs,
-            b_imag,
-            context=context,
-        )
+        ret = self.check_relevance(y_var_real, a_real, x_var_real, hook=hook)
+        if ret:
+            yield F90AffineContainer(
+                y_var_real,
+                y_var_offs,
+                a_real,
+                x_var_real,
+                x_var_offs,
+                b_real,
+                context=context,
+            )
+            b_real = 0.0  # don't add b twice
+        ret = self.check_relevance(y_var_real, a_imag, x_var_imag, hook=hook)
+        if ret:
+            yield F90AffineContainer(
+                y_var_real,
+                y_var_offs,
+                -a_imag,
+                x_var_imag,
+                x_var_offs,
+                b_real,
+                context=context,
+            )
+        ret = self.check_relevance(y_var_imag, a_real, x_var_imag, hook=hook)
+        if ret:
+            yield F90AffineContainer(
+                y_var_imag,
+                y_var_offs,
+                a_real,
+                x_var_imag,
+                x_var_offs,
+                b_imag,
+                context=context,
+            )
+            b_imag = 0.0  # don't add b twice
+        ret = self.check_relevance(y_var_imag, a_imag, x_var_real, hook=hook)
+        if ret:
+            yield F90AffineContainer(
+                y_var_imag,
+                y_var_offs,
+                a_imag,
+                x_var_real,
+                x_var_offs,
+                b_imag,
+                context=context,
+            )
         yield CodeLine("", context=context)
 
     def handle_bilinear_instruction(self, instruction, context, buildargs):
@@ -470,15 +501,25 @@ class F90Builder(Builder, identifier="FORTRAN90"):
         src0 = instruction_dict.get("src0")
         src1 = instruction_dict.get("src1")
         alpha = instruction_dict.get("alpha")
-        otgt0 = list(tgt0.offsets)
-        osrc0 = list(src0.offsets)
-        osrc1 = list(src1.offsets)
-        u_var_real = context.namespace.find_assignment(type(src0), "real")
-        u_var_imag = context.namespace.find_assignment(type(src0), "imag")
-        v_var_real = context.namespace.find_assignment(type(src1), "real")
-        v_var_imag = context.namespace.find_assignment(type(src1), "imag")
-        y_var_real = context.namespace.find_assignment(type(tgt0), "real")
-        y_var_imag = context.namespace.find_assignment(type(tgt0), "imag")
+
+        u_var_real = context.namespace.find_assignment(
+            type(src0), "real", exception_not_existing=False
+        )
+        u_var_imag = context.namespace.find_assignment(
+            type(src0), "imag", exception_not_existing=False
+        )
+        v_var_real = context.namespace.find_assignment(
+            type(src1), "real", exception_not_existing=False
+        )
+        v_var_imag = context.namespace.find_assignment(
+            type(src1), "imag", exception_not_existing=False
+        )
+        y_var_real = context.namespace.find_assignment(
+            type(tgt0), "real", exception_not_existing=False
+        )
+        y_var_imag = context.namespace.find_assignment(
+            type(tgt0), "imag", exception_not_existing=False
+        )
 
         u_var_offs = src0.offsets
         v_var_offs = src1.offsets
@@ -490,14 +531,17 @@ class F90Builder(Builder, identifier="FORTRAN90"):
 
         hook = HookContainer(context=context)
 
-        hook.requires(u_var_real)
-        hook.requires(u_var_imag)
-        hook.requires(v_var_real)
-        hook.requires(v_var_imag)
-        hook.requires(y_var_real)
-        hook.requires(y_var_imag)
+        # hook.requires(u_var_real)
+        # hook.requires(u_var_imag)
+        # hook.requires(v_var_real)
+        # hook.requires(v_var_imag)
+        # hook.requires(y_var_real)
+        # hook.requires(y_var_imag)
 
-        if abs(a_real) > 1e-12 or include_all:
+        ret = self.check_relevance(
+            y_var_real, a_real, u_var_real, v_var_real, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_real,
                 y_var_offs,
@@ -508,6 +552,11 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 v_var_offs,
                 context=context,
             )
+
+        ret = self.check_relevance(
+            y_var_real, a_real, u_var_imag, v_var_imag, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_real,
                 y_var_offs,
@@ -519,7 +568,10 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 context=context,
             )
 
-        if abs(a_imag) > 1e-12 or include_all:
+        ret = self.check_relevance(
+            y_var_real, a_imag, u_var_imag, v_var_real, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_real,
                 y_var_offs,
@@ -530,6 +582,11 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 v_var_offs,
                 context=context,
             )
+
+        ret = self.check_relevance(
+            y_var_real, a_imag, u_var_real, v_var_imag, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_real,
                 y_var_offs,
@@ -541,7 +598,10 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 context=context,
             )
 
-        if abs(a_real) > 1e-12 or include_all:
+        ret = self.check_relevance(
+            y_var_imag, a_real, u_var_imag, v_var_real, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_imag,
                 y_var_offs,
@@ -552,6 +612,11 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 v_var_offs,
                 context=context,
             )
+
+        ret = self.check_relevance(
+            y_var_imag, a_real, u_var_real, v_var_imag, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_imag,
                 y_var_offs,
@@ -563,7 +628,10 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 context=context,
             )
 
-        if abs(a_imag) > 1e-12 or include_all:
+        ret = self.check_relevance(
+            y_var_imag, a_imag, u_var_real, v_var_real, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_imag,
                 y_var_offs,
@@ -574,6 +642,11 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 v_var_offs,
                 context=context,
             )
+
+        ret = self.check_relevance(
+            y_var_imag, a_imag, u_var_imag, v_var_imag, hook=hook
+        )
+        if ret or include_all:
             yield F90BilinearContainer(
                 y_var_imag,
                 y_var_offs,

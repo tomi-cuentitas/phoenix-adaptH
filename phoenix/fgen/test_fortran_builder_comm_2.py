@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 22/08/2025, 13:07
-# Version:     0.0.212
+# Last Update: 22/08/2025, 14:28
+# Version:     0.0.219
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -43,7 +43,7 @@ from phoenix.fgen.fortran_builder import (
 )
 
 
-from phoenix.adaa_derived import FortranCA
+from phoenix.adaa_derived import FortranCA, FortranRA
 from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 
@@ -394,8 +394,8 @@ for nums_a_key, nums_a_entry in system_keymap.items():
 
 my_library = F90Library("pauli_library_comm")
 
-System_ADAA = FortranCA.set_keymap(system_keymap)
-Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
+System_ADAA = FortranRA.set_keymap(system_keymap)
+Hamilton_ADAA = FortranRA.set_keymap(hamilton_keymap)
 
 daa_assignments = {
     VarRho: (System_ADAA, LibRoutineVariable.STATUS_INPUT),
@@ -478,7 +478,7 @@ for num, (t_pattern, operations) in enumerate(commutate_operations.items()):
                 target_variable(tgt_key),
                 rho_variable(src1_key),
                 ham_variable(src2_key),
-                factor,
+                factor * 1j,
             )
             # we remember the instructions though, because we will call them many times for
             # all the index combinations that match the t_pattern
@@ -561,7 +561,7 @@ my_library.build()
 
 pauli_library_comm = None
 
-RECOMPILE = False
+RECOMPILE = True
 
 try:
     if not RECOMPILE:
@@ -635,18 +635,18 @@ res_adaa = System_ADAA()
 ham_adaa = Hamilton_ADAA()
 
 
-# def comm_wrapper(rho, ham, res=None):
-#     if res is None:
-#         res = System_ADAA()
-#     pauli_library_comm.commutate(
-#         rho.real,
-#         rho.imag,
-#         ham.real,
-#         ham.imag,
-#         res.real,
-#         res.imag,
-#     )
-#     return res
+def comm_wrapper(rho, ham, res=None):
+    if res is None:
+        res = System_ADAA()
+    pauli_library_comm.commutate(
+        rho.real,
+        rho.imag,
+        ham.real,
+        ham.imag,
+        res.real,
+        res.imag,
+    )
+    return res
 
 
 from phoenix.fgen.pywrapper_library import PyWrapperLibrary
@@ -709,7 +709,7 @@ for num_step in range(NUM_STEPS_MAX):
 
         for evo_order in range(1, EVO_ORDER + 1):
             res_adaa = wrapper(rho=rho_adaa, ham=ham_adaa)
-            drh_adaa = (-1j * dtime / evo_order) * res_adaa
+            drh_adaa = (dtime / evo_order) * res_adaa
             rho_adaa += drh_adaa
 
     if num_step >= NUM_STEPS_AT_ONCE:

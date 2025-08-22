@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 22/08/2025, 12:36
-# Version:     0.0.2037
+# Last Update: 22/08/2025, 14:30
+# Version:     0.0.2047
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -106,6 +106,9 @@ class GenericADAA:
         if init_zeros:
             self.to_zero()  # should probably be forced anyways.
 
+    # plan for future:
+    # auto sync between _data and _local
+
     @property
     def identifier(self) -> str:
         """access write-protected property 'identifier'"""
@@ -119,7 +122,7 @@ class GenericADAA:
     @property
     def data(self) -> dict[str, Any]:
         """Access to ideally write-protexted property _data"""
-        # TODO
+        # TODO, sync?
         return self._data
 
     @classmethod
@@ -334,6 +337,15 @@ class GenericADAA:
         """negation slot routine"""
         return cls.mul(first, -1, target=target, **kwargs)
 
+    def index(self, *keylike):
+        """request the index associated to a certain key"""
+        if self._KEYMAP:
+            return self._KEYMAP.key2off(*keylike)
+        raise ValueError("no keymap assigned")
+
+    def __getitem__(self, keylike):
+        return self.to_numpy[self.index(*keylike)]
+
     ###########################################################################
     #
     # MAGIC
@@ -508,3 +520,83 @@ class ComplexArrayADAA(
             self.imag, size=self.size, dtype=self._DATATYPES["imag"]
         )
         return real_part + 1j * imag_part
+
+
+###############################################################################
+
+
+class RealArrayADAA(GenericADAA, identifier="RealARRAY", backend=CoeffBackend):
+    "implement a complex array as default"
+
+    _DATATYPES: dict[str, str] = {"real": "f64"}
+
+    @property
+    def real(self):
+        """Access protected attribute real."""
+        return self._data["real"]
+
+    @real.setter
+    def real(self, arr):
+        """Set the data for real part."""
+        # self._set_data("real", arr)
+        raise ValueError("Data cannot be set directly.")
+
+    @classmethod
+    def basic_linop(cls, op_r, /, op_a=None, sc_b=None, op_c=None, size=None):
+        """evaluates operator_r += operator_a + scalar_b * operator_c"""
+
+        assert op_c is not None
+        assert op_r is not None
+
+        if size is not None:
+            if size != op_r.size:
+                raise ValueError("Invalid size parameter.")
+        size = op_r.size
+
+        if op_a is None:
+            zero = cls(size).to_zero()
+            oar = zero.real
+        else:
+            oar = op_a.real
+
+        ocr = op_c.real
+
+        if sc_b is None:
+            sbr = 1.0
+        else:
+            sbr = complex(sc_b).real
+
+        aux_r = cls._BACKEND.coeff_new_array(
+            size, dtype=cls._DATATYPES["real"]
+        )
+
+        # sbr * ocr - sbi * oci -> aux_r
+        cls._BACKEND.coeff_smul(
+            aux_r,
+            sbr,
+            ocr,
+            size=size,
+            dtype=cls._DATATYPES["real"],
+        )
+
+        # bracket + oar -> op_r.real
+        cls._BACKEND.coeff_add(
+            op_r.real, aux_r, oar, size=size, dtype=cls._DATATYPES["real"]
+        )
+
+    @classmethod
+    def from_numpy(cls, arr: np.ndarray) -> ComplexArrayADAA:
+        """Import data from numpy array."""
+        size = len(arr)
+        obj = cls(size)
+        cls._BACKEND.coeff_from_numpy(
+            obj.real, arr.real, size=size, dtype=cls._DATATYPES["real"]
+        )
+        return obj
+
+    def to_numpy(self) -> np.ndarray:
+        """Export data as numpy array."""
+        real_part = self._BACKEND.coeff_to_numpy(
+            self.real, size=self.size, dtype=self._DATATYPES["real"]
+        )
+        return real_part
