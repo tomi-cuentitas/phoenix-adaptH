@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   11/02/2025
-# Last Update: 21/08/2025, 15:04
-# Version:     0.1.886
+# Last Update: 25/08/2025, 14:54
+# Version:     0.1.894
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -894,9 +894,7 @@ class CaptureContainer(CodeContainer):
         if callable(capture):
             self._filter_func_customs.append((capture, callback))
             return
-        raise ValueError(
-            f"Invalid filter arg {capture}. Must be str|callable."
-        )
+        raise ValueError(f"Invalid filter arg {capture}. Must be str|callable.")
 
     @property
     def captured(self):
@@ -1020,14 +1018,25 @@ class RoutineContainer(
     DEFAULT_MULTIFRAME_CLASS = MultiFrameContainer
 
     def __init__(
-        self, name, *, context, multiframe_container_class=None, **buildargs
+        self,
+        name,
+        *,
+        context,
+        multiframe_container_class=None,
+        include_loop=True,
+        **buildargs,
     ):
         if multiframe_container_class is None:
             multiframe_container_class = type(self).DEFAULT_MULTIFRAME_CLASS
         self._mfcontainer_class = multiframe_container_class
+        self._include_loop = include_loop
 
         unique_name = UniqueString(name, namespace=context.namespace)
         context.namespace.add(unique_name)
+
+        self._var_layer = None
+        self._def_layer = None
+        self._rep_layer = None
 
         super().__init__(name=unique_name.name, context=context, **buildargs)
 
@@ -1050,14 +1059,18 @@ class RoutineContainer(
         )
 
     def _prep_hidden_layers_post(self, context, container=None, **buildargs):
-        self._rep_layer = LoopCaptureContainer(
-            self._mfcontainer_class,
-            context=context,
-            **buildargs,
-        )
-        container.append_body(self._rep_layer)
+        if self._include_loop:
+            self._rep_layer = LoopCaptureContainer(
+                self._mfcontainer_class,
+                context=context,
+                **buildargs,
+            )
+            container.append_body(self._rep_layer)
+            return super()._prep_hidden_layers_post(
+                self._rep_layer.context, self._rep_layer, **buildargs
+            )
         return super()._prep_hidden_layers_post(
-            self._rep_layer.context, self._rep_layer, **buildargs
+            self.context, container=self, **buildargs
         )
 
     # def get_call_arguments(self, **substitutions):
@@ -1090,8 +1103,7 @@ class RoutineContainer(
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
         yield from self.codelines_from_text(
             f":BEGIN: FUNCTION {self.name} ({', '.join(call_args)})"
@@ -1139,9 +1151,9 @@ class KernelContainer(RoutineContainer):
     INPUT_VARIABLE_CLASS = LibRoutineInputVariable
 
     def __init__(self, name, *, context, **buildargs):
-        super().__init__(name, context=context, **buildargs)
+        self._ker_layer = None
+        super().__init__(name, context=context, include_loop=False, **buildargs)
         self._ker_layer.add_capture_trigger(LibRoutineMultiFrame)
-        self._rep_layer = None
 
     def _prep_hidden_layers_pre(self, context, **buildargs):
         self._def_layer = CaptureContainer(context=context, **buildargs)
@@ -1185,8 +1197,7 @@ class KernelContainer(RoutineContainer):
 
     def generate_head_containers(self, **_):
         call_args = (
-            variable.as_argument()
-            for variable in self.get_argument_variables()
+            variable.as_argument() for variable in self.get_argument_variables()
         )
 
         yield from self.codelines_from_text(
@@ -1292,7 +1303,9 @@ class KernelCallContainer(RoutineCallContainer):
 
     def get_call_string(self):
         """generate the call string"""
-        return f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
+        return (
+            f":KCALL: {self.get_call_name()}({', '.join(self.get_args_list())})"
+        )
 
 
 class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
@@ -1334,9 +1347,7 @@ class ImportSectionContainer(CaptureContainer, EmbeddingContainer):
                         self.compose_call_name(routine, library)
                     )
                 else:
-                    routine.set_call_name(
-                        self.compose_call_name(routine, None)
-                    )
+                    routine.set_call_name(self.compose_call_name(routine, None))
             if routine_selection:
                 self._grouped_imports.append((library, routine_selection))
 

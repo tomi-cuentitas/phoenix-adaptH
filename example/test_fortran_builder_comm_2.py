@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 22/08/2025, 14:45
-# Version:     0.0.236
+# Last Update: 25/08/2025, 14:52
+# Version:     0.0.242
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -390,7 +390,7 @@ for nums_a_key, nums_a_entry in system_keymap.items():
             if t_pattern in commutate_cases:
                 print("->", t_pattern, nums_c)
                 commutate_cases[t_pattern].add((nums_a, nums_b, nums_c))
-                assert len(nums_c) <= MAX_SIZE:
+                assert len(nums_c) <= MAX_SIZE
 
 
 my_library = F90Library("pauli_library_comm")
@@ -518,10 +518,13 @@ for num, (t_pattern, cases) in enumerate(commutate_cases.items()):
     # we now want all the instruction environments being applied to the same instruction group (that
     # takes care of the component operations). And that's it! That's everything we need to do to
     # cover one of the t_patterns in our KeyMap configurations
-    these_instructions = MapApplyInstruction(
-        content=instruction_groups[t_pattern],
-        environments=environments,
-    )
+    these_instructions = [
+        MapApplyInstruction(
+            content=instruction_groups[t_pattern],
+            environments=environments,
+        )
+    ]
+
     # having collected all the environments, we can put it into a routine and give it a telling name
     lr_name = f"commutate_{num:03d}"
 
@@ -530,7 +533,7 @@ for num, (t_pattern, cases) in enumerate(commutate_cases.items()):
     # library and even in another language backend.
     libroutine = my_library.libroutine_from_instructions(
         lr_name,
-        these_instructions,
+        *these_instructions,
         builder=my_builder,
         daa_assignments=daa_assignments,
         # lrv_assignments=lrv_assignments,
