@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 25/08/2025, 14:52
-# Version:     0.0.242
+# Last Update: 25/08/2025, 14:57
+# Version:     0.0.244
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -565,7 +565,7 @@ import subprocess
 import sys
 
 
-my_library.build()
+# my_library.build()
 
 pauli_library_comm = None
 
@@ -584,7 +584,7 @@ if not pauli_library_comm:
         print("attempt to compile...")
 
         ret = subprocess.run(
-            "/home/matthias/VENV/default/bin/f2py -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'",
+            "/home/matthias/VENV/DEFAULT/bin/f2py -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'",
             shell=True,
             # stderr=subprocess.DEVNULL,
             # stdout=subprocess.DEVNULL,
