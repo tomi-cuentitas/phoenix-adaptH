@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/04/2025
-# Last Update: 22/08/2025, 14:38
-# Version:     0.0.1242
+# Last Update: 27/08/2025, 11:53
+# Version:     0.0.1246
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -380,6 +380,12 @@ class F90Builder(Builder, identifier="FORTRAN90"):
                 namespace=namespace,
             )
 
+    def _lookup_status(self, status):
+        """map out status to inout"""
+        if status.upper().strip() == "OUT":
+            status = "INOUT"
+        return super()._lookup_status(status)
+
     def handle_environment_instruction(self, instruction, context, buildargs):
         yield from super().handle_environment_instruction(
             instruction, context, buildargs
@@ -714,6 +720,7 @@ class F90Library(Library):
     LIBROUTINE_CLASS = F90LibRoutine
     IMPORTLINE_CLASS = F90ImportContainer
     DEFAULT_BUILDER = F90Builder
+    DEFAULT_CONTAINER_CLASS = F90RoutineContainer
 
     def generate_head_containers(self, **_):
         """make the enclosings for this container"""

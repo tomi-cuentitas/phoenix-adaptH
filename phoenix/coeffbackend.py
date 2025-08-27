@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/10/2024
-# Last Update: 31/01/2025, 12:01
-# Version:     0.0.163
+# Last Update: 27/08/2025, 11:54
+# Version:     0.0.164
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -35,7 +35,8 @@ class CoeffBackend(metaclass=ABCMeta):
 
     def __init__(self, *_args, **_kwargs):
         if __debug__:
-            print(f"Backend '{self.__class__.__name__}': __init__()")
+            # print(f"Backend '{self.__class__.__name__}': __init__()")
+            pass
 
     def coeff_add(
         self, co_r: Any, co_a: Any, co_b: Any, size: int, dtype: str

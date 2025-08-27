@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 11/08/2025, 14:03
-# Version:     0.1.11
+# Last Update: 27/08/2025, 10:13
+# Version:     0.1.14
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -111,7 +111,10 @@ class _KeySegment:
     _cparent = None
 
     def __init__(self, label: Hashable, parent: Domain | None = None):
-        assert not isinstance(label, (_KeySegment, Key)), "Invalid label"
+        assert not isinstance(label, (Key,)), "Invalid label"
+
+        if isinstance(label, _KeySegment):
+            label = label.label
 
         # label is an actual label. Make sure the label is hashable
         assert isinstance(label, Hashable)

@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   01/10/2024
-# Last Update: 11/08/2025, 14:59
-# Version:     0.0.3096
+# Last Update: 27/08/2025, 11:19
+# Version:     0.0.3097
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -1525,7 +1525,7 @@ class PolynomialInstruction(
 ):
     """
     Base class for polynomial instructions
-    y[key_tgt0] = c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
+    y[key_tgt0] += c0 x[key_tgt0]^0 + c1 x[key_tgt0]^1 + c2 x[key_tgt0]^2 + ...
     """
 
     def __init__(
@@ -1555,7 +1555,7 @@ class AffineOperationInstruction(
     ftype="affine",
     defining_keys=["tgt0", "src0", "alpha", "beta"],
 ):
-    """y[key_tgt0] = a * x[key_src] + b type instruction"""
+    """y[key_tgt0] += a * x[key_src] + b type instruction"""
 
     def __init__(self, tgt0, src0, alpha, beta):
         assert isinstance(tgt0, InstructionVariable)
@@ -1579,7 +1579,7 @@ class LinearOperationInstruction(
     ftype="linear",
     defining_keys=["tgt0", "src0", "alpha"],
 ):
-    """y[key_tgt0] = a * x[key_src] type instruction"""
+    """y[key_tgt0] += a * x[key_src] type instruction"""
 
     def __init__(self, tgt0, src0, alpha):
         assert isinstance(tgt0, InstructionVariable)
@@ -1598,7 +1598,7 @@ class BiLinearOperationInstruction(
     ftype="bilinear",
     defining_keys=["tgt0", "src0", "src1", "alpha"],
 ):
-    """y[key_tgt0] = a * x1[key_src1] * x2[key_src2] type instruction"""
+    """y[key_tgt0] += a * x1[key_src1] * x2[key_src2] type instruction"""
 
     def __init__(self, tgt0, src0, src1, alpha):
         assert isinstance(tgt0, InstructionVariable)

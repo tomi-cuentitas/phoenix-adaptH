@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 25/08/2025, 14:57
-# Version:     0.0.244
+# Last Update: 27/08/2025, 12:54
+# Version:     0.0.249
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -51,8 +51,8 @@ from phoenix.fgen.libroutinevar import LibRoutineVariable
 # ===============
 
 # Some parameters that define the subspace
-MAX_SIZE = 4
-NUM_SPINS = 15
+MAX_SIZE = 3
+NUM_SPINS = 10
 NUM_SPINS_EXPLORE = MAX_SIZE + MAX_SIZE // 2
 REAL_ONLY = True
 
@@ -565,7 +565,7 @@ import subprocess
 import sys
 
 
-# my_library.build()
+my_library.build()
 
 pauli_library_comm = None
 
@@ -584,7 +584,7 @@ if not pauli_library_comm:
         print("attempt to compile...")
 
         ret = subprocess.run(
-            "/home/matthias/VENV/DEFAULT/bin/f2py -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'",
+            "/home/matthias/VENV/default/bin/f2py -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'",
             shell=True,
             # stderr=subprocess.DEVNULL,
             # stdout=subprocess.DEVNULL,
@@ -661,7 +661,7 @@ from phoenix.fgen.pywrapper_library import PyWrapperLibrary
 
 foo = PyWrapperLibrary(my_library, wrapper_lib=pauli_library_comm)
 
-wrapper = foo.create_wrapper("commutate", daa_assignments=daa_assignments)
+wrapper = foo.create_wrapper("commutate")
 
 print(wrapper(rho=rho_adaa, ham=ham_adaa))
 
@@ -716,7 +716,7 @@ for num_step in range(NUM_STEPS_MAX):
         drh_adaa = rho_adaa.copy()
 
         for evo_order in range(1, EVO_ORDER + 1):
-            res_adaa = wrapper(rho=rho_adaa, ham=ham_adaa)
+            res_adaa = wrapper(rho=drh_adaa, ham=ham_adaa)
             drh_adaa = (dtime / evo_order) * res_adaa
             rho_adaa += drh_adaa
 

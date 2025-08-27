@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2024
-# Last Update: 22/08/2025, 12:22
-# Version:     0.1.475
+# Last Update: 27/08/2025, 12:38
+# Version:     0.1.487
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -124,7 +124,8 @@ class LibRoutine(LibraryContent):
         dependencies=None,
         is_kernel=False,
         container=None,
-        assignments=None,
+        lrv_assignments=None,
+        daa_assignments=None,
     ):
         super().__init__(
             identifier, library=library, dependencies=dependencies
@@ -136,7 +137,8 @@ class LibRoutine(LibraryContent):
         # self._input_variables = []
         self._is_kernel = is_kernel
         self._container = container
-        self._assignments = assignments
+        self._lrv_assignments = lrv_assignments
+        self._daa_assignments = daa_assignments
 
     @property
     def key(self):
@@ -149,9 +151,16 @@ class LibRoutine(LibraryContent):
         return self._is_kernel
 
     @property
-    def assignments(self):
+    def daa_assignments(self):
         """access read-only attribute assignments"""
-        yield from self._assignments.items()
+        if self._daa_assignments is not None:
+            yield from self._daa_assignments.items()
+
+    @property
+    def lrv_assignments(self):
+        """access read-only attribute assignments"""
+        if self._lrv_assignments is not None:
+            yield from self._lrv_assignments.items()
 
     def get_meta(self):
         """return meta information on the library"""
@@ -203,6 +212,7 @@ class Library:
     LIBROUTINE_CLASS = LibRoutine
     IMPORTLINE_CLASS = ImportContainer
     DEFAULT_BUILDER = Builder
+    DEFAULT_CONTAINER_CLASS = None
 
     def __init__(self, plain_name, build_hash=None):
         self._build_hash = build_hash
@@ -348,7 +358,9 @@ class Library:
     ):
         """add a new libroutine from a container"""
         if container_class is None:
-            raise ValueError("No container class provided")
+            container_class = type(self).DEFAULT_CONTAINER_CLASS
+            if container_class is None:
+                raise ValueError("No container class provided")
 
         if builder is None:
             builder = type(self).DEFAULT_BUILDER(f"default:lib{name}")
@@ -356,17 +368,18 @@ class Library:
         if namespace is None:
             namespace = self.context.namespace
 
-        all_assignments = builder.handle_assignments(
-            daa_assignments=daa_assignments,
-            lrv_assignments=lrv_assignments,
-            namespace=namespace,
-        )
+        # all_assignments = builder.handle_assignments(
+        #     daa_assignments=daa_assignments,
+        #     lrv_assignments=lrv_assignments,
+        #     namespace=namespace,
+        # )
 
         routine_container = builder.instructions_to_routine_container(
             name,
             instructions,
             context=self.context,
-            assignments=all_assignments,
+            daa_assignments=daa_assignments,
+            lrv_assignments=lrv_assignments,
             container_class=container_class,
             **buildargs,
         )
@@ -379,12 +392,19 @@ class Library:
             arguments=list(routine_container.get_argument_variables()),
             is_kernel=isinstance(routine_container, KernelContainer),
             container=routine_container,
-            assignments=all_assignments,
+            lrv_assignments=lrv_assignments,
+            daa_assignments=daa_assignments,
         )
         return libroutine
 
     def create_libroutine_entry(
-        self, name, arguments, is_kernel, container, assignments
+        self,
+        name,
+        arguments,
+        is_kernel,
+        container,
+        lrv_assignments,
+        daa_assignments=None,
     ):
         libroutine = type(self).LIBROUTINE_CLASS(
             name,
@@ -392,7 +412,8 @@ class Library:
             arguments=arguments,
             is_kernel=is_kernel,
             container=container,
-            assignments=assignments,
+            lrv_assignments=lrv_assignments,
+            daa_assignments=daa_assignments,
         )
         self.append_libroutine(libroutine)
         return libroutine
