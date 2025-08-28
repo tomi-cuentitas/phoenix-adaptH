@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 27/08/2025, 12:54
-# Version:     0.0.249
+# Last Update: 28/08/2025, 14:34
+# Version:     0.0.326
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -34,30 +34,40 @@ from phoenix.keymap import KeyMap
 # this part will later be automatized by the choice of backend, but it is
 # probably useful to understand what is going on under the hood.
 from phoenix.fgen.fortran_builder import (
-    F90Builder,
     F90Library,
-    F90InputVariable,
-    F90OutputVariable,
-    F90KernelContainer,
     F90RoutineContainer,
 )
 
-
-from phoenix.adaa_derived import FortranCA, FortranRA
-from phoenix.fgen.libroutinevar import LibRoutineVariable
-
+from phoenix.adaa_derived import (
+    FortranCA,
+    FortranRA,
+    STATUS_INPUT,
+    STATUS_INOUT,
+)
 
 # USEFUL SETTINGS
 # ===============
 
 # Some parameters that define the subspace
+# ----------------------------------------
+
+# maximum size of truncated subspace
 MAX_SIZE = 3
+
+# number of spins
 NUM_SPINS = 10
+
+# number of spins explored when investigating the algebra
 NUM_SPINS_EXPLORE = MAX_SIZE + MAX_SIZE // 2
+
+# consider only real entries in the arrays (choice of ADAA)
 REAL_ONLY = True
 
-my_builder = F90Builder("my_f90_builder")
+# flag to make some extra output later
+SHOW_EXTENDED_OUTPUT = False
 
+# collect info on the multiplication algebra. pauli_table[a][b] -> c, k
+# which means that sigma_a * sigma_b = i^k sigma_c
 pauli_table = {
     "0": {"0": ("0", 0), "x": ("x", 0), "y": ("y", 0), "z": ("z", 0)},
     "x": {"0": ("x", 0), "x": ("0", 0), "y": ("z", 1), "z": ("y", 3)},
@@ -66,6 +76,7 @@ pauli_table = {
 }
 
 
+# some auxilliary routines
 def all_pauli_strings(string_size, prefix=""):
     """Recursively generate all pauli strings of given string_size"""
     if string_size <= 0:
@@ -76,7 +87,7 @@ def all_pauli_strings(string_size, prefix=""):
         yield from all_pauli_strings(string_size - 1, prefix=f"{prefix}z")
 
 
-def pauli_comm(string_a, string_b, coeff_phase=0):
+def pauli_comm(string_a, string_b):
     """commutate two pauli strings of same length"""
     assert len(string_a) == len(string_b)
     result_ab = ""
@@ -98,17 +109,17 @@ def pauli_comm(string_a, string_b, coeff_phase=0):
         ):
             return result_ab, factor
         return None, None
-    raise SystemError("That's weird!")
+    raise SystemError("This should not have happened. Get a coffee now.")
 
 
-def pad_pauli_string(reduced, nums, size):
+def pad_pauli_string(reduced, nums, length):
     """Create a padded string from a reduced string.
     E.g. having a string xyz at spins 2,4,6 in a subspace of length 8,
     we call pad_pauli_string('xyz', (2,4,6), 8) and receive '0x0y0z00'.
     """
-    padded = ["0"] * size
-    for letter, num in zip(reduced, nums):
-        padded[num] = letter
+    padded = ["0"] * length
+    for letter, index in zip(reduced, nums):
+        padded[index] = letter
     return "".join(padded)
 
 
@@ -118,24 +129,28 @@ def simplify_pauli_string(padded):
     """
     nums = []
     reduced = ""
-    for num, letter in enumerate(padded):
+    for index, letter in enumerate(padded):
         if letter == "0":
             continue
-        nums.append(num)
+        nums.append(index)
         reduced += letter
     return reduced, tuple(nums)
 
 
-def all_spin_groups(size, num_spins, collect=[]):
+def all_spin_groups(length, num_spins, collect=None):
     """
     Recursively generate all spin groups made from <num_spins> spins that you
     can find in a subspace of size <size>.
     """
-    if size == 0:
+    if collect is None:
+        collect = []
+    if length == 0:
         yield tuple(collect)
     else:
-        for num in range(max(collect + [-1]) + 1, num_spins):
-            yield from all_spin_groups(size - 1, num_spins, collect + [num])
+        for index in range(max(collect + [-1]) + 1, num_spins):
+            yield from all_spin_groups(
+                length - 1, num_spins, collect + [index]
+            )
 
 
 def triple_pattern(string_a, string_b, string_c):
@@ -168,7 +183,7 @@ def nice_phase(integer_phase):
         return "i "
     if integer_phase == 3:
         return "-i "
-    raise RuntimeError("you should never see this.")
+    raise SystemError("This should not have happened. Get a coffee now.")
 
 
 #######################################################################
@@ -218,7 +233,7 @@ inner_keymaps_hamilt = {}
 hamilton_keymap = KeyMap(name="hamiltonian")
 hamilton_explore_keymap = KeyMap(name="hamiltonian explore")
 
-keymap_larmor = KeyMap(name=f"ham_single")
+keymap_larmor = KeyMap(name="ham_single")
 keymap_larmor.entry("x")
 keymap_larmor.entry("y")
 keymap_larmor.entry("z")
@@ -246,12 +261,12 @@ for number_tuple in all_spin_groups(2, NUM_SPINS_EXPLORE):
 
 #######################################################################
 
-
+# we create the instruction variables for the result, rho and ham
 VarRes = InstructionVariable.new(name="res", config=system_keymap)
 VarRho = InstructionVariable.new(name="rho", config=system_keymap)
 VarHam = InstructionVariable.new(name="ham", config=hamilton_keymap)
 
-
+# here we collect operations and cases. Will become clear below.
 commutate_operations = {}
 commutate_cases = {}
 
@@ -265,6 +280,7 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
 
         for keys_a_key in nums_a_entry.keys():
             keys_a = keys_a_key.onlylabel()
+            # we extend the strings to feed them to our commutation procedure
             ext_string_a = pad_pauli_string(keys_a, nums_a, NUM_SPINS_EXPLORE)
             for keys_b_key in nums_b_entry.keys():
                 keys_b = keys_b_key.onlylabel()
@@ -278,6 +294,10 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
                     continue
 
                 # the t_pattern helps us to group operations
+                # many operations are identical but are applied
+                # to different memory regions. We will explot this
+                # to simplify the routine significantly by grouping
+                # with respect to these patterns
                 t_pattern = triple_pattern(
                     ext_string_a, ext_string_b, ext_prod_c
                 )
@@ -286,7 +306,7 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
                 if t_pattern[-1].count("X") > MAX_SIZE:
                     continue
 
-                # init?
+                # is this the first time you see that pattern?
                 if t_pattern not in commutate_operations:
                     commutate_operations[t_pattern] = {}
                     commutate_cases[t_pattern] = set()
@@ -295,10 +315,12 @@ for nums_a_key, nums_a_entry in system_explore_keymap.items():
                 if (keys_a, keys_b) not in commutate_operations[t_pattern]:
                     commutate_operations[t_pattern][(keys_a, keys_b)] = set()
 
-                # we perform the multiplication
+                # now we see how it looks once it is simplified
                 keys_c, nums_c = simplify_pauli_string(ext_prod_c)
 
-                # we remember the result. The set datattype avoids duplicates.
+                # in the commutate_operations dict we remember
+                # what we do on a key level
+                # we remember the result once we got this far
                 commutate_operations[t_pattern][(keys_a, keys_b)].add(
                     (keys_c, factor)
                 )
@@ -313,8 +335,15 @@ def get_target_variations(
     _t_b=None,
     _t_c=None,
 ):
-    """get all possible target variations from nums_a, nums_b and corresponding t_patterns"""
+    """
+    Get all possible target variations from nums_a, nums_b and corresponding t_patterns.
+
+    In other words, consider a group of spins nums_a meeting a group of spins nums_b.
+    How can terms living in the two subspaces appear, interact and where would the results
+    end up?
+    """
     if _combined is None:
+        # consider all spins that are wither in set a, set b or both.
         _combined = set.union(set(nums_a), set(nums_b))
 
     if _nums_c is None:
@@ -330,7 +359,16 @@ def get_target_variations(
         _t_c = ""
 
     if len(_combined) > 0:
+        # we consider the indices in ascending order.
         num = sorted(_combined)[0]
+
+        # the following four cases consider, that
+        # one of the spins might be exclusive to the subspace, for
+        # both the first and second subspace.
+        # if it is not exclusive, during the operation, its effect might cancel
+        # (evaluate into identity, which is not considered in the result), or it
+        # survives. These are the four cases. Identity being represented as _, while
+        # x, y, z is simply a X (hit).
         if num in nums_a and num in nums_b:
             # cancellation case
             yield from get_target_variations(
@@ -376,7 +414,10 @@ def get_target_variations(
         yield tuple(_nums_c), (_t_a, _t_b, _t_c)
 
 
-# This time, we identify the cases based on the larger set of spins
+# We go through all entries in the keymap again.
+# But this time, we only look for the spin groups and consider all
+# potential t-patterns that might show up and that we have investigated
+# on the smaller exploration set already.
 for nums_a_key, nums_a_entry in system_keymap.items():
     nums_a = nums_a_key.onlylabel()
     for nums_b_key, nums_b_entry in hamilton_keymap.items():
@@ -385,16 +426,34 @@ for nums_a_key, nums_a_entry in system_keymap.items():
         # create the various t-patterns that this set of nums could contribute
         # to
 
-        print(nums_a, nums_b)
-        for nums_c, t_pattern in get_target_variations(nums_a, nums_b):
+        variations = get_target_variations(nums_a, nums_b)
+        patterns_report = []
+        for nums_c, t_pattern in variations:
             if t_pattern in commutate_cases:
-                print("->", t_pattern, nums_c)
+                patterns_report.append(
+                    f"- pattern {t_pattern} -> subspace C = {nums_c}"
+                )
                 commutate_cases[t_pattern].add((nums_a, nums_b, nums_c))
+                # this is just a little sanity check
                 assert len(nums_c) <= MAX_SIZE
+        if SHOW_EXTENDED_OUTPUT:
+            if patterns_report:
+                print(
+                    f"consider subspace A = {nums_a}, subspace B = {nums_b}:"
+                )
+                for pattern_report in patterns_report:
+                    print(pattern_report)
+            else:
+                print(
+                    f"subspace A = {nums_a}, subspace B = {nums_b} does not yield anything…"
+                )
 
-
+# now that we explored everything, let's put it into a library
 my_library = F90Library("pauli_library_comm")
 
+# There are two types of ADAAs prepared for Fortran so far. Real and Complex.
+# I expect performance benefits when we restrict ourselves to real numbers only.
+# Math tells us it's fine (as we added the factor 1j to the commutator result).
 if REAL_ONLY:
     System_ADAA = FortranRA.set_keymap(system_keymap)
     Hamilton_ADAA = FortranRA.set_keymap(hamilton_keymap)
@@ -402,41 +461,20 @@ else:
     System_ADAA = FortranCA.set_keymap(system_keymap)
     Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
 
+# we assing ADAAs to the instruction variables.
 daa_assignments = {
-    VarRho: (System_ADAA, LibRoutineVariable.STATUS_INPUT),
-    VarRes: (System_ADAA, LibRoutineVariable.STATUS_INOUT),
-    VarHam: (Hamilton_ADAA, LibRoutineVariable.STATUS_INPUT),
+    VarRho: (System_ADAA, STATUS_INPUT),
+    VarRes: (System_ADAA, STATUS_INOUT),
+    VarHam: (Hamilton_ADAA, STATUS_INPUT),
 }
-
-
-# lrv_assignments = {
-#     (VarRho, "real"): F90InputVariable(
-#         assignment=(VarRho, "real"), name="rho_real", size=system_keymap.size
-#     ),
-#     (VarRho, "imag"): F90InputVariable(
-#         assignment=(VarRho, "imag"), name="rho_imag", size=system_keymap.size
-#     ),
-#     (VarHam, "real"): F90InputVariable(
-#         assignment=(VarHam, "real"), name="ham_real", size=hamilton_keymap.size
-#     ),
-#     (VarHam, "imag"): F90InputVariable(
-#         assignment=(VarHam, "imag"), name="ham_imag", size=hamilton_keymap.size
-#     ),
-#     (VarRes, "real"): F90OutputVariable(
-#         assignment=(VarRes, "real"), name="res_real", size=system_keymap.size
-#     ),
-#     (VarRes, "imag"): F90OutputVariable(
-#         assignment=(VarRes, "imag"), name="res_imag", size=system_keymap.size
-#     ),
-# }
-
 
 VarInpRInner = {}
 VarInpHInner = {}
 VarTargInner = {}
 
-# Input rho goes up to max_size + 1.
-# At the same time, the targets can also be restricted to these subspaces
+# Input rho and output res has subspaces up to max_size + 1.
+# To simplify the groupings, we create instruction variables for all of them.
+# We can later define an auxilliary routine for every t-pattern.
 for size in range(MAX_SIZE + 1):
     VarInpRInner[size] = InstructionVariable.new(
         name=f"rho_inner_{size}", config=inner_keymaps_system[size]
@@ -445,7 +483,7 @@ for size in range(MAX_SIZE + 1):
         name=f"res_inner_{size}", config=inner_keymaps_system[size]
     )
 
-# Input ham can contribute to single and pair terms
+# Input ham can contribute to single and pair terms.
 VarInpHInner[1] = InstructionVariable.new(
     name=f"ham_inner_{size}", config=inner_keymaps_hamilt[1]
 )
@@ -478,7 +516,7 @@ for num, (t_pattern, operations) in enumerate(commutate_operations.items()):
     for (src1_key, src2_key), operation in operations.items():
         for tgt_key, factor in operation:
             # Here, we create the actual instruction. The Builder will decide, how to turn that
-            # into code, the instruction level is completely abstract
+            # into code
             instruction = BiLinearOperationInstruction(
                 target_variable(tgt_key),
                 rho_variable(src1_key),
@@ -495,9 +533,10 @@ for num, (t_pattern, operations) in enumerate(commutate_operations.items()):
 for num, (t_pattern, cases) in enumerate(commutate_cases.items()):
     # we will use an Environment Instruction. This instruction will add offsets to  instruction
     # variables. You can read in InstructionEnvironment as 'everything in here will be interpreted
-    # as seen from this offset'. Performing the component operations from different offsets means
+    # as seen from this offset'. Performing the component operations from different offsets is done by
     # creating an offset environment for all the matching index groups and mapping all these
-    # environments on the component operations.
+    # environments on the component operations. In other words: we call the aux operation for a t pattern
+    # from all the environments that match the t-pattern, as investigated before.
 
     environments = []
     for case in cases:
@@ -514,69 +553,78 @@ for num, (t_pattern, cases) in enumerate(commutate_cases.items()):
                 }
             )
         )
+        # this reads as follows:
+        # when you see an instruction variable of class VarInpRInner[len(rho_nums)]:
+        # glue the offset VarRho(rho_nums) in front of it, i.e. see everything expressed via
+        # VarInpRInner[len(rho_nums)] from the point of view of VarRho(rho_nums).
+        # That makes what has previously been a variable of class VarInpRInner[len(rho_nums)]
+        # a variable of class VarRho(rho_nums) with a combined offset.
 
     # we now want all the instruction environments being applied to the same instruction group (that
     # takes care of the component operations). And that's it! That's everything we need to do to
-    # cover one of the t_patterns in our KeyMap configurations
+    # cover all appearances of one of the t_patterns in our KeyMap configurations
     these_instructions = [
         MapApplyInstruction(
             content=instruction_groups[t_pattern],
             environments=environments,
         )
     ]
+    # MapApply is a special instruction, that implies potential parallelisation. This is not implemented
+    # yet, but at this point it is worth mentioning, that using MapApply here hase some implications.
 
     # having collected all the environments, we can put it into a routine and give it a telling name
     lr_name = f"commutate_{num:03d}"
 
-    # this is the crucial step: We create a libroutine (that is now in a specific target language)
-    # from the instructions we have now created. We can reuse the same instructions in another
-    # library and even in another language backend.
+    # this is the final step: We create a libroutine from the instructions we have just designed.
+    # Remember, that instructions are not yet bound to any specific language. We can reuse the
+    # same instructions in another library and even in another language backend.
     libroutine = my_library.libroutine_from_instructions(
         lr_name,
         *these_instructions,
-        builder=my_builder,
         daa_assignments=daa_assignments,
-        # lrv_assignments=lrv_assignments,
-        # container_class=F90KernelContainer,
-        container_class=F90RoutineContainer,
     )
     # Note that the assignments tell the building process what variables to associate with the
     # abstract instruction variables
 
-    # we will also add the libroutine to our dictionary, to conveniently call it later
+    # we will also add the libroutine to our dictionary, to conveniently call it later in a summary call.
     libroutines[lr_name] = libroutine
 
-
+# The summary call:
 # first we group all the calls into one group
 call_collection = [CallInstruction(lr) for lr in libroutines.values()]
 
-
+# Then we create another libroutine from it.
 libroutine_commutate = my_library.libroutine_from_instructions(
     "commutate",
     *call_collection,
-    builder=my_builder,
     daa_assignments=daa_assignments,
-    # lrv_assignments=lrv_assignments,
-    container_class=F90RoutineContainer,
 )
+# Note that internally the dependency of this call will be managed. While not fully tested yet, the idea
+# is that an imported routine will traverse its dependency to the libraries import container. We keep it
+# in the same library though.
 
-
+# Now we need to reimport that into python.
 import subprocess
 import sys
 
-
+# building means creating the code file
 my_library.build()
 
+# now we try to import the routine after we compile it into a python-readable library via f2py
 pauli_library_comm = None
 
-RECOMPILE = True
+# This flag can skip the compilation if you have not changed any paramters.
+RECOMPILE = False
+
+# set the executable for f2py. This is especially relevant if you use a virtual environment
+F2PYEXEC = "f2py"
 
 try:
     if not RECOMPILE:
         print("attempt to import... ")
         from ecplib import pauli_library_comm
 
-except ImportError as exc:
+except ImportError:
     print("import failed, probably not compiled yet.")
 
 if not pauli_library_comm:
@@ -584,7 +632,7 @@ if not pauli_library_comm:
         print("attempt to compile...")
 
         ret = subprocess.run(
-            "/home/matthias/VENV/default/bin/f2py -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'",
+            f"{F2PYEXEC} -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'",
             shell=True,
             # stderr=subprocess.DEVNULL,
             # stdout=subprocess.DEVNULL,
@@ -593,8 +641,7 @@ if not pauli_library_comm:
             raise RuntimeError(
                 f"f2py failed compilation with exit code {ret.returncode}"
             )
-        else:
-            print("compilation finished")
+        print("compilation finished")
 
     except RuntimeError as exc:
         print("something went wrong during the compilation:")
@@ -611,140 +658,154 @@ if not pauli_library_comm:
         from ecplib import pauli_library_comm
 
     except ImportError as exc:
-        print("import failed again Try to compile manually via")
-        print(
-            "  f2py -m ecplib -c pauli_library_comm.f90 --f90flags='-ffree-line-length-none'"
-        )
-        print("and try running it again.")
+        print("import failed again. This is weird. Get a coffee now.")
+        print(exc)
+        print("if the compilation was successful, but the import failed, ")
+        print("you probably changed the library name?")
+        import ecplib
+
+        print("this is the content of the plain lib:", dir(ecplib))
+        print("Good luck next time!")
         sys.exit(1)
 
 assert pauli_library_comm is not None
 
+# Once we got here, we can set up a little toy simulation using the routine we built.
+
 import numpy as np
 from matplotlib import pyplot as plt
 
-size_ham = len(hamilton_keymap)
-size_rho = len(system_keymap)
+# some paramters
+COUPL = 0.1
+OMEGA = 1.0
+DTIME = 0.0125
+NUM_STEPS_MAX = 2000
+NUM_SUBSTEPS = 10
+DTIME_SUB = DTIME / NUM_SUBSTEPS
+NUM_STEPS_AT_ONCE = 200  # number of shown steps in graph
+PLOT_EVERY_K = 20  # wait K points until plot is redrawn
+EVO_ORDER = 6
 
-# rho_real = np.zeros(size_rho)
-# rho_imag = np.zeros(size_rho)
-# drh_real = np.zeros(size_rho)
-# drh_imag = np.zeros(size_rho)
-# res_real = np.zeros(size_rho)
-# res_imag = np.zeros(size_rho)
-
-# ham_real = np.zeros(size_ham)
-# ham_imag = np.zeros(size_ham)
-
-
+# we create actual variables from the derived ADAAs
 rho_adaa = System_ADAA()
 drh_adaa = System_ADAA()
 res_adaa = System_ADAA()
 ham_adaa = Hamilton_ADAA()
 
+# This is how you would design a wrapper
+# def comm_wrapper(rho, ham, res=None):
+#     if res is None:
+#         res = System_ADAA()
+#     pauli_library_comm.commutate(
+#         rho.real,
+#         ham.real,
+#         res.real,
+#     )
+#     return res
 
-def comm_wrapper(rho, ham, res=None):
-    if res is None:
-        res = System_ADAA()
-    pauli_library_comm.commutate(
-        rho.real,
-        rho.imag,
-        ham.real,
-        ham.imag,
-        res.real,
-        res.imag,
-    )
-    return res
-
-
+# this library does the wrapper for us.
 from phoenix.fgen.pywrapper_library import PyWrapperLibrary
 
-foo = PyWrapperLibrary(my_library, wrapper_lib=pauli_library_comm)
+# we create a wrapper to work with out ADAAs directly
+my_wrapper_lib = PyWrapperLibrary(my_library, wrapper_lib=pauli_library_comm)
 
-wrapper = foo.create_wrapper("commutate")
+# and explicitely request one for the commutate routine.
+wrapper = my_wrapper_lib.create_wrapper("commutate")
 
-print(wrapper(rho=rho_adaa, ham=ham_adaa))
-
-print(help(wrapper))
-print(wrapper.__doc__)
-
-
+# we will use the indices of the z values of the individual spins a couple of times.
 ids_z = []
 
-
-coupl = 0.1
-omega = 1.0
-dtime = 0.00125
-
+# initialize data
 for num_spin_a in range(NUM_SPINS):
     for num_spin_b in range(num_spin_a, NUM_SPINS):
         if num_spin_a == num_spin_b:
             ham_adaa.real[hamilton_keymap.key2off((num_spin_a,), "z")] = (
-                6.28 * omega
+                6.28 * OMEGA / 2
             )
             ids_z.append(system_keymap.key2off((num_spin_a,), "z"))
         else:
             ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "xx")
-            ] = (6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
+            ] = (6.28 * COUPL / 4) / (num_spin_a - num_spin_b) ** 3
             ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "yy")
-            ] = (6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
+            ] = (6.28 * COUPL / 4) / (num_spin_a - num_spin_b) ** 3
             ham_adaa.real[
                 hamilton_keymap.key2off((num_spin_a, num_spin_b), "zz")
-            ] = (-2 * 6.28 * coupl) / (num_spin_a - num_spin_b) ** 3
+            ] = (-2 * 6.28 * COUPL / 4) / (num_spin_a - num_spin_b) ** 3
 
+# start with one spin polarized
 rho_adaa.real[ids_z[0]] = 1.0
 
-NUM_STEPS_MAX = 2000
-NUM_STEPS_AT_ONCE = 200
-EVO_ORDER = 6
-
+# here goes the data
 result_spin_z = [np.zeros(NUM_STEPS_AT_ONCE) for _ in range(NUM_SPINS)]
+
+# check sum of polarisation
 summed = np.zeros(NUM_STEPS_AT_ONCE)
 
-plt.ion()
-
+# graph prep
 plt.ylim(-0.5, 1.1)
 plt.xlim(0, NUM_STEPS_AT_ONCE + 10)
 
 graph_sumd = plt.plot(summed)[0]
 graph_data = [plt.plot(result_spin_z[k])[0] for k in range(NUM_SPINS)]
 
-for num_step in range(NUM_STEPS_MAX):
-    for num_substep in range(10):
-        drh_adaa = rho_adaa.copy()
+# enable interactive mode
+plt.ion()
 
+# main iteration loop
+for num_step in range(NUM_STEPS_MAX):
+    # substeps (z values not stored)
+    for num_substep in range(NUM_SUBSTEPS):
+        # time evolution is not only first order.
+        # This loop allows for dynamic order parameters
+        # the drho from the previous iteration is fed back to
+        # the commutator with ham to get the next order in change
+        # which is then weighted by 1/k! (*1/k in every iteration
+        # accumulates to just that)
+        drh_adaa = rho_adaa.copy()
         for evo_order in range(1, EVO_ORDER + 1):
             res_adaa = wrapper(rho=drh_adaa, ham=ham_adaa)
-            drh_adaa = (dtime / evo_order) * res_adaa
+            drh_adaa = (DTIME / evo_order) * res_adaa
             rho_adaa += drh_adaa
 
+    # to get alot of time steps, consider a moving window once its filled.
     if num_step >= NUM_STEPS_AT_ONCE:
+        # moving window case
         summed[:-1] = summed[1:]
         summed[-1] = 0
         for spin_id in range(NUM_SPINS):
+            # make space to the right
             result_spin_z[spin_id][:-1] = result_spin_z[spin_id][1:]
+            # get the value, put it there, update the sum
             value = rho_adaa.real[ids_z[spin_id]]
-            # value = rho_real[ids_z[spin_id]]
             result_spin_z[spin_id][-1] = value
             summed[-1] += value
+            # update the plot
             graph_data[spin_id].set_ydata(result_spin_z[spin_id])
             graph_data[spin_id].set_xdata(
                 range(num_step - NUM_STEPS_AT_ONCE, num_step)
             )
-        graph_sumd.set_xdata(range(num_step - NUM_STEPS_AT_ONCE, num_step))
-        graph_sumd.set_ydata(summed)
+            graph_sumd.set_xdata(range(num_step - NUM_STEPS_AT_ONCE, num_step))
+            graph_sumd.set_ydata(summed)
         plt.xlim(num_step - NUM_STEPS_AT_ONCE, num_step + 10)
 
     else:
+        # window not yet filled. Just write to k
         for spin_id in range(NUM_SPINS):
+            # as above, evaluate, write and update
             value = rho_adaa.real[ids_z[spin_id]]
-            # value = rho_real[ids_z[spin_id]]
             result_spin_z[spin_id][num_step] = value
             summed[num_step] += value
+            # udpate the plot data
             graph_data[spin_id].set_ydata(result_spin_z[spin_id])
-        graph_sumd.set_ydata(summed)
+            graph_sumd.set_ydata(summed)
 
-    plt.pause(0.0001)
+    # only update every PLOT_EVERY_K steps. Plotting is way
+    # slower than the actual computation.
+    if (num_step - 1) % PLOT_EVERY_K == 0:
+        # this is the crucial update
+        plt.pause(0.0001)
+
+plt.ioff()
 plt.show()
