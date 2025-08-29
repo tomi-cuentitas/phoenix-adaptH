@@ -21,8 +21,31 @@
               "icon": "lucide-file",
               "title": "example scripts"
             }
+          },
+          {
+            "id": "0a8e3529c6075b34",
+            "type": "leaf",
+            "state": {
+              "type": "release-notes",
+              "state": {
+                "currentVersion": "1.9.12"
+              },
+              "icon": "lucide-book-up",
+              "title": "Release Notes 1.9.12"
+            }
+          },
+          {
+            "id": "331210ef27a9bf0c",
+            "type": "leaf",
+            "state": {
+              "type": "graph",
+              "state": {},
+              "icon": "lucide-git-fork",
+              "title": "Graph view"
+            }
           }
-        ]
+        ],
+        "currentTab": 2
       }
     ],
     "direction": "vertical"
@@ -158,6 +181,8 @@
   },
   "left-ribbon": {
     "hiddenItems": {
+      "3d-graph:3D Graph": false,
+      "new-3d-graph:Open 3d graph": false,
       "bases:Create new base": false,
       "switcher:Open quick switcher": false,
       "graph:Open graph view": false,
@@ -168,7 +193,7 @@
       "publish:Publish changes...": false
     }
   },
-  "active": "cb6255f01c0ad4d3",
+  "active": "ba9c30b28c79bc9e",
   "lastOpenFiles": [
     "example keymaps.md",
     "example instructions.md",

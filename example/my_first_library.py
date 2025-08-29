@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   27/08/2025
-# Last Update: 27/08/2025, 12:57
-# Version:     0.0.97
+# Last Update: 29/08/2025, 10:07
+# Version:     0.0.101
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -21,13 +21,7 @@ from get_to_know_instructions import (
     matrix_c,
 )
 
-from phoenix.fgen.fortran_builder import (
-    F90Builder,
-    F90Library,
-    F90InputVariable,
-    F90OutputVariable,
-    F90RoutineContainer,
-)
+from phoenix.fgen.fortran_builder import F90Library
 
 from phoenix.adaa_derived import (
     FortranRA,
@@ -62,17 +56,18 @@ libroutine = my_library.libroutine_from_instructions(
 
 my_library.build()
 
-print("\nlet's get the code")
-print(f"(which you can also find in the file '{my_library.filename}')")
-print("")
-print("\n" + "-" * 78 + "\n")
+if __name__ == "__main__":
+    print("\nlet's get the code")
+    print(f"(which you can also find in the file '{my_library.filename}')")
+    print("")
+    print("\n" + "-" * 78 + "\n")
 
-for indent, line in my_library.get_codelines():
-    print(indent * "  " + line)
+    for indent, line in my_library.get_codelines():
+        print(indent * "  " + line)
 
-print("\n" + "-" * 78 + "\n")
+    print("\n" + "-" * 78 + "\n")
 
-if COMPILE_AND_RUN:
+if COMPILE_AND_RUN and __name__ == "__main__":
     # let's perform the compilation
     import subprocess
 
@@ -95,17 +90,18 @@ if COMPILE_AND_RUN:
     # let's do some plotting later
     from matplotlib import pyplot as plt
 
-    # this will simplify the access of the fortran routine, but it is optional
+    # this will simplify the access of the fortran routine, but
+    # of course you can use your own way of accessing the f2py stuff
     from phoenix.fgen.pywrapper_library import PyWrapperLibrary
 
     wrappers = PyWrapperLibrary(my_library, wrapper_lib=my_first_library)
     wrapper = wrappers.create_wrapper("commutator2i")
 
+    # some simulation parameters
     DTIME = 0.0025
     NUM_STEPS = 1000
 
     NUM_SUBSTEPS = 10
-
     DTIME_SUB = DTIME / NUM_SUBSTEPS
 
     # we create ADAA objects for rho and ham
