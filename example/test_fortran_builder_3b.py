@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/07/2025
-# Last Update: 19/08/2025, 14:22
-# Version:     0.0.439
+# Last Update: 17/09/2025, 13:59
+# Version:     0.0.442
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -51,8 +51,8 @@ from phoenix.fgen.fortran_builder import (
 
 # Some parameters that define the subspace
 MAX_SIZE = 3
-NUM_SPINS = 3
-NUM_SPINS_EXPLORE = 3
+NUM_SPINS = 10
+NUM_SPINS_EXPLORE = 4
 
 # Extended output will generate lots of text, but might be helpful
 SHOW_EXTENDED_OUTPUT = False
@@ -576,6 +576,7 @@ print(
     f"The library is now written to '{my_library.filename}'. Open it to see the code generated!"
     ""
 )
+
 
 pauli_library_eff3b = None
 

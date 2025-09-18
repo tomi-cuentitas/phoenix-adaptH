@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   14/08/2025
-# Last Update: 25/08/2025, 14:57
-# Version:     0.0.244
+# Last Update: 17/09/2025, 14:10
+# Version:     0.0.249
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -565,7 +565,7 @@ import subprocess
 import sys
 
 
-# my_library.build()
+my_library.build()
 
 pauli_library_comm = None
 
