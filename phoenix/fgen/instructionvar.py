@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   06/02/2025
-# Last Update: 11/08/2025, 14:07
-# Version:     0.0.1236
+# Last Update: 29/08/2025, 09:57
+# Version:     0.0.1244
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -16,6 +16,8 @@
 from __future__ import annotations
 
 from typing import Dict, Tuple, Any
+
+from phoenix.keymap import Key
 
 import weakref
 
@@ -322,6 +324,10 @@ class InstructionVariableOffset(_Chainable):
             return potential_offset
         match handle.upper().strip():
             case "AUTO":
+                if isinstance(potential_offset, Key):
+                    return InstructionVariableOffset.auto_convert(
+                        potential_offset, handle="KEY", config=config
+                    )
                 if isinstance(potential_offset, int):
                     return InstructionVariableOffset.auto_convert(
                         potential_offset, handle="int", config=config

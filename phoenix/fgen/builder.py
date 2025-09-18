@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   03/03/2025
-# Last Update: 22/08/2025, 14:26
-# Version:     0.0.1433
+# Last Update: 27/08/2025, 12:37
+# Version:     0.0.1437
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -253,6 +253,15 @@ class Builder(BuilderSegment, identifier="GENERIC"):
             for instruction_type in forbidden:
                 yield f"  - {instruction_type}"
 
+    def _lookup_status(self, status: str):
+        if status.strip().upper() == "IN":
+            return LibRoutineVariable.STATUS_INPUT
+        if status.strip().upper() == "OUT":
+            return LibRoutineVariable.STATUS_OUTPUT
+        if status.strip().upper() == "INOUT":
+            return LibRoutineVariable.STATUS_INOUT
+        raise ValueError(f"unknown status: {status}")
+
     def handle_assignments(
         self,
         daa_assignments,
@@ -265,6 +274,8 @@ class Builder(BuilderSegment, identifier="GENERIC"):
 
         if daa_assignments is not None:
             for instr_var, (adaa, status) in daa_assignments.items():
+                if isinstance(status, str):
+                    status = self._lookup_status(status)
                 for key, dtype in adaa.datatypes():
                     lrv = self.create_libroutine_variable(
                         name=f"{instr_var._name}_{key}",
@@ -409,7 +420,8 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         name,
         instructions,
         context,
-        assignments,
+        daa_assignments=None,
+        lrv_assignments=None,
         container_class=None,
         **buildargs,
     ):
@@ -425,7 +437,13 @@ class Builder(BuilderSegment, identifier="GENERIC"):
         #             libroutinevar = Input
         #         routine_context.namespace.assign(source, key, assignment)
 
-        for (source, key), assignment in assignments.items():
+        all_assignments = self.handle_assignments(
+            daa_assignments=daa_assignments,
+            lrv_assignments=lrv_assignments,
+            namespace=context.namespace,
+        )
+
+        for (source, key), assignment in all_assignments.items():
             routine_context.namespace.assign(source, key, assignment)
 
         routine_container = container_class(

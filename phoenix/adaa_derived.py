@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   24/10/2024
-# Last Update: 22/08/2025, 14:23
-# Version:     0.0.79
+# Last Update: 27/08/2025, 12:13
+# Version:     0.0.83
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -21,6 +21,7 @@ from phoenix.coeffbackend_derived import CuPyCoeffBackend
 from phoenix.coeffbackend_derived import OpenClCoeffBackend
 from phoenix.coeffbackend_derived import PyCudaCoeffBackend
 
+from phoenix.fgen.libroutinevar import LibRoutineVariable
 
 # CA for complex array
 
@@ -89,6 +90,11 @@ class PyCudaRA(
     RealArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
 ):
     """OpenCL based data layer"""
+
+
+STATUS_OUTPUT = LibRoutineVariable.STATUS_OUTPUT
+STATUS_INPUT = LibRoutineVariable.STATUS_INPUT
+STATUS_INOUT = LibRoutineVariable.STATUS_INOUT
 
 
 if __name__ == "__main__":

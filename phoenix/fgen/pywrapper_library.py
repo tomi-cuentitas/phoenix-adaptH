@@ -5,8 +5,8 @@
 # Author:      Matthias Kost
 # Contact:     matthias.kost@uni-ulm.de
 # Generated:   21/08/2025
-# Last Update: 22/08/2025, 14:02
-# Version:     0.0.82
+# Last Update: 27/08/2025, 12:40
+# Version:     0.0.96
 #
 #################################################end#of#autoheader#do#not#modify
 
@@ -37,11 +37,15 @@ class PyWrapperLibrary(Library):
 
     def create_wrapper(self, libroutine_name, daa_assignments=None):
         """wrap a libroutine in the library"""
-        if daa_assignments is None:
-            daa_assignments = {}
         libroutine = self._wrapped_library[libroutine_name]
         if not isinstance(libroutine, LibRoutine):
             raise TypeError("can only wrap libroutine")
+
+        all_daa_assignments = {
+            key: val for key, val in libroutine.daa_assignments
+        }
+        if daa_assignments is not None:
+            all_daa_assignments.update(daa_assignments)
 
         internally_call_with = []
         requires = {}
@@ -50,8 +54,8 @@ class PyWrapperLibrary(Library):
         for arg in libroutine.get_arguments():
             if arg.assignment is not None:
                 src, key = arg.assignment
-                if src in daa_assignments:
-                    adaa, status = daa_assignments[src]
+                if src in all_daa_assignments:
+                    adaa, status = all_daa_assignments[src]
                     name = src().name
                     if status & LibRoutineVariable.STATUS_OUTPUT:
                         if name in returns:
