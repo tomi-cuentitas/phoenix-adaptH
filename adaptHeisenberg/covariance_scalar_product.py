@@ -31,7 +31,7 @@ _PAULI_TABLE: Dict[str, Dict[str, Tuple[str, int]]] = {
 }
 
 
-def mul_reduced(
+def __mul_reduced(
     nums_a: Tuple[int, ...],
     word_a: str,
     nums_b: Tuple[int, ...],
@@ -67,6 +67,91 @@ def mul_reduced(
 
     return tuple(out_nums), "".join(out_word), (1j ** phase_pow)
 
+# Keep your existing table, but normalize access (lowercase).
+# _PAULI_TABLE[a][b] -> (phase, out_axis) where out_axis in {"i","x","y","z"}
+# phase is ±1 for your real-convention multiplication
+# (If your table encodes "i" explicitly as a symbol, we handle it.)
+
+def mul_reduced_fast(nums_a, word_a, nums_b, word_b):
+    """
+    Fast multiplication of two reduced Pauli terms with sorted supports.
+
+    Inputs:
+      nums_a, word_a: reduced representation (no 'I' sites), identity letter is '0' if present
+      nums_b, word_b: same
+
+    Uses _PAULI_TABLE with entries like:
+      _PAULI_TABLE[p][q] = (out_axis, phase_code)
+    where phase_code is:
+      0 -> * 1
+      1 -> * (+i)
+      3 -> * (-i)
+
+    Returns:
+      nums_out: tuple[int,...] sorted
+      word_out: str over {'x','y','z'} (no '0')
+      phase_mod4: int in {0,1,2,3} representing factor i**phase_mod4
+    """
+    wa = str(word_a).lower()
+    wb = str(word_b).lower()
+
+    ia = ib = 0
+    na = len(nums_a)
+    nb = len(nums_b)
+
+    phase = 0  # mod 4 exponent of i
+    out_nums = []
+    out_word = []
+
+    while ia < na and ib < nb:
+        sa = nums_a[ia]
+        sb = nums_b[ib]
+
+        if sa < sb:
+            ax = wa[ia]
+            if ax != "0":
+                out_nums.append(sa)
+                out_word.append(ax)
+            ia += 1
+
+        elif sb < sa:
+            bx = wb[ib]
+            if bx != "0":
+                out_nums.append(sb)
+                out_word.append(bx)
+            ib += 1
+
+        else:
+            pa = wa[ia]
+            pb = wb[ib]
+
+            # multiply using table (handles '0' as identity too)
+            out_axis, ph_code = _PAULI_TABLE[pa][pb]
+            phase = (phase + int(ph_code)) % 4
+
+            if out_axis != "0":
+                out_nums.append(sa)
+                out_word.append(out_axis)
+
+            ia += 1
+            ib += 1
+
+    # append remainders
+    while ia < na:
+        ax = wa[ia]
+        if ax != "0":
+            out_nums.append(nums_a[ia])
+            out_word.append(ax)
+        ia += 1
+
+    while ib < nb:
+        bx = wb[ib]
+        if bx != "0":
+            out_nums.append(nums_b[ib])
+            out_word.append(bx)
+        ib += 1
+
+    return tuple(out_nums), "".join(out_word), phase
 
 # -----------------------------------------------------------------------------
 # ADAA sparse extraction + caches
@@ -112,7 +197,7 @@ def _extract_sparse_coeffs(adaa, eps: float = 1e-14) -> List[Tuple[int, complex]
 @dataclass
 class CovarCaches:
     """Caches to amortize KeyMap decoding and σ0 expectation calls."""
-    decode: Dict[int, Tuple[Tuple[int, ...], str]]                 # offset -> (nums, word)
+    decode: Dict[tuple[int, int], Tuple[Tuple[int, ...], str]]  # (id(km), offset) -> …
     expect: Dict[Tuple[Tuple[int, ...], str], float]               # (nums, word) -> <P>_σ0
 
     @classmethod
@@ -144,21 +229,29 @@ def covar_inner_product(
     
     a_terms: List[Tuple[Tuple[int, ...], str, complex]] = []
     for off, coeff in a_nz:
-        term = caches.decode.get(off)
+        kid = id(km_a)
+        key = (kid, off)
+
+        term = caches.decode.get(key)
         if term is None:
             nums, word = km_a.off2key(off).labels
-            term = (nums, word)
-            caches.decode[off] = term
+            term = (tuple(int(x) for x in nums), str(word).lower())
+            caches.decode[key] = term
+
         nums, word = term
         a_terms.append( (nums, word, coeff) )
     
     b_terms: List[Tuple[Tuple[int, ...], str, complex]] = []
     for off, coeff in b_nz:
-        term = caches.decode.get(off)
+        kid = id(km_b)
+        key = (kid, off)
+
+        term = caches.decode.get(key)
         if term is None:
             nums, word = km_b.off2key(off).labels
-            term = (nums, word)
-            caches.decode[off] = term
+            term = (tuple(int(x) for x in nums), str(word).lower())
+            caches.decode[key] = term       
+        
         nums, word = term
         b_terms.append( (nums, word, coeff) )
     
@@ -173,18 +266,30 @@ def covar_inner_product(
     for nums_a, word_a, ca in a_terms:
         for nums_b, word_b, cb in b_terms:
             
-            nums_c, word_c, overall_phase = mul_reduced(
-                nums_a, word_a,
-                nums_b, word_b
-            )
-            
+            nums_c, word_c, ph = mul_reduced_fast(nums_a, word_a, nums_b, word_b)
+
+            # In covariance / Re Tr(σ A B), only real phases contribute:
+            # i^0 = +1  (real)
+            # i^1 = +i  (imag)
+            # i^2 = -1  (real)
+            # i^3 = -i  (imag)
+            if ph == 1 or ph == 3:
+                continue  # purely imaginary contribution -> zero in Re[...]
+
+            sign = 1.0 if ph == 0 else -1.0  # ph==2 gives -1
+
             key = (nums_c, word_c)
             exp = caches.expect.get(key)
             if exp is None:
-                exp = float(expect_reduced(nums_c, word_c))
+                exp = expect_reduced(nums_c, word_c)
                 caches.expect[key] = exp
-            if abs(exp) > 1e-14:
-                acc += ca * cb * overall_phase * exp
+
+            if abs(exp) >= 1e-14:
+                acc += (ca * cb) * (sign * exp) ### could use float(ca)*float(cb) 
+                                                ### but in the case of complex numbers, could
+                                                ### blow up.
+
+
             #print("DEBUG acc =", acc)
 
     return float(np.real(acc))
