@@ -15,6 +15,7 @@ from adaptHeisenberg.projection import project_system_adaa_between
 from adaptHeisenberg.covariance_scalar_product import (
     fetch_covar_scalar_product,
     gram_matrix,
+    TermListCache,
     CovarCaches,
 )
 
@@ -53,7 +54,7 @@ class FrozenBasisEvolver:
     eps_sp: float = 1e-14
 
     # gram pseudo-inverse cutoff
-    pinv_rtol: float = 1e-12  # relative to max eigenvalue
+    pinv_rtol: float = 1e-10  # relative to max eigenvalue
 
     # frozen data
     basis: Optional[List] = None
@@ -67,7 +68,7 @@ class FrozenBasisEvolver:
     _wk: Optional[np.ndarray] = None
 
 
-    def build(self, seed_op_small, profile=True):
+    def build(self, seed_op_small, profile=False):
         """(Re)build basis + geometry for a frozen window starting from seed_op_small."""
 
         timings = {}
@@ -79,11 +80,11 @@ class FrozenBasisEvolver:
         t0 = time.perf_counter()
 
         self.caches = CovarCaches.empty()
-        self.sp = fetch_covar_scalar_product(
-            self.sigma0,
-            eps=self.eps_sp,
-            caches=self.caches
-        )
+        self.term_cache = TermListCache()   
+        self.sp = fetch_covar_scalar_product(self.sigma0, 
+                                             eps=self.eps_sp,
+                                             caches = self.caches,
+                                             term_cache = self.term_cache,)
 
         timings["scalar_product_setup"] = time.perf_counter() - t0
 
@@ -102,7 +103,6 @@ class FrozenBasisEvolver:
         t0 = time.perf_counter()
 
         G = gram_matrix(self.basis, self.sigma0, sp=self.sp, symmetric = True)
-        G = 0.5 * (G + G.T)
         self.gram = G
 
         timings["build_gram"] = time.perf_counter() - t0
@@ -112,7 +112,8 @@ class FrozenBasisEvolver:
         # --------------------------------------------------
         t0 = time.perf_counter()
 
-        self.Hij = self._build_Hij_from_gram_shift()
+        self.Hij = self.Hij = self._build_Hij_full()
+ #self._build_Hij_from_gram_shift()
 
         timings["build_Hij"] = time.perf_counter() - t0
 
@@ -157,7 +158,32 @@ class FrozenBasisEvolver:
             )
             b.append(nxt)
         return b
+    
+    def _build_Hij_full(self) -> np.ndarray:
+        if self.basis is None:
+            raise RuntimeError("Call build() first.")
 
+        n = len(self.basis)
+        Hij = np.zeros((n, n), dtype=float)
+
+        for j in range(n):
+            big = self.backend.commutate(rho=self.basis[j], ham=self.ham)
+
+            nxt = self.backend.SystemSmall()
+            nxt.to_zero()
+            project_system_adaa_between(
+                big, nxt, self.sigma0, self.m_small,
+                exclude_scalar=self.exclude_scalar,
+                eps=self.eps_sp,
+            )
+
+            # Hij_{i,j} = <b_i, nxt>
+            for i in range(n):
+                Hij[i, j] = float(self.sp(self.basis[i], nxt))
+
+        return Hij
+
+    
     def _build_Hij_from_gram_shift(self, project_last: bool = True) -> np.ndarray:
         if self.basis is None:
             raise RuntimeError("Call build() first.")
@@ -180,24 +206,37 @@ class FrozenBasisEvolver:
                 eps=self.eps_sp,
             )
         else:
-            nxt = big  # debug only; will be slow
+            nxt = big  
 
-        # IMPORTANT: sp() must accept (SMALL, SMALL) here for the fast path
         for i in range(n):
             Hij[i, n - 1] = float(self.sp(self.basis[i], nxt))
 
         return Hij
 
     def _prep_gram_pinv(self):
-        """Eigen pseudo-inverse prep for gram: G^+ = V diag(1/w) V^T on kept subspace."""
+        """
+        Eigen pseudo-inverse prep for gram: G^+ = V diag(1/w) V^T on kept subspace.
+        """
         if self.gram is None:
             raise RuntimeError("Call build() first.")
 
-        w, V = np.linalg.eigh(self.gram)
-        wmax = float(np.max(w)) if w.size else 0.0
-        tol = self.pinv_rtol * wmax
+        G = 0.5 * (self.gram + self.gram.T)
 
+        # scale-aware jitter (tiny, prevents catastrophic near-singularity)
+        n = G.shape[0]
+        scale = float(np.trace(G) / n) if n else 1.0
+        jitter = 1e-14 + 1e-12 * max(scale, 1.0)   # tune if needed
+        G = G + jitter * np.eye(n)
+
+        w, V = np.linalg.eigh(G)
+
+        wmax = float(np.max(w)) if w.size else 0.0
+        w = np.maximum(w, 0.0)
+
+        tol = max(self.pinv_rtol * wmax, 1e-14 * max(wmax, 1.0))
         keep = w > tol
+
+        self.gram = G
         self._Vk = V[:, keep]
         self._wk = w[keep]
 
@@ -225,6 +264,8 @@ class FrozenBasisEvolver:
         if self.Hij is None:
             raise RuntimeError("Call build() first.")
         return self.solve_gram(self.Hij)
+               
+        return A  ###self.solve_gram(self.Hij)
 
     def apply_A(self, phi: np.ndarray) -> np.ndarray:
         """Compute A phi without forming A explicitly."""
@@ -257,11 +298,22 @@ class FrozenBasisEvolver:
                 out = out + (b * float(c))
                 
         return out
-
-    def project_operator(self, O):
+    
+    def project_operator(self, O, damp_rel: float = 1e-12):
         """Compute phi such that O ≈ Σ phi_i b_i via gram pseudo-inverse."""
         if self.basis is None:
             raise RuntimeError("Call build() first.")
 
         rhs = np.array([float(self.sp(bi, O)) for bi in self.basis], dtype=float)
-        return self.solve_gram(rhs)
+
+        # damp in the eigenbasis you already computed: (w -> w + λ)
+        Vk = self._Vk
+        wk = self._wk
+        if Vk is None or wk is None:
+            raise RuntimeError("Call build() first (pinv not prepared).")
+
+        wmax = float(np.max(wk)) if wk.size else 0.0
+        lam = damp_rel * max(wmax, 1.0)
+
+        return Vk @ ((Vk.T @ rhs) / (wk + lam))
+

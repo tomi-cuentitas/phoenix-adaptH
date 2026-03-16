@@ -1,5 +1,4 @@
-"""adaptHeisenberg.commutator_builder
-
+"""
 Build a Phoenix/Fortran commutator routine as a reusable function.
 
 This is a refactor of `example/test_fortran_builder_comm_3.py` into a side-effect-free
@@ -12,7 +11,7 @@ wrapper:
 Key points:
 - Uses KeyMap.link / KeyMap.entry (your Phoenix version; no add_key / no item assignment).
 - The returned callable is produced by PyWrapperLibrary and operates on ADAAs.
-- You can choose REAL_ONLY=True (recommended).
+- We can choose REAL_ONLY=True (recommended).
 
 """
 
@@ -38,10 +37,11 @@ from phoenix.fgen.fortran_builder import F90Library
 from phoenix.adaa_derived import FortranRA, FortranCA, STATUS_INPUT, STATUS_INOUT
 from phoenix.fgen.pywrapper_library import PyWrapperLibrary
 from phoenix.keymap import KeyMap
+from phoenix.lattice import link_hamiltonian_domains
 
 
 # -----------------------------------------------------------------------------
-# Pauli algebra helpers (copied from comm_3 with minimal edits)
+# Pauli algebra helpers (copied from comm_3)
 # -----------------------------------------------------------------------------
 
 pauli_table = {
@@ -230,7 +230,20 @@ def build_system_explore_keymap(num_spins_explore: int, inner_keymaps_system: Di
     return system_explore_keymap
 
 
-def build_hamilton_keymaps(num_spins: int, num_spins_explore: int) -> Tuple[KeyMap, KeyMap, Dict[int, KeyMap]]:
+def build_hamilton_keymaps(
+    num_spins: int,
+    num_spins_explore: int,
+    lattice_shape: Optional[Tuple[int, ...]] = None,
+    explore_lattice_shape: Optional[Tuple[int, ...]] = None,
+    zeta: Optional[int] = None,
+    periodic: bool = False,
+) -> Tuple[KeyMap, KeyMap, Dict[int, KeyMap]]:
+    """
+    Generalized version of build_hamilton_keymaps function to allow both all-to-all dipolar 
+    couplings, with number of terms scaling as O(N**2), as well as those corresponding to models with
+    only zeta-nearest neighbours, with number of Hamiltonian terms O(N*zeta) with zeta = O(1).
+    """
+   
     inner_h: Dict[int, KeyMap] = {}
 
     hamilton_keymap = KeyMap(name="hamiltonian")
@@ -247,15 +260,42 @@ def build_hamilton_keymaps(num_spins: int, num_spins_explore: int) -> Tuple[KeyM
     inner_h[1] = keymap_larmor
     inner_h[2] = keymap_dipdip
 
-    for number_tuple in all_spin_groups(1, num_spins):
-        hamilton_keymap.link(number_tuple, keymap_larmor)
-    for number_tuple in all_spin_groups(2, num_spins):
-        hamilton_keymap.link(number_tuple, keymap_dipdip)
+    # Default: old behavior
+    if lattice_shape is None:
+        lattice_shape = (num_spins,)
+    if explore_lattice_shape is None:
+        explore_lattice_shape = (num_spins_explore,)
 
-    for number_tuple in all_spin_groups(1, num_spins_explore):
-        hamilton_explore_keymap.link(number_tuple, keymap_larmor)
-    for number_tuple in all_spin_groups(2, num_spins_explore):
-        hamilton_explore_keymap.link(number_tuple, keymap_dipdip)
+    # onsite terms
+    for i in range(num_spins):
+        hamilton_keymap.link((i,), keymap_larmor)
+    for i in range(num_spins_explore):
+        hamilton_explore_keymap.link((i,), keymap_larmor)
+
+    # pair terms
+    if zeta is None:
+        # old case: preserve old all-to-all behavior
+        for number_tuple in all_spin_groups(2, num_spins):
+            hamilton_keymap.link(number_tuple, keymap_dipdip)
+        for number_tuple in all_spin_groups(2, num_spins_explore):
+            hamilton_explore_keymap.link(number_tuple, keymap_dipdip)
+    else:
+        link_hamiltonian_domains(
+            hamilton_keymap,
+            keymap_larmor,
+            keymap_dipdip,
+            lattice_shape,
+            zeta=zeta,
+            periodic=periodic,
+        )
+        link_hamiltonian_domains(
+            hamilton_explore_keymap,
+            keymap_larmor,
+            keymap_dipdip,
+            explore_lattice_shape,
+            zeta=zeta,
+            periodic=periodic,
+        )
 
     return hamilton_keymap, hamilton_explore_keymap, inner_h
 
@@ -270,6 +310,10 @@ def build_commutator(
     num_spins: int,
     max_size: int,
     num_spins_explore: Optional[int] = None,
+    lattice_shape: Optional[Tuple[int, ...]] = None,
+    explore_lattice_shape: Optional[Tuple[int, ...]] = None,
+    zeta: Optional[int] = None,
+    periodic: bool = False,
     real_only: bool = True,
     lib_basename: str = "pauli_library_comm",
     py_module_name: str = "ecplib",
@@ -304,13 +348,19 @@ def build_commutator(
     """
 
     if num_spins_explore is None:
-        num_spins_explore = min(num_spins, max_size + max_size // 2)
+        num_spins_explore = min(num_spins, max_size + 1)
 
     # --- KeyMaps (same structure as comm_3 script)
     system_keymap, inner_keymaps_system = build_system_keymap(num_spins, max_size)
     system_explore_keymap = build_system_explore_keymap(num_spins_explore, inner_keymaps_system)
+    
     hamilton_keymap, hamilton_explore_keymap, inner_keymaps_hamilt = build_hamilton_keymaps(
-        num_spins, num_spins_explore
+        num_spins,
+        num_spins_explore,
+        lattice_shape=lattice_shape,
+        explore_lattice_shape=explore_lattice_shape,
+        zeta=zeta,
+        periodic=periodic,
     )
 
     # --- Instruction variables
@@ -355,9 +405,10 @@ def build_commutator(
                     keys_c, _nums_c = simplify_pauli_string(ext_prod_c)
                     commutate_operations[t_pattern][(keys_a, keys_b)].add((keys_c, factor))
 
-    # --- Collect cases over full model
+                    
     for nums_a_key, _nums_a_entry in system_keymap.items():
         nums_a = nums_a_key.onlylabel()
+        
         for nums_b_key, _nums_b_entry in hamilton_keymap.items():
             nums_b = nums_b_key.onlylabel()
 
@@ -397,7 +448,6 @@ def build_commutator(
     VarInpHInner[1] = InstructionVariable.new(name="ham_inner_1", config=inner_keymaps_hamilt[1])
     VarInpHInner[2] = InstructionVariable.new(name="ham_inner_2", config=inner_keymaps_hamilt[2])
 
-    # --- Build instruction groups (micro ops)
     instruction_groups: Dict[Tuple[str, str, str], InstructionGroup] = {}
     for t_pattern, operations in commutate_operations.items():
         instructions: List[BiLinearOperationInstruction] = []
@@ -409,11 +459,6 @@ def build_commutator(
 
         for (src1_key, src2_key), operation in operations.items():
             for tgt_key, factor in operation:
-                # IMPORTANT:
-                # - In REAL_ONLY mode we use FortranRA (real arrays). The Pauli commutator factor is
-                #   typically purely imaginary (e.g. ±2j). Multiplying by 1j makes it real (±2), but
-                #   the Python type would still be `complex` (e.g. -2+0j). Phoenix codegen for real
-                #   backends expects a real float here.
                 if real_only:
                     coeff = float((factor * 1j).real)
                 else:
@@ -430,7 +475,6 @@ def build_commutator(
 
         instruction_groups[t_pattern] = InstructionGroup(instructions)
 
-    # --- Build per-pattern libroutines and summary commutate
     libroutines = {}
 
     for num, (t_pattern, cases) in enumerate(commutate_cases.items()):
@@ -468,7 +512,6 @@ def build_commutator(
         daa_assignments=daa_assignments,
     )
 
-    # --- Emit Fortran
     my_library.build()
 
     # --- Import/compile f2py module
@@ -484,11 +527,16 @@ def build_commutator(
         mod = _try_import_module()
 
     if mod is None:
-        # Numpy f2py (>=2.0) uses a meson backend by default and may promote some
-        # Fortran warnings (e.g. line truncation) to errors. We explicitly disable
-        # line-length warnings and also set free-line-length-none.
-        f90flags = "-ffree-line-length-none -Wno-line-truncation -Wno-error=line-truncation"
+        #f90flags = "-ffree-line-length-none -Wno-line-truncation -Wno-error=line-truncation"
+        ### deprecated flagggg
+        
+        f90flags = (
+            "-ffree-line-length-none "
+            "-Wno-line-truncation -Wno-error=line-truncation "
+            "-fmax-array-constructor=1000000"
+        ) # extension to the limit, done on 19.2.2026 prior to meeting
 
+        
         env = os.environ.copy()
         env["F90FLAGS"] = (env.get("F90FLAGS", "") + " " + f90flags).strip()
         env["FFLAGS"] = (env.get("FFLAGS", "") + " " + f90flags).strip()
@@ -504,7 +552,6 @@ def build_commutator(
 
         ret = subprocess.run(cmd, env=env)
         if ret.returncode != 0:
-            # Fallback to legacy distutils backend (often more permissive)
             env2 = env.copy()
             env2["NPY_F2PY_BACKEND"] = "distutils"
             ret2 = subprocess.run(cmd, env=env2)
@@ -521,13 +568,9 @@ def build_commutator(
                 f"Check your PYTHONPATH / build directory."
             )
 
-    # --- Wrap
-    # f2py may expose routines either at top-level (mod.commutate) or nested under
-    # a Fortran module attribute (e.g. mod.<fortran_module>.commutate).
     def _resolve_lib_with_routine(root, routine_name: str):
         if hasattr(root, routine_name):
             return root
-        # Search one level deep for a submodule/object that contains the routine
         candidates = []
         for attr in dir(root):
             if attr.startswith("__"):
@@ -542,7 +585,6 @@ def build_commutator(
                 f"f2py module {py_module_name!r} exposes {routine_name!r} in multiple places: {candidates}. "
                 f"Set py_module_name/lib_basename uniquely or refine resolver."
             )
-        # Nothing found: show helpful info
         public = [a for a in dir(root) if not a.startswith("__")]
         raise RuntimeError(
             f"f2py module {py_module_name!r} has no attribute {routine_name!r}. "

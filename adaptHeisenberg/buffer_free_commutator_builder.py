@@ -1,10 +1,5 @@
-"""adaptHeisenberg.efficient_commutator_builder
-
-Purpose
--------
-Provide a *buffer-aware* commutator builder for iterated projected commutators.
-
-You want to iterate
+"""
+We want to iterate
     b_{k+1} = π_m^{σ0}([H, b_k])
 with b_k guaranteed to live in the <=m-body ("SMALL") operator space.
 
@@ -13,29 +8,13 @@ populate higher-body sectors. For typical few-body Hamiltonians (e.g. 2-body),
 [H, b] increases support by at most (h_body-1) per step, so a small intermediate
 buffer suffices:
     m_int = min(N, m + (h_body_max - 1))
-(For 2-body Hamiltonians, m_int = min(N, m+1).)
 
 This module builds a Phoenix/Fortran commutator routine that maps:
     rho  in SMALL system_keymap (<=m)
     ham  in Hamiltonian keymap
     res  in BIG system_keymap (<=m_int)
 
-Then you project BIG -> SMALL in Python.
-
-Why this helps
---------------
-- You avoid allocating/compiling against the full <=N operator space.
-- You never compute nested raw commutators; you only compute one commutator per
-  step, into a controlled intermediate buffer, then project.
-
-Integration notes
------------------
-- This is a minimal refactor of adaptHeisenberg.commutator_builder.
-- It does *not* inline the projection into the Fortran commutator (because the
-  projection weights depend on sigma0 and require additional runtime dataflow).
-- You can keep projection.py unchanged for SAME-type projection, but for BIG->SMALL
-  you need a cross-type projection helper. Recommended: add
-  `project_system_adaa_between(src, dst, ...)` to projection.py.
+Then we project BIG -> SMALL in Python.
 
 """
 
@@ -46,7 +25,9 @@ from typing import Dict, List, Optional, Set, Tuple
 import importlib
 import os
 import subprocess
+import time
 
+from phoenix.lattice import nsites_from_shape
 from phoenix.fgen.instruction import (
     BiLinearOperationInstruction,
     CallInstruction,
@@ -113,11 +94,18 @@ def build_commutator_buffered(
     m_small: int,
     h_body_max: int = 2,
     num_spins_explore: Optional[int] = None,
+    lattice_shape: Optional[Tuple[int, ...]] = None,
+    explore_lattice_shape: Optional[Tuple[int, ...]] = None,
+    zeta: Optional[int] = None,
+    periodic: bool = False,
     real_only: bool = True,
     lib_basename: str = "pauli_library_comm_buf",
     py_module_name: str = "ecplib_comm_buf",
     f2py_exec: str = "f2py",
     recompile: bool = False,
+    # build/diagnostics knobs
+    print_stage_timings: bool = True,
+    ninja_jobs: Optional[int] = None,
 ):
     """Build a buffered commutator mapping SMALL rho -> BIG res.
 
@@ -131,25 +119,45 @@ def build_commutator_buffered(
 
     Then project tmp_big -> b_next_small in Python.
     """
+    # ---------------------------
+    # Stage timing helpers
+    # ---------------------------
+    stage: Dict[str, float] = {}
+
+    def _tic(name: str) -> None:
+        stage[name] = stage.get(name, 0.0) - time.perf_counter()
+
+    def _toc(name: str) -> None:
+        stage[name] = stage.get(name, 0.0) + time.perf_counter()
 
     if m_small < 0:
         raise ValueError("m_small must be >=0")
     if h_body_max < 1:
         raise ValueError("h_body_max must be >=1")
 
+    # For 2-body H, m_int = m_small + 1.
     m_int = min(num_spins, m_small + (h_body_max - 1))
 
-    if num_spins_explore is None:
-        # same heuristic used previously
-        num_spins_explore = min(num_spins, max(m_int + m_int // 2, m_int))
 
+    if explore_lattice_shape is not None:
+        num_spins_explore = nsites_from_shape(explore_lattice_shape)
+    elif num_spins_explore is None:
+        num_spins_explore = m_small + 1
+
+    _tic("keymaps_build")
     # --- KeyMaps
     system_small_keymap, inner_small = _build_system_keymap(num_spins, m_small)
     system_big_keymap, inner_big = _build_system_keymap(num_spins, m_int)
-
     system_explore_keymap = _build_system_explore_keymap(num_spins_explore, inner_big)
-
-    hamilton_keymap, hamilton_explore_keymap, inner_ham = build_hamilton_keymaps(num_spins, num_spins_explore)
+    hamilton_keymap, hamilton_explore_keymap, inner_ham = build_hamilton_keymaps(
+        num_spins,
+        num_spins_explore,
+        lattice_shape=lattice_shape,
+        explore_lattice_shape=explore_lattice_shape,
+        zeta=zeta,
+        periodic=periodic,
+    )
+    _toc("keymaps_build")
 
     # --- Instruction variables
     VarRho = InstructionVariable.new(name="rho", config=system_small_keymap)
@@ -160,6 +168,7 @@ def build_commutator_buffered(
     commutate_operations: Dict[Tuple[str, str, str], Dict[Tuple[str, str], Set[Tuple[str, complex]]]] = {}
     commutate_cases: Dict[Tuple[str, str, str], Set[Tuple[Tuple[int, ...], Tuple[int, ...], Tuple[int, ...]]]] = {}
 
+    _tic("explore_commutate_operations")
     for nums_a_key, nums_a_entry in system_explore_keymap.items():
         nums_a = nums_a_key.onlylabel()
         for nums_b_key, nums_b_entry in hamilton_explore_keymap.items():
@@ -191,8 +200,10 @@ def build_commutator_buffered(
 
                     keys_c, _ = simplify_pauli_string(ext_c)
                     commutate_operations[t_pattern][(keys_a, keys_b)].add((keys_c, factor))
+    _toc("explore_commutate_operations")
 
     # --- Collect cases over full model
+    _tic("collect_cases_full_model")
     for nums_a_key, _ in system_small_keymap.items():
         nums_a = nums_a_key.onlylabel()
         for nums_b_key, _ in hamilton_keymap.items():
@@ -200,11 +211,12 @@ def build_commutator_buffered(
 
             for nums_c, t_pattern in get_target_variations(nums_a, nums_b):
                 if t_pattern in commutate_cases:
-                    # nums_c can be up to m_int by construction
                     if len(nums_c) <= m_int:
                         commutate_cases[t_pattern].add((nums_a, nums_b, nums_c))
+    _toc("collect_cases_full_model")
 
     # --- Library
+    _tic("fortran_library_build_structures")
     lib = F90Library(lib_basename)
 
     if real_only:
@@ -215,7 +227,10 @@ def build_commutator_buffered(
         SystemSmall_ADAA = FortranCA.set_keymap(system_small_keymap)
         SystemBig_ADAA = FortranCA.set_keymap(system_big_keymap)
         Hamilton_ADAA = FortranCA.set_keymap(hamilton_keymap)
-
+    
+    n_edges = sum(1 for nums in hamilton_keymap.items() if len(nums) == 2)
+    print("ham 2-body domains:", n_edges)
+    
     daa_assignments = {
         VarRho: (SystemSmall_ADAA, STATUS_INPUT),
         VarHam: (Hamilton_ADAA, STATUS_INPUT),
@@ -270,16 +285,10 @@ def build_commutator_buffered(
         instruction_groups[t_pattern] = InstructionGroup(instrs)
 
     # --- Build per-pattern routines and summary routine
-    # NOTE: commutate_cases is seeded with *all* patterns discovered during the
-    # explore phase (commutate_operations). Many of those patterns are impossible
-    # in the SMALL->BIG workflow (e.g. rho pattern requires >m_small sites), so
-    # they will have empty `cases` and/or no corresponding instruction group.
-    # We must skip them.
     libroutines = {}
     num = 0
     for t_pattern, cases in commutate_cases.items():
-                # Skip patterns that never occur for the concrete (rho,ham)->res
-        # variations, or that were filtered out when building instruction groups.
+        # Skip patterns that never occur, or filtered out (no instruction group).
         if not cases:
             continue
         if t_pattern not in instruction_groups:
@@ -298,11 +307,33 @@ def build_commutator_buffered(
             )
 
         lr_name = f"commutate_{num:03d}"
+
+        # --- chunk environments to avoid gigantic Fortran array constructors
+        MAX_ENVS_PER_MAP = 600  # tune upward if you want
+
+        # NEW: put *each* MapApplyInstruction in its own subroutine, then call them.
+        part_routines = []
+        for part_idx, i0 in enumerate(range(0, len(envs), MAX_ENVS_PER_MAP)):
+            env_chunk = envs[i0 : i0 + MAX_ENVS_PER_MAP]
+
+            part_name = f"{lr_name}_part{part_idx:03d}"
+            part_lr = lib.libroutine_from_instructions(
+                part_name,
+                MapApplyInstruction(
+                    content=instruction_groups[t_pattern],
+                    environments=env_chunk,
+                ),
+                daa_assignments=daa_assignments,
+            )
+            part_routines.append(part_lr)
+
+        # Main routine just calls the parts in sequence (no MapApply here!)
         lr = lib.libroutine_from_instructions(
             lr_name,
-            MapApplyInstruction(content=instruction_groups[t_pattern], environments=envs),
+            *[CallInstruction(pr) for pr in part_routines],
             daa_assignments=daa_assignments,
         )
+
         libroutines[lr_name] = lr
         num += 1
 
@@ -311,9 +342,12 @@ def build_commutator_buffered(
         *[CallInstruction(lr) for lr in libroutines.values()],
         daa_assignments=daa_assignments,
     )
+    _toc("fortran_library_build_structures")
 
     # --- Emit Fortran
+    _tic("emit_fortran")
     lib.build()
+    _toc("emit_fortran")
 
     # --- Compile/import via f2py
     mod = None
@@ -328,10 +362,27 @@ def build_commutator_buffered(
         mod = _try_import()
 
     if mod is None:
-        f90flags = "-ffree-line-length-none -Wno-line-truncation -Wno-error=line-truncation"
+        # IMPORTANT: I included -fmax-array-constructor to avoid gfortran 65535 limit
+        f90flags = (
+            "-O3 "
+            "-ffree-line-length-none "
+            "-Wno-line-truncation -Wno-error=line-truncation "
+            "-fmax-array-constructor=1000000"
+        )
+
         env = os.environ.copy()
+
+        # Parallel compilation (meson/ninja). If ninja_jobs=None, auto-detect cores.
+        if ninja_jobs is None:
+            nj = os.cpu_count() or 8
+        else:
+            nj = int(ninja_jobs)
+        env["NINJAFLAGS"] = env.get("NINJAFLAGS", "-j16")  
+
+        # Propagate flags for meson + distutils fallback paths
         env["F90FLAGS"] = (env.get("F90FLAGS", "") + " " + f90flags).strip()
         env["FFLAGS"] = (env.get("FFLAGS", "") + " " + f90flags).strip()
+        env["FCFLAGS"] = (env.get("FCFLAGS", "") + " " + f90flags).strip()
 
         cmd = [
             f2py_exec,
@@ -342,11 +393,18 @@ def build_commutator_buffered(
             f"--f90flags={f90flags}",
         ]
 
+        _tic("compile_f2py_meson")
         ret = subprocess.run(cmd, env=env)
+        _toc("compile_f2py_meson")
+
         if ret.returncode != 0:
             env2 = env.copy()
             env2["NPY_F2PY_BACKEND"] = "distutils"
+
+            _tic("compile_f2py_distutils")
             ret2 = subprocess.run(cmd, env=env2)
+            _toc("compile_f2py_distutils")
+
             if ret2.returncode != 0:
                 raise RuntimeError(
                     f"f2py compilation failed (meson rc={ret.returncode}, distutils rc={ret2.returncode})."
@@ -374,6 +432,11 @@ def build_commutator_buffered(
     wrapper_root = _resolve(mod, "commutate")
     wrapper_lib = PyWrapperLibrary(lib, wrapper_lib=wrapper_root)
     commutate = wrapper_lib.create_wrapper("commutate")
+
+    if print_stage_timings:
+        print("=== build_commutator_buffered stage timings ===")
+        for k, v in sorted(stage.items(), key=lambda kv: kv[0]):
+            print(f"{k:28s}: {v:10.3f} s")
 
     return (
         commutate,
