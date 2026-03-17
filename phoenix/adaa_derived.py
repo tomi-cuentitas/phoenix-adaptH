@@ -17,9 +17,9 @@ from phoenix.adaa import ComplexArrayADAA, RealArrayADAA
 from phoenix.coeffbackend_derived import RawPyCoeffBackend
 from phoenix.coeffbackend_derived import NumPyCoeffBackend
 from phoenix.coeffbackend_derived import FortranCoeffBackend
-from phoenix.coeffbackend_derived import CuPyCoeffBackend
-from phoenix.coeffbackend_derived import OpenClCoeffBackend
-from phoenix.coeffbackend_derived import PyCudaCoeffBackend
+#from phoenix.coeffbackend_derived import CuPyCoeffBackend
+#from phoenix.coeffbackend_derived import OpenClCoeffBackend
+#from phoenix.coeffbackend_derived import PyCudaCoeffBackend
 
 from phoenix.fgen.libroutinevar import LibRoutineVariable
 
@@ -44,20 +44,20 @@ class FortranCA(
     """FORTRAN based data layer (implemented via NumPy)"""
 
 
-class CupyCA(ComplexArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
-    """CuPy based data layer"""
+#class CupyCA(ComplexArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
+#    """CuPy based data layer"""
 
 
-class OpenClCA(
-    ComplexArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
-):
-    """OpenCL based data layer"""
+#class OpenClCA(
+#    ComplexArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
+#):
+#    """OpenCL based data layer"""
 
 
-class PyCudaCA(
-    ComplexArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
-):
-    """OpenCL based data layer"""
+#class PyCudaCA(
+##    ComplexArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
+#):
+#    """OpenCL based data layer"""
 
 
 class RawPyRA(
@@ -76,20 +76,20 @@ class FortranRA(
     """FORTRAN based data layer (implemented via NumPy)"""
 
 
-class CupyRA(RealArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
-    """CuPy based data layer"""
+#class CupyRA(RealArrayADAA, backend=CuPyCoeffBackend(), identifier="CUPY"):
+#    """CuPy based data layer"""
 
 
-class OpenClRA(
-    RealArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
-):
-    """OpenCL based data layer"""
+#class OpenClRA(
+#    RealArrayADAA, backend=OpenClCoeffBackend(), identifier="OPENCL"
+#):
+ #   """OpenCL based data layer"""
 
 
-class PyCudaRA(
-    RealArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
-):
-    """OpenCL based data layer"""
+#class PyCudaRA(
+#    RealArrayADAA, backend=PyCudaCoeffBackend(), identifier="PYCUDA"
+#):
+#    """OpenCL based data layer"""
 
 
 STATUS_OUTPUT = LibRoutineVariable.STATUS_OUTPUT

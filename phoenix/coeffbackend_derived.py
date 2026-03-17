@@ -20,7 +20,7 @@ from typing import Any
 import warnings
 
 import pyopencl as cl
-import cupy as cp
+#import cupy as cp
 import numpy as np
 
 from phoenix.coeffbackend import CoeffBackend
