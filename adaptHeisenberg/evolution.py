@@ -159,7 +159,7 @@ class FrozenBasisEvolver:
             b.append(nxt)
         return b
 
-    def _build_Hij_from_gram_shift(self, project_last: bool = True) -> np.ndarray:
+    def _build_Hij_from_gram_shift(self, project_last: bool = False) -> np.ndarray:
         if self.basis is None:
             raise RuntimeError("Call build() first.")
 
