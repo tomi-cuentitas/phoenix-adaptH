@@ -103,7 +103,6 @@ class FrozenBasisEvolver:
         t0 = time.perf_counter()
 
         G = gram_matrix(self.basis, self.sigma0, sp=self.sp, symmetric = True)
-        G = 0.5 * (G + G.T)
         self.gram = G
 
         timings["build_gram"] = time.perf_counter() - t0
@@ -156,7 +155,7 @@ class FrozenBasisEvolver:
                 exclude_scalar=self.exclude_scalar,
                 eps=self.eps_sp,
             )
-            b.append(nxt)
+            b.append(-nxt)
         return b
 
     def _build_Hij_from_gram_shift(self, project_last: bool = False) -> np.ndarray:
@@ -170,7 +169,7 @@ class FrozenBasisEvolver:
         Hij[:, : n - 1] = self.gram[:, 1:n]
 
         # last column from one commutator
-        big = self.backend.commutate(rho=self.basis[-1], ham=self.ham)
+        big = -self.backend.commutate(rho=self.basis[-1], ham=self.ham)
 
         if project_last:
             nxt = self.backend.SystemSmall()
@@ -222,23 +221,32 @@ class FrozenBasisEvolver:
             raise ValueError(f"rhs must be 1D or 2D, got shape {rhs.shape}")
 
     def generator_A(self) -> np.ndarray:
-        """A = G^+ Hij."""
+        """
+        A = (1 - eta) * G^+ Hij_skew + eta * G^+ Hij
+
+        eta = 0   -> fully skewed generator (stable, conservative)
+        eta = 1   -> raw Phoenix generator
+        0 < eta < 1 -> interpolation
+        """
         if self.Hij is None:
             raise RuntimeError("Call build() first.")
-        return self.solve_gram(self.Hij)
+
+        # raw
+        A_raw = self.solve_gram(self.Hij)
+
+        # skewed Hij
+        Hij_skew = 0.5 * (self.Hij - self.Hij.T)
+        A_skew = self.solve_gram(Hij_skew)
+
+        # blend
+        eta = 0.001
+        return (1.0 - eta) * A_skew + eta * A_raw
 
     def apply_A(self, phi: np.ndarray) -> np.ndarray:
         """Compute A phi without forming A explicitly."""
         if self.Hij is None:
             raise RuntimeError("Call build() first.")
         return self.solve_gram(self.Hij @ phi)
-
-    def step_rk4(self, phi: np.ndarray, dt: float) -> np.ndarray:
-        k1 = self.apply_A(phi)
-        k2 = self.apply_A(phi + 0.5 * dt * k1)
-        k3 = self.apply_A(phi + 0.5 * dt * k2)
-        k4 = self.apply_A(phi + dt * k3)
-        return phi + (dt / 6.0) * (k1 + 2 * k2 + 2 * k3 + k4)
 
     def step_expm(self, phi: np.ndarray, dt: float) -> np.ndarray:
         A = self.generator_A()
