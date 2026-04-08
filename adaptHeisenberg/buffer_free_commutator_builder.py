@@ -22,6 +22,11 @@ from __future__ import annotations
 
 from typing import Dict, List, Optional, Set, Tuple
 
+import os
+import sys
+import re
+from pathlib import Path
+
 import importlib
 import os
 import subprocess
@@ -347,6 +352,49 @@ def build_commutator_buffered(
     # --- Emit Fortran
     _tic("emit_fortran")
     lib.build()
+
+    # Post-process generated Fortran:
+    # 1) only expose "commutate" publicly to f2py
+    # 2) fix broken internal helper calls like
+    #       call commutate_0001(...)
+    #       call commutate_0002(...)
+    #       call commutate_003_part0001(...)
+    #       call commutate_003_part0002(...)
+    #    which must instead be
+    #       call commutate_000(...)
+    #       call commutate_003_part000(...)
+    f90_path = Path(f"{lib_basename}.f90")
+    _f90_text = f90_path.read_text(encoding="utf-8")
+
+    if "  PRIVATE\n  PUBLIC :: commutate\n" not in _f90_text:
+        _f90_text = _f90_text.replace(
+            "  IMPLICIT NONE\n",
+            "  IMPLICIT NONE\n  PRIVATE\n  PUBLIC :: commutate\n",
+            1,
+        )
+
+    # Strip any spurious numeric suffix after helper routine names in call sites.
+    # Examples:
+    #   commutate_0001(        -> commutate_000(
+    #   commutate_0002(        -> commutate_000(
+    #   commutate_003_part0001( -> commutate_003_part000(
+    #   commutate_003_part0002( -> commutate_003_part000(
+    _f90_text = re.sub(
+        r"\b(commutate_[0-9]{3}(?:_part[0-9]{3})?)\d+(?=\s*\()",
+        r"\1",
+        _f90_text,
+    )
+
+    _bad_names = re.findall(
+        r"\bcommutate_[0-9]{3}(?:_part[0-9]{3})?\d+(?=\s*\()",
+        _f90_text,
+    )
+    if _bad_names:
+        raise RuntimeError(
+            f"Generated Fortran still contains broken helper-call names: {_bad_names[:20]}"
+        )
+
+    f90_path.write_text(_f90_text, encoding="utf-8")
     _toc("emit_fortran")
 
     # --- Compile/import via f2py
@@ -377,7 +425,8 @@ def build_commutator_buffered(
             nj = os.cpu_count() or 8
         else:
             nj = int(ninja_jobs)
-        env["NINJAFLAGS"] = env.get("NINJAFLAGS", "-j16")  
+
+        env["NINJAFLAGS"] = env.get("NINJAFLAGS", f"-j{nj}")
 
         # Propagate flags for meson + distutils fallback paths
         env["F90FLAGS"] = (env.get("F90FLAGS", "") + " " + f90flags).strip()
