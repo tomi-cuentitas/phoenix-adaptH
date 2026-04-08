@@ -17,6 +17,7 @@ Key points:
 
 from __future__ import annotations
 
+from functools import lru_cache
 from dataclasses import dataclass
 from typing import Dict, Iterable, List, Optional, Sequence, Set, Tuple
 
@@ -100,15 +101,46 @@ def simplify_pauli_string(padded: str) -> Tuple[str, Tuple[int, ...]]:
         reduced += letter
     return reduced, tuple(nums)
 
+#######%%%%#####
+
+"""
+Refactored version from Matthias' ,,all_spin_groups" function, for better handling of the repeated
+callings of said function.
+"""
+
+@lru_cache(maxsize=None)
+def _all_spin_groups_cached(length: int, num_spins: int) -> Tuple[Tuple[int, ...], ...]:
+    if length == 0:
+        return (tuple(),)
+
+    out = []
+    prev = _all_spin_groups_cached(length - 1, num_spins)
+    for tail in prev:
+        start = tail[-1] + 1 if tail else 0
+        for index in range(start, num_spins):
+            out.append(tail + (index,))
+    return tuple(out)
+
 
 def all_spin_groups(length: int, num_spins: int, collect: Optional[List[int]] = None):
+    """
+    Public wrapper preserving the old generator API.
+    Fast cached path for standard top-level calls.
+    """
     if collect is None:
-        collect = []
-    if length == 0:
-        yield tuple(collect)
+        yield from _all_spin_groups_cached(length, num_spins)
     else:
-        for index in range(max(collect + [-1]) + 1, num_spins):
-            yield from all_spin_groups(length - 1, num_spins, collect + [index])
+        if length == 0:
+            yield tuple(collect)
+        else:
+            for index in range(max(collect + [-1]) + 1, num_spins):
+                yield from all_spin_groups(length - 1, num_spins, collect + [index])
+
+@lru_cache(maxsize=None)
+def _cached_all_to_all_pair_domains(num_spins: int) -> Tuple[Tuple[int, int], ...]:
+    return tuple(_all_spin_groups_cached(2, num_spins))
+
+#######%%%%#####
 
 
 def triple_pattern(string_a: str, string_b: str, string_c: str):
@@ -275,9 +307,9 @@ def build_hamilton_keymaps(
     # pair terms
     if zeta is None:
         # old case: preserve old all-to-all behavior
-        for number_tuple in all_spin_groups(2, num_spins):
+        for number_tuple in _cached_all_to_all_pair_domains(num_spins):
             hamilton_keymap.link(number_tuple, keymap_dipdip)
-        for number_tuple in all_spin_groups(2, num_spins_explore):
+        for number_tuple in _cached_all_to_all_pair_domains(num_spins_explore):
             hamilton_explore_keymap.link(number_tuple, keymap_dipdip)
     else:
         link_hamiltonian_domains(
