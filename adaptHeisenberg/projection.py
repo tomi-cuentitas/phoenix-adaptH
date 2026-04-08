@@ -262,7 +262,7 @@ def project_system_adaa(
     sigma0,
     m: int,
     *,
-    exclude_scalar: bool = True,
+    exclude_scalar: bool = False,
     eps: float = 1e-14,
 ) -> None:
     """Compute dst = π_m^{σ0}(src) for Phoenix system ADAAs.
