@@ -23,11 +23,27 @@ Design notes:
 """
 
 from __future__ import annotations
+from dataclasses import dataclass, field
 
 import itertools
 from typing import Dict, Iterable, Tuple, Union, Optional
 
 import numpy as np
+
+# LEGACY cache container retained for compatibility/debugging only.
+#
+# IMPORTANT: state-adapted projection coefficients depend on the numerical
+# contents of sigma0.vectors (and on eps), so caching by id(sigma0) is unsafe:
+# Python may reuse object ids after a state is destroyed, and ProductState
+# instances from older workflows may also have been mutable.  The production
+# projection path below therefore uses a fresh per-call cache instead.
+_PROJECTION_TERM_CACHE_BY_SIGMA0_ID: Dict[
+    int,
+    Dict[
+        Tuple[Tuple[int, ...], str, int, bool, float],
+        Dict[Tuple[Tuple[int, ...], str], float],
+    ],
+] = {}
 
 
 # -----------------------------------------------------------------------------
@@ -144,87 +160,137 @@ def expect_single_site_product_state(sigma0, site: int, letter: str) -> float:
 # Term-level projection for the hierarchical KeyMap representation
 # -----------------------------------------------------------------------------
 
+def _extract_sparse_terms_with_labels(adaa, keymap, eps: float = 1e-14):
+    """
+    Extract nonzero terms as tuples.
 
-def project_term_delta(
+    real-only:
+      (src_offset, nums, word, coeff_real)
+
+    real/imag:
+      (src_offset, nums, word, coeff_real, coeff_imag)
+    """
+    data_ids = list(type(adaa)._DATATYPES.keys())
+    if not data_ids:
+        return []
+
+    if data_ids == ["real"]:
+        arr = adaa.data["real"]
+        idx = np.flatnonzero(np.abs(arr) > eps)
+        out = []
+        for off in idx:
+            off_i = int(off)
+            nums, word = keymap.off2key(off_i).labels
+            out.append((
+                off_i,
+                tuple(int(x) for x in nums),
+                str(word),
+                float(arr[off_i]),
+            ))
+        return out
+
+    if data_ids == ["real", "imag"]:
+        rr = adaa.data["real"]
+        ii = adaa.data["imag"]
+        mask = (np.abs(rr) > eps) | (np.abs(ii) > eps)
+        idx = np.flatnonzero(mask)
+        out = []
+        for off in idx:
+            off_i = int(off)
+            nums, word = keymap.off2key(off_i).labels
+            out.append((
+                off_i,
+                tuple(int(x) for x in nums),
+                str(word),
+                float(rr[off_i]),
+                float(ii[off_i]),
+            ))
+        return out
+
+    raise TypeError(f"Unsupported ADAA datatypes: {data_ids}")
+    
+    
+def project_term_delta_fast(
     nums: Tuple[int, ...],
     word: str,
-    sigma0,
+    sigma0_vectors: np.ndarray,
     m: int,
     *,
     exclude_scalar: bool = False,
     eps: float = 1e-14,
+    cache: Optional[
+        Dict[
+            Tuple[Tuple[int, ...], str, int, bool, float],
+            Dict[Tuple[Tuple[int, ...], str], float],
+        ]
+    ] = None,
 ) -> Dict[Tuple[Tuple[int, ...], str], float]:
-    """δq-based projection of a single reduced Pauli term to <=m-body terms.
+    """
+    Projection of a reduced Pauli term onto the <=m centered subspace.
 
-    Implements:
-      π_m^{(δ)}(Q)= Σ_{|S|<=m} (Π_{i∈S} δq_i) <Π_{j∉S} q_j>
-      δq_i = q_i - <q_i> I
+    Equivalent to the previous combinations+mask implementation, but avoids
+    constructing kept-position sets and mask-expanded temporary containers.
     """
     k = len(nums)
     if k != len(word):
         raise ValueError("nums and word length mismatch")
 
     if k == 0:
-        return {} if exclude_scalar else { (tuple(), ""): 1.0 }
+        return {} if exclude_scalar else {(tuple(), ""): 1.0}
 
-    # Precompute μ_i = <q_i> for each factor in this reduced word
-    mu = [expect_single_site_product_state(sigma0, nums[p], word[p]) for p in range(k)]
+    # The expansion depends on eps because the DFS prunes small branches.
+    # Include it in the key so that changing numerical tolerances cannot reuse
+    # an expansion produced under a different pruning threshold.
+    cache_key = (nums, word, int(m), bool(exclude_scalar), float(eps))
+    if cache is not None:
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+    mu = []
+    for site, let in zip(nums, word):
+        ax = _axis_index(let)
+        if ax is None:
+            mu.append(1.0)
+        else:
+            mu.append(float(sigma0_vectors[site, ax]))
+    mu = tuple(mu)
 
     out: Dict[Tuple[Tuple[int, ...], str], float] = {}
-    positions = range(k)
 
-    # We allow |S|=0 only if scalar is allowed
-    r_start = 0 if not exclude_scalar else 1
-    r_max = min(m, k)
+    nums_acc = []
+    word_acc = []
 
-    for r in range(r_start, r_max + 1):
-        for kept_pos in itertools.combinations(positions, r):
-            kept_pos = tuple(kept_pos)
+    def dfs(pos: int, s_count: int, coeff: float) -> None:
+        if abs(coeff) <= eps:
+            return
 
-            # dropped part expectation <Q_{not in S}>
-            dropped_pos = [p for p in positions if p not in kept_pos]
-            if not dropped_pos:
-                drop_val = 1.0
-            else:
-                # product state => product of single-site μ’s
-                drop_val = 1.0
-                for p in dropped_pos:
-                    drop_val *= mu[p]
+        if pos == k:
+            if exclude_scalar and len(nums_acc) == 0:
+                return
+            key = (tuple(nums_acc), "".join(word_acc))
+            out[key] = out.get(key, 0.0) + float(coeff)
+            return
 
-            if abs(drop_val) <= eps:
-                continue
+        # Branch 1: site not included in S
+        dfs(pos + 1, s_count, coeff * mu[pos])
 
-            # Expand Π_{i in S} (q_i - μ_i I)
-            # => sum over T ⊆ S: (Π_{i in T} q_i) * Π_{j in S\T} (-μ_j)
-            # We iterate T by iterating a subset mask over kept_pos
-            kept_list = list(kept_pos)
-            nS = len(kept_list)
+        # Branches 2 and 3: site included in S
+        if s_count < m:
+            # 2a: keep the Pauli operator itself
+            nums_acc.append(nums[pos])
+            word_acc.append(word[pos])
+            dfs(pos + 1, s_count + 1, coeff)
+            nums_acc.pop()
+            word_acc.pop()
 
-            for mask in range(1 << nS):
-                coeff = drop_val
-                nums_new_list = []
-                word_new_list = []
+            # 2b: take the -mu_i * I piece
+            dfs(pos + 1, s_count + 1, coeff * (-mu[pos]))
 
-                for t_idx, p in enumerate(kept_list):
-                    if (mask >> t_idx) & 1:
-                        # keep operator q_p
-                        nums_new_list.append(nums[p])
-                        word_new_list.append(word[p])
-                    else:
-                        # replace with (-μ_p) * I
-                        coeff *= (-mu[p])
+    dfs(0, 0, 1.0)
 
-                if abs(coeff) <= eps:
-                    continue
-
-                nums_new = tuple(nums_new_list)
-                word_new = "".join(word_new_list)
-
-                if exclude_scalar and len(nums_new) == 0:
-                    continue
-
-                out[(nums_new, word_new)] = out.get((nums_new, word_new), 0.0) + float(coeff)
-
+    if cache is not None:
+        cache[cache_key] = out
     return out
 
 
@@ -255,6 +321,26 @@ def _parse_system_key_labels(labels: Tuple[object, ...]) -> Tuple[Tuple[int, ...
         "Projection expects a 2-level system KeyMap key: (nums_tuple, reduced_word)."
     )
 
+@dataclass
+class ProjectionTermCache:
+    expansions: Dict[
+        Tuple[Tuple[int, ...], str, int, bool, float],
+        Dict[Tuple[Tuple[int, ...], str], float],
+    ] = field(default_factory=dict)
+
+def _get_projection_cache_for_sigma0(sigma0):
+    """Return a fresh state-local projection expansion cache.
+
+    LEGACY API NOTE
+    ---------------
+    Older versions kept a module-global dictionary keyed by ``id(sigma0)``.
+    That is not safe for a state-dependent projection: object ids can be reused
+    across sequential runs, and stale expansions can then leak from one sigma0
+    into another.  Keep this helper so old call sites remain valid, but make its
+    lifetime exactly one public projection call.
+    """
+    del sigma0  # compatibility argument; state ownership is the caller's concern
+    return {}
 
 def project_system_adaa(
     src,
@@ -289,56 +375,103 @@ def project_system_adaa(
     if keymap is None:
         raise ValueError("ADAA type has no _KEYMAP bound")
 
-    # Zero dst
     dst.to_zero()
 
-    # Determine which data identifiers exist
     data_ids = list(type(src)._DATATYPES.keys())
     if not data_ids:
         return
 
-    # We do a dense scan; this matches Phoenix's dense storage model.
-    # Later optimizations can restrict to subspaces or track sparsity.
-    for i in range(src.size):
-        # Quick skip if all data fields are ~0
-        # (real-only: 1 field; complex: 2 fields)
-        nonzero = False
-        for did in data_ids:
-            if abs(src.data[did][i]) > eps:
-                nonzero = True
-                break
-        if not nonzero:
-            continue
+    sparse_terms = _extract_sparse_terms_with_labels(src, keymap, eps=eps)
+    if not sparse_terms:
+        return
 
-        labels = keymap.off2key(i).labels
-        nums, word = _parse_system_key_labels(labels)
+    off_cache: Dict[Tuple[Tuple[int, ...], str], int] = {}
+    proj_cache = _get_projection_cache_for_sigma0(sigma0)
+    sigma0_vectors = np.asarray(sigma0.vectors, dtype=float)
 
-        body = len(nums)
-        if body == 0:
-            if not exclude_scalar:
-                for did in data_ids:
-                    dst.data[did][i] += src.data[did][i]
-            continue
+    def get_off(nums_new: Tuple[int, ...], word_new: str) -> int:
+        key = (nums_new, word_new)
+        off = off_cache.get(key)
+        if off is None:
+            off = keymap.key2off(nums_new, word_new)
+            off_cache[key] = off
+        return off
 
-        if body <= m:
-            # copy term
-            for did in data_ids:
-                dst.data[did][i] += src.data[did][i]
-            continue
+    scalar_off = None
+    if not exclude_scalar:
+        try:
+            scalar_off = get_off(tuple(), "")
+        except Exception:
+            scalar_off = None
 
-        # Expand
-        expansion = project_term_delta(nums, word, sigma0, m, exclude_scalar=exclude_scalar, eps=eps)
-        if not expansion:
-            continue
+    if data_ids == ["real"]:
+        for _, nums, word, coeff in sparse_terms:
+            body = len(nums)
 
-        for (nums_new, word_new), w in expansion.items():
-            if exclude_scalar and len(nums_new) == 0:
+            if body == 0:
+                if scalar_off is not None:
+                    dst.data["real"][scalar_off] += coeff
                 continue
-            off_new = keymap.key2off(nums_new, word_new)
-            for did in data_ids:
-                dst.data[did][off_new] += src.data[did][i] * w
 
+            if body <= m:
+                off = get_off(nums, word)
+                dst.data["real"][off] += coeff
+                continue
 
+            expansion = project_term_delta_fast(
+                nums,
+                word,
+                sigma0_vectors,
+                m,
+                exclude_scalar=exclude_scalar,
+                eps=eps,
+                cache=proj_cache,
+            )
+
+            for (nums_new, word_new), w in expansion.items():
+                if exclude_scalar and len(nums_new) == 0:
+                    continue
+                off_new = get_off(nums_new, word_new)
+                dst.data["real"][off_new] += coeff * w
+        return
+
+    if data_ids == ["real", "imag"]:
+        for _, nums, word, coeff_r, coeff_i in sparse_terms:
+            body = len(nums)
+
+            if body == 0:
+                if scalar_off is not None:
+                    dst.data["real"][scalar_off] += coeff_r
+                    dst.data["imag"][scalar_off] += coeff_i
+                continue
+
+            if body <= m:
+                off = get_off(nums, word)
+                dst.data["real"][off] += coeff_r
+                dst.data["imag"][off] += coeff_i
+                continue
+
+            expansion = project_term_delta_fast(
+                nums,
+                word,
+                sigma0_vectors,
+                m,
+                exclude_scalar=exclude_scalar,
+                eps=eps,
+                cache=proj_cache,
+            )
+
+            for (nums_new, word_new), w in expansion.items():
+                if exclude_scalar and len(nums_new) == 0:
+                    continue
+                off_new = get_off(nums_new, word_new)
+                dst.data["real"][off_new] += coeff_r * w
+                dst.data["imag"][off_new] += coeff_i * w
+        return
+
+    raise TypeError(f"Unsupported ADAA datatypes: {data_ids}")
+
+                
 def project_system_adaa_inplace(
     adaa,
     sigma0,
@@ -380,35 +513,92 @@ def project_system_adaa_between(
     if src_ids != dst_ids:
         raise TypeError("src and dst must have same data identifiers (real/imag)")
 
-    for i in range(src.size):
-        # skip zeros
-        if all(abs(src.data[did][i]) <= eps for did in src_ids):
-            continue
+    sparse_terms = _extract_sparse_terms_with_labels(src, src_km, eps=eps)
+    if not sparse_terms:
+        return
 
-        nums, word = _parse_system_key_labels(src_km.off2key(i).labels)
-        body = len(nums)
+    off_cache: Dict[Tuple[Tuple[int, ...], str], int] = {}
+    proj_cache = _get_projection_cache_for_sigma0(sigma0)
+    sigma0_vectors = np.asarray(sigma0.vectors, dtype=float)
 
-        if body == 0:
-            if not exclude_scalar:
-                try:
-                    off0 = dst_km.key2off(tuple(), "")
-                except Exception:
-                    continue
-                for did in src_ids:
-                    dst.data[did][off0] += src.data[did][i]
-            continue
+    def get_dst_off(nums_new: Tuple[int, ...], word_new: str) -> int:
+        key = (nums_new, word_new)
+        off = off_cache.get(key)
+        if off is None:
+            off = dst_km.key2off(nums_new, word_new)
+            off_cache[key] = off
+        return off
 
-        if body <= m:
-            off_new = dst_km.key2off(nums, word)
-            for did in src_ids:
-                dst.data[did][off_new] += src.data[did][i]
-            continue
+    scalar_off = None
+    if not exclude_scalar:
+        try:
+            scalar_off = get_dst_off(tuple(), "")
+        except Exception:
+            scalar_off = None
 
-        expansion = project_term_delta(nums, word, sigma0, m, exclude_scalar=exclude_scalar, eps=eps)
-        for (nums_new, word_new), w in expansion.items():
-            if exclude_scalar and len(nums_new) == 0:
+    if src_ids == ["real"]:
+        for _, nums, word, coeff in sparse_terms:
+            body = len(nums)
+
+            if body == 0:
+                if scalar_off is not None:
+                    dst.data["real"][scalar_off] += coeff
                 continue
-            off_new = dst_km.key2off(nums_new, word_new)
-            for did in src_ids:
-                dst.data[did][off_new] += src.data[did][i] * w
-        
+
+            if body <= m:
+                off_new = get_dst_off(nums, word)
+                dst.data["real"][off_new] += coeff
+                continue
+
+            expansion = project_term_delta_fast(
+                nums,
+                word,
+                sigma0_vectors,
+                m,
+                exclude_scalar=exclude_scalar,
+                eps=eps,
+                cache=proj_cache,
+            )
+
+            for (nums_new, word_new), w in expansion.items():
+                if exclude_scalar and len(nums_new) == 0:
+                    continue
+                off_new = get_dst_off(nums_new, word_new)
+                dst.data["real"][off_new] += coeff * w
+        return
+
+    if src_ids == ["real", "imag"]:
+        for _, nums, word, coeff_r, coeff_i in sparse_terms:
+            body = len(nums)
+
+            if body == 0:
+                if scalar_off is not None:
+                    dst.data["real"][scalar_off] += coeff_r
+                    dst.data["imag"][scalar_off] += coeff_i
+                continue
+
+            if body <= m:
+                off_new = get_dst_off(nums, word)
+                dst.data["real"][off_new] += coeff_r
+                dst.data["imag"][off_new] += coeff_i
+                continue
+
+            expansion = project_term_delta_fast(
+                nums,
+                word,
+                sigma0_vectors,
+                m,
+                exclude_scalar=exclude_scalar,
+                eps=eps,
+                cache=proj_cache,
+            )
+
+            for (nums_new, word_new), w in expansion.items():
+                if exclude_scalar and len(nums_new) == 0:
+                    continue
+                off_new = get_dst_off(nums_new, word_new)
+                dst.data["real"][off_new] += coeff_r * w
+                dst.data["imag"][off_new] += coeff_i * w
+        return
+
+    raise TypeError(f"Unsupported ADAA datatypes: {src_ids}")
