@@ -156,6 +156,63 @@ def triple_pattern(string_a: str, string_b: str, string_c: str):
     return (pat_a, pat_b, pat_c)
 
 
+@lru_cache(maxsize=None)
+def _get_target_variations_cached(nums_a: tuple[int, ...], nums_b: tuple[int, ...]):
+    """
+    Faster cached version using a two-pointer merge over sorted tuples.
+    Returns tuple[(nums_c, (t_a, t_b, t_c)), ...].
+    """
+    out = []
+
+    def rec(ia, ib, nums_c, t_a, t_b, t_c):
+        if ia == len(nums_a) and ib == len(nums_b):
+            out.append((tuple(nums_c), (t_a, t_b, t_c)))
+            return
+
+        if ia < len(nums_a) and (ib == len(nums_b) or nums_a[ia] < nums_b[ib]):
+            rec(
+                ia + 1,
+                ib,
+                nums_c + (nums_a[ia],),
+                t_a + "X",
+                t_b + "_",
+                t_c + "X",
+            )
+            return
+
+        if ib < len(nums_b) and (ia == len(nums_a) or nums_b[ib] < nums_a[ia]):
+            rec(
+                ia,
+                ib + 1,
+                nums_c + (nums_b[ib],),
+                t_a + "_",
+                t_b + "X",
+                t_c + "X",
+            )
+            return
+
+        # equal index: overlap case
+        rec(
+            ia + 1,
+            ib + 1,
+            nums_c,
+            t_a + "X",
+            t_b + "X",
+            t_c + "_",
+        )
+        rec(
+            ia + 1,
+            ib + 1,
+            nums_c + (nums_a[ia],),
+            t_a + "X",
+            t_b + "X",
+            t_c + "X",
+        )
+
+    rec(0, 0, tuple(), "", "", "")
+    return tuple(out)
+
+
 def get_target_variations(
     nums_a: Tuple[int, ...],
     nums_b: Tuple[int, ...],
@@ -165,68 +222,15 @@ def get_target_variations(
     _t_b: Optional[str] = None,
     _t_c: Optional[str] = None,
 ):
-    if _combined is None:
-        _combined = set.union(set(nums_a), set(nums_b))
-    if _nums_c is None:
-        _nums_c = []
-    if _t_a is None:
-        _t_a = ""
-    if _t_b is None:
-        _t_b = ""
-    if _t_c is None:
-        _t_c = ""
-
-    if len(_combined) > 0:
-        num = sorted(_combined)[0]
-        if num in nums_a and num in nums_b:
-            yield from get_target_variations(
-                nums_a,
-                nums_b,
-                _combined=_combined - {num},
-                _nums_c=_nums_c,
-                _t_a=_t_a + "X",
-                _t_b=_t_b + "X",
-                _t_c=_t_c + "_",
-            )
-            yield from get_target_variations(
-                nums_a,
-                nums_b,
-                _combined=_combined - {num},
-                _nums_c=_nums_c + [num],
-                _t_a=_t_a + "X",
-                _t_b=_t_b + "X",
-                _t_c=_t_c + "X",
-            )
-        elif num in nums_a:
-            yield from get_target_variations(
-                nums_a,
-                nums_b,
-                _combined=_combined - {num},
-                _nums_c=_nums_c + [num],
-                _t_a=_t_a + "X",
-                _t_b=_t_b + "_",
-                _t_c=_t_c + "X",
-            )
-        elif num in nums_b:
-            yield from get_target_variations(
-                nums_a,
-                nums_b,
-                _combined=_combined - {num},
-                _nums_c=_nums_c + [num],
-                _t_a=_t_a + "_",
-                _t_b=_t_b + "X",
-                _t_c=_t_c + "X",
-            )
-    else:
-        yield tuple(_nums_c), (_t_a, _t_b, _t_c)
-
-
+    # compatibility wrapper preserving the old generator API
+    yield from _get_target_variations_cached(tuple(nums_a), tuple(nums_b))
+        
 # -----------------------------------------------------------------------------
-# KeyMap constructors
+# KeyMap constructors: Legacy, buffer_free_commutator_builder uses its own.
 # -----------------------------------------------------------------------------
 
 
-def build_system_keymap(num_spins: int, max_size: int) -> Tuple[KeyMap, Dict[int, KeyMap]]:
+def __legacy__build_system_keymap(num_spins: int, max_size: int) -> Tuple[KeyMap, Dict[int, KeyMap]]:
     inner: Dict[int, KeyMap] = {}
 
     system_keymap = KeyMap(name="system")
@@ -251,14 +255,14 @@ def build_system_keymap(num_spins: int, max_size: int) -> Tuple[KeyMap, Dict[int
     return system_keymap, inner
 
 
-def build_system_explore_keymap(num_spins_explore: int, inner_keymaps_system: Dict[int, KeyMap]) -> KeyMap:
+def __legacy__build_system_explore_keymap(num_spins_explore: int, inner_keymaps_system: Dict[int, KeyMap]) -> KeyMap:
     system_explore_keymap = KeyMap(name="system explore")
     system_explore_keymap.link(tuple(), inner_keymaps_system[0])
     max_size = max(inner_keymaps_system.keys())
     for size in range(1, max_size + 1):
         km = inner_keymaps_system[size]
         for number_tuple in all_spin_groups(size, num_spins_explore):
-            system_explore_keymap.link(number_tuple, km)
+            system_explore_keymap.link(number_tuple, km, no_override=False)
     return system_explore_keymap
 
 
@@ -337,7 +341,7 @@ def build_hamilton_keymaps(
 # -----------------------------------------------------------------------------
 
 
-def build_commutator(
+def __legacy__build_commutator(
     *,
     num_spins: int,
     max_size: int,
@@ -352,7 +356,9 @@ def build_commutator(
     f2py_exec: str = "f2py",
     recompile: bool = False,
 ):
-    """Build and return a wrapper callable for `commutate`.
+    """
+    LEGACY implementation of naked commutator [rho, H]. Not employed for adaptH.
+    Build and return a wrapper callable for `commutate`.
 
     Parameters
     ----------
