@@ -28,15 +28,31 @@ import numpy as np
 
 
 def _as_vectors(vectors: Union[Sequence[float], np.ndarray]) -> np.ndarray:
-    """Normalize input into an array of shape (N, 3)."""
-    arr = np.asarray(vectors, dtype=float)
+    """Normalize input into an owned, immutable array of shape (N, 3).
+
+    ProductState is used as the reference object behind state-dependent
+    projection and covariance caches.  It must therefore own its Bloch-vector
+    storage and that storage must not be mutable after construction.
+    """
+    # Always copy, including the flat-array case.  ``np.asarray(...).reshape``
+    # can otherwise retain shared memory with a caller-owned sweep buffer.
+    arr = np.array(vectors, dtype=float, copy=True)
+
     if arr.ndim == 1:
         if arr.size % 3 != 0:
             raise ValueError("Flat vectors must have length 3N")
-        return arr.reshape(arr.size // 3, 3)
-    if arr.ndim == 2 and arr.shape[1] == 3:
-        return arr.copy()
-    raise ValueError("vectors must be a flat length-3N array or shape (N,3) array")
+        arr = arr.reshape(arr.size // 3, 3)
+    elif arr.ndim == 2 and arr.shape[1] == 3:
+        pass
+    else:
+        raise ValueError(
+            "vectors must be a flat length-3N array or shape (N,3) array"
+        )
+
+    # ``@dataclass(frozen=True)`` freezes the attribute binding, not the NumPy
+    # buffer itself.  Make the numerical state genuinely immutable.
+    arr.setflags(write=False)
+    return arr
 
 
 def _axis_index(letter: str) -> Optional[int]:
@@ -77,9 +93,29 @@ class ProductState:
         v = _as_vectors(vectors)
         object.__setattr__(self, "vectors", v)
 
+        eps0 = 1e-15
+        allowed_bits = np.zeros(v.shape[0], dtype=np.uint8)
+        for s in range(v.shape[0]):
+            mu_x, mu_y, mu_z = v[s, 0], v[s, 1], v[s, 2]
+            if abs(mu_x) > eps0:
+                allowed_bits[s] |= 1
+            if abs(mu_y) > eps0:
+                allowed_bits[s] |= 2
+            if abs(mu_z) > eps0:
+                allowed_bits[s] |= 4
+
+        object.__setattr__(self, "allowed_bits", allowed_bits)
+        object.__setattr__(self, "is_allz_only", bool(np.all(allowed_bits == 4)))
+
     @property
     def N(self) -> int:
         return int(self.vectors.shape[0])
+    
+    def expect_single_site(self, site: int, letter: str) -> float:
+        ax = _axis_index(letter)
+        if ax is None:
+            return 1.0
+        return float(self.vectors[site, ax])
 
     # ---------------------------------------------------------------------
     # Full-string expectations
